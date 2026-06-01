@@ -34,6 +34,7 @@ def _is_distinct_removal(original: SelectQuery, rewritten: SelectQuery) -> bool:
         and not rewritten.distinct
         and original.table == rewritten.table
         and original.projections == rewritten.projections
+        and original.predicates == rewritten.predicates
     )
 
 

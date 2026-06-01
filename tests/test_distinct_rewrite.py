@@ -14,6 +14,16 @@ def test_removes_distinct_when_projection_contains_unique_key() -> None:
     assert suggestion.rewritten_sql == "SELECT user_id\nFROM users;"
 
 
+def test_removes_distinct_while_preserving_where_predicates() -> None:
+    query = parse_select("SELECT DISTINCT user_id FROM users WHERE status = 'active'")
+    constraints = ConstraintCatalog(tables={"users": TableConstraints(unique=[("user_id",)])})
+
+    suggestion = RemoveRedundantDistinct().apply(query, constraints)
+
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rewritten_sql == "SELECT user_id\nFROM users\nWHERE status = 'active';"
+
+
 def test_keeps_distinct_when_uniqueness_is_unknown() -> None:
     query = parse_select("SELECT DISTINCT user_id FROM users")
     constraints = ConstraintCatalog(tables={"users": TableConstraints()})

@@ -15,6 +15,26 @@ def test_check_proves_distinct_removal_with_unique_key() -> None:
     assert result.assumptions
 
 
+def test_check_proves_distinct_removal_with_matching_where_predicates() -> None:
+    original = parse_select("SELECT DISTINCT user_id FROM users WHERE status = 'active'")
+    rewritten = parse_select("SELECT user_id FROM users WHERE status = 'active'")
+    constraints = ConstraintCatalog(tables={"users": TableConstraints(unique=[("user_id",)])})
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+
+
+def test_check_does_not_apply_distinct_rule_when_predicates_differ() -> None:
+    original = parse_select("SELECT DISTINCT user_id FROM users WHERE status = 'active'")
+    rewritten = parse_select("SELECT user_id FROM users WHERE status = 'inactive'")
+    constraints = ConstraintCatalog(tables={"users": TableConstraints(unique=[("user_id",)])})
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.UNKNOWN
+
+
 def test_check_disproves_distinct_removal_without_unique_key() -> None:
     original = parse_select("SELECT DISTINCT user_id FROM users")
     rewritten = parse_select("SELECT user_id FROM users")
