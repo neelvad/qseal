@@ -6,8 +6,10 @@ from rich.console import Console
 from snowprove.constraints.yaml_loader import load_constraints
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.report.text import render_suggestion_report, render_verification_report
+from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.rewrites.distinct import RemoveRedundantDistinct
 from snowprove.verifier.check import check_equivalence
+from snowprove.verifier.model import VerificationResult
 
 console = Console()
 
@@ -28,12 +30,18 @@ def main() -> None:
 )
 def suggest(query_path: Path, schema_path: Path) -> None:
     """Suggest verified-safe rewrites for one SQL query."""
+    raw_sql = query_path.read_text()
     try:
-        query = parse_select(query_path.read_text())
+        query = parse_select(raw_sql)
         constraints = load_constraints(schema_path)
         suggestion = RemoveRedundantDistinct().apply(query, constraints)
     except UnsupportedSqlError as error:
-        raise click.ClickException(str(error)) from error
+        suggestion = RewriteSuggestion(
+            rule_name=RemoveRedundantDistinct.rule_name,
+            status=VerificationStatus.UNSUPPORTED,
+            original_sql=raw_sql.strip(),
+            reason=str(error),
+        )
 
     console.print(render_suggestion_report(suggestion))
 
@@ -50,11 +58,36 @@ def suggest(query_path: Path, schema_path: Path) -> None:
 )
 def check(original_path: Path, rewritten_path: Path, schema_path: Path) -> None:
     """Check whether two supported SQL queries are equivalent."""
+    original_sql = original_path.read_text()
+    rewritten_sql = rewritten_path.read_text()
+
     try:
-        original = parse_select(original_path.read_text())
-        rewritten = parse_select(rewritten_path.read_text())
-        constraints = load_constraints(schema_path)
+        original = parse_select(original_sql)
     except UnsupportedSqlError as error:
+        result = VerificationResult(
+            status=VerificationStatus.UNSUPPORTED,
+            original_sql=original_sql.strip(),
+            rewritten_sql=rewritten_sql.strip(),
+            reason=f"Original query unsupported: {error}",
+        )
+        console.print(render_verification_report(result))
+        return
+
+    try:
+        rewritten = parse_select(rewritten_sql)
+    except UnsupportedSqlError as error:
+        result = VerificationResult(
+            status=VerificationStatus.UNSUPPORTED,
+            original_sql=original_sql.strip(),
+            rewritten_sql=rewritten_sql.strip(),
+            reason=f"Rewritten query unsupported: {error}",
+        )
+        console.print(render_verification_report(result))
+        return
+
+    try:
+        constraints = load_constraints(schema_path)
+    except ValueError as error:
         raise click.ClickException(str(error)) from error
 
     result = check_equivalence(original, rewritten, constraints)

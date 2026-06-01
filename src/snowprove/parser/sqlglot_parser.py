@@ -1,5 +1,6 @@
 import sqlglot
 from sqlglot import exp
+from sqlglot.errors import ParseError
 
 from snowprove.ir.model import ColumnRef, SelectQuery
 
@@ -9,7 +10,11 @@ class UnsupportedSqlError(ValueError):
 
 
 def parse_select(sql: str) -> SelectQuery:
-    parsed = sqlglot.parse_one(sql, read="snowflake")
+    try:
+        parsed = sqlglot.parse_one(sql, read="snowflake")
+    except ParseError as error:
+        raise UnsupportedSqlError(f"Could not parse SQL: {error}") from error
+
     if not isinstance(parsed, exp.Select):
         raise UnsupportedSqlError("Only SELECT statements are supported.")
 
