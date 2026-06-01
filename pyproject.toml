@@ -1,0 +1,36 @@
+[project]
+name = "snowprove"
+version = "0.1.0"
+description = "Verified-safe SQL rewrites for a constrained Snowflake SQL subset."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.1.8",
+    "pydantic>=2.10.6",
+    "pyyaml>=6.0.2",
+    "rich>=13.9.4",
+    "sqlglot>=26.3.0",
+]
+
+[project.scripts]
+snowprove = "snowprove.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+    "ruff>=0.9.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

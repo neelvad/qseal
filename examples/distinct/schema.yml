@@ -1,0 +1,7 @@
+tables:
+  users:
+    columns:
+      user_id:
+        nullable: false
+    unique:
+      - [user_id]
