@@ -1,8 +1,14 @@
-from enum import StrEnum
+from pydantic import BaseModel, ConfigDict, Field
+
+from snowprove.rewrites.base import VerificationStatus
 
 
-class VerifierOutcome(StrEnum):
-    PROVEN = "PROVEN"
-    DISPROVEN = "DISPROVEN"
-    UNKNOWN = "UNKNOWN"
-    UNSUPPORTED = "UNSUPPORTED"
+class VerificationResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: VerificationStatus
+    original_sql: str
+    rewritten_sql: str
+    assumptions: tuple[str, ...] = Field(default_factory=tuple)
+    reason: str | None = None
+    counterexample: str | None = None

@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class VerificationStatus(StrEnum):
     PROVEN_EQUIVALENT = "PROVEN_EQUIVALENT"
+    NOT_EQUIVALENT = "NOT_EQUIVALENT"
     NOT_APPLICABLE = "NOT_APPLICABLE"
     UNKNOWN = "UNKNOWN"
     UNSUPPORTED = "UNSUPPORTED"

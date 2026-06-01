@@ -21,3 +21,27 @@ tables:
     assert result.exit_code == 0
     assert "PROVEN_EQUIVALENT" in result.output
     assert "SELECT user_id" in result.output
+
+
+def test_check_cli(tmp_path) -> None:
+    original = tmp_path / "original.sql"
+    rewritten = tmp_path / "rewritten.sql"
+    schema = tmp_path / "schema.yml"
+    original.write_text("SELECT DISTINCT user_id FROM users")
+    rewritten.write_text("SELECT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["check", str(original), str(rewritten), "--schema", str(schema)],
+    )
+
+    assert result.exit_code == 0
+    assert "PROVEN_EQUIVALENT" in result.output
