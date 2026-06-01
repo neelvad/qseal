@@ -18,6 +18,14 @@ class PredicatePushdown:
             )
 
         inner = query.subquery
+        if query.joins or inner.joins:
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.UNSUPPORTED,
+                original_sql=query.raw_sql,
+                reason="Predicate pushdown with joins is not supported yet.",
+            )
+
         if query.distinct or inner.distinct:
             return RewriteSuggestion(
                 rule_name=self.rule_name,

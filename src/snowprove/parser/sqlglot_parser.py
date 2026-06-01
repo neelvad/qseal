@@ -2,7 +2,7 @@ import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ParseError
 
-from snowprove.ir.model import ColumnRef, LiteralValue, Predicate, SelectQuery
+from snowprove.ir.model import ColumnRef, Join, JoinCondition, LiteralValue, Predicate, SelectQuery
 
 
 class UnsupportedSqlError(ValueError):
@@ -22,18 +22,16 @@ def parse_select(sql: str) -> SelectQuery:
     if from_expr is None or from_expr.this is None:
         raise UnsupportedSqlError("SELECT statements must include a FROM table.")
 
-    joins = parsed.args.get("joins") or []
-    if joins:
-        raise UnsupportedSqlError("Joins are not supported by this rewrite yet.")
-
     _reject_unsupported_clauses(parsed)
 
     source = _source(from_expr.this)
+    joins = [_join(join) for join in parsed.args.get("joins") or []]
     projections = [_projection_to_column(expr) for expr in parsed.expressions]
     predicates = _where_predicates(parsed.args.get("where"))
 
     return SelectQuery(
         **source,
+        joins=tuple(joins),
         projections=tuple(projections),
         predicates=tuple(predicates),
         distinct=parsed.args.get("distinct") is not None,
@@ -43,7 +41,7 @@ def parse_select(sql: str) -> SelectQuery:
 
 def _source(node: exp.Expression) -> dict[str, object]:
     if isinstance(node, exp.Table):
-        return {"table": node.name}
+        return {"table": node.name, "table_alias": node.alias or None}
     if isinstance(node, exp.Subquery):
         if not isinstance(node.this, exp.Select):
             raise UnsupportedSqlError("Only SELECT subqueries are supported.")
@@ -59,18 +57,16 @@ def _parse_select_expression(parsed: exp.Select) -> SelectQuery:
     if from_expr is None or from_expr.this is None:
         raise UnsupportedSqlError("SELECT statements must include a FROM table.")
 
-    joins = parsed.args.get("joins") or []
-    if joins:
-        raise UnsupportedSqlError("Joins are not supported by this rewrite yet.")
-
     _reject_unsupported_clauses(parsed)
 
     source = _source(from_expr.this)
+    joins = [_join(join) for join in parsed.args.get("joins") or []]
     projections = [_projection_to_column(expr) for expr in parsed.expressions]
     predicates = _where_predicates(parsed.args.get("where"))
 
     return SelectQuery(
         **source,
+        joins=tuple(joins),
         projections=tuple(projections),
         predicates=tuple(predicates),
         distinct=parsed.args.get("distinct") is not None,
@@ -82,6 +78,36 @@ def _projection_to_column(node: exp.Expression) -> ColumnRef:
     if isinstance(node, exp.Column):
         return ColumnRef(table=node.table or None, name=node.name)
     raise UnsupportedSqlError("Only direct column projections are supported.")
+
+
+def _join(node: exp.Join) -> Join:
+    if node.side != "LEFT":
+        raise UnsupportedSqlError("Only LEFT JOIN is supported yet.")
+    if not isinstance(node.this, exp.Table):
+        raise UnsupportedSqlError("Only direct table JOIN targets are supported.")
+
+    condition = node.args.get("on")
+    if not isinstance(condition, exp.EQ):
+        raise UnsupportedSqlError("JOIN conditions must be column equality predicates.")
+    condition_sides_are_columns = isinstance(condition.this, exp.Column) and isinstance(
+        condition.expression,
+        exp.Column,
+    )
+    if not condition_sides_are_columns:
+        raise UnsupportedSqlError("JOIN conditions must compare two columns.")
+
+    return Join(
+        join_type="LEFT",
+        table=node.this.name,
+        alias=node.this.alias or None,
+        condition=JoinCondition(
+            left=ColumnRef(table=condition.this.table or None, name=condition.this.name),
+            right=ColumnRef(
+                table=condition.expression.table or None,
+                name=condition.expression.name,
+            ),
+        ),
+    )
 
 
 def _reject_unsupported_clauses(parsed: exp.Select) -> None:

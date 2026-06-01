@@ -15,6 +15,14 @@ class RemoveRedundantDistinct:
                 reason="Query does not use DISTINCT.",
             )
 
+        if query.joins:
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.NOT_APPLICABLE,
+                original_sql=query.raw_sql,
+                reason="DISTINCT removal with joins is not supported yet.",
+            )
+
         table_name = query.table_name()
         if table_name is None:
             return RewriteSuggestion(

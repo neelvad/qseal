@@ -24,3 +24,20 @@ def test_rejects_unsupported_where_expression() -> None:
 def test_rejects_unmodeled_clauses() -> None:
     with pytest.raises(UnsupportedSqlError, match="ORDER BY"):
         parse_select("SELECT user_id FROM users ORDER BY user_id")
+
+
+def test_parse_simple_left_join() -> None:
+    query = parse_select(
+        """
+        SELECT f.user_id
+        FROM fact_orders f
+        LEFT JOIN dim_users u ON f.user_id = u.user_id
+        """
+    )
+
+    assert query.table == "fact_orders"
+    assert query.table_alias == "f"
+    assert len(query.joins) == 1
+    assert query.joins[0].table == "dim_users"
+    assert query.joins[0].alias == "u"
+    assert query.joins[0].condition.to_sql() == "f.user_id = u.user_id"

@@ -45,12 +45,40 @@ class Predicate(BaseModel):
         return Predicate(left=self.left.unqualified(), operator=self.operator, right=self.right)
 
 
+class JoinCondition(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    left: ColumnRef
+    right: ColumnRef
+
+    def to_sql(self) -> str:
+        return f"{self.left.to_sql()} = {self.right.to_sql()}"
+
+
+class Join(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    join_type: str
+    table: str
+    alias: str | None = None
+    condition: JoinCondition
+
+    def relation_name(self) -> str:
+        return self.alias or self.table
+
+    def to_sql(self) -> str:
+        alias = f" {self.alias}" if self.alias else ""
+        return f"{self.join_type} JOIN {self.table}{alias} ON {self.condition.to_sql()}"
+
+
 class SelectQuery(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     table: str | None = None
+    table_alias: str | None = None
     subquery: SelectQuery | None = None
     alias: str | None = None
+    joins: tuple[Join, ...] = ()
     projections: tuple[ColumnRef, ...]
     predicates: tuple[Predicate, ...] = ()
     distinct: bool
@@ -64,7 +92,8 @@ class SelectQuery(BaseModel):
 
     def source_sql(self) -> str:
         if self.table is not None:
-            return self.table
+            alias = f" {self.table_alias}" if self.table_alias else ""
+            return f"{self.table}{alias}"
         if self.subquery is not None:
             subquery_sql = self.subquery.to_sql().removesuffix(";")
             alias = f" {self.alias}" if self.alias else ""
@@ -75,6 +104,9 @@ class SelectQuery(BaseModel):
         distinct = " DISTINCT" if self.distinct else ""
         projected = ", ".join(column.to_sql() for column in self.projections)
         sql = f"SELECT{distinct} {projected}\nFROM {self.source_sql()}"
+        if self.joins:
+            joins = "\n".join(join.to_sql() for join in self.joins)
+            sql = f"{sql}\n{joins}"
         if self.predicates:
             predicates = " AND ".join(predicate.to_sql() for predicate in self.predicates)
             sql = f"{sql}\nWHERE {predicates}"

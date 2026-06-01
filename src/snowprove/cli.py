@@ -8,6 +8,7 @@ from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.report.text import render_suggestion_report, render_verification_report
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.rewrites.distinct import RemoveRedundantDistinct
+from snowprove.rewrites.join_elimination import RemoveUnusedLeftJoin
 from snowprove.rewrites.predicate_pushdown import PredicatePushdown
 from snowprove.verifier.check import check_equivalence
 from snowprove.verifier.model import VerificationResult
@@ -37,6 +38,7 @@ def suggest(query_path: Path, schema_path: Path) -> None:
         constraints = load_constraints(schema_path)
         suggestion = _first_applicable_suggestion(
             [
+                RemoveUnusedLeftJoin().apply(query, constraints),
                 RemoveRedundantDistinct().apply(query, constraints),
                 PredicatePushdown().apply(query, constraints),
             ]

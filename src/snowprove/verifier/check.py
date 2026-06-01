@@ -1,6 +1,7 @@
 from snowprove.constraints.model import ConstraintCatalog
 from snowprove.ir.model import SelectQuery
 from snowprove.rewrites.base import VerificationStatus
+from snowprove.rewrites.join_elimination import RemoveUnusedLeftJoin
 from snowprove.rewrites.predicate_pushdown import PredicatePushdown
 from snowprove.verifier.model import VerificationResult
 
@@ -21,17 +22,27 @@ def check_equivalence(
     if _is_distinct_removal(original, rewritten):
         return _check_distinct_removal(original, rewritten, constraints)
 
+    join_elimination = RemoveUnusedLeftJoin().apply(original, constraints)
+    if (
+        join_elimination.status == VerificationStatus.PROVEN_EQUIVALENT
+        and join_elimination.rewritten_sql is not None
+    ):
+        expected = _parse_expected(join_elimination.rewritten_sql, rewritten)
+        if _same_normalized_query(expected, rewritten):
+            return VerificationResult(
+                status=VerificationStatus.PROVEN_EQUIVALENT,
+                original_sql=original.raw_sql,
+                rewritten_sql=rewritten.raw_sql,
+                assumptions=join_elimination.assumptions,
+                reason=join_elimination.reason,
+            )
+
     pushdown = PredicatePushdown().apply(original, constraints)
     if (
         pushdown.status == VerificationStatus.PROVEN_EQUIVALENT
         and pushdown.rewritten_sql is not None
     ):
-        try:
-            from snowprove.parser.sqlglot_parser import parse_select
-
-            expected = parse_select(pushdown.rewritten_sql)
-        except Exception:
-            expected = rewritten
+        expected = _parse_expected(pushdown.rewritten_sql, rewritten)
 
         if _same_normalized_query(expected, rewritten):
             return VerificationResult(
@@ -53,12 +64,23 @@ def check_equivalence(
 def _same_normalized_query(left: SelectQuery, right: SelectQuery) -> bool:
     return (
         left.table == right.table
+        and left.table_alias == right.table_alias
         and left.subquery == right.subquery
         and left.alias == right.alias
+        and left.joins == right.joins
         and left.projections == right.projections
         and left.predicates == right.predicates
         and left.distinct == right.distinct
     )
+
+
+def _parse_expected(sql: str, fallback: SelectQuery) -> SelectQuery:
+    try:
+        from snowprove.parser.sqlglot_parser import parse_select
+
+        return parse_select(sql)
+    except Exception:
+        return fallback
 
 
 def _is_distinct_removal(original: SelectQuery, rewritten: SelectQuery) -> bool:
@@ -66,7 +88,9 @@ def _is_distinct_removal(original: SelectQuery, rewritten: SelectQuery) -> bool:
         original.distinct
         and not rewritten.distinct
         and original.table == rewritten.table
+        and original.table_alias == rewritten.table_alias
         and original.subquery == rewritten.subquery
+        and original.joins == rewritten.joins
         and original.projections == rewritten.projections
         and original.predicates == rewritten.predicates
     )

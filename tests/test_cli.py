@@ -57,7 +57,7 @@ def test_suggest_cli_reports_unsupported_sql(tmp_path) -> None:
 
     assert result.exit_code == 0
     assert "UNSUPPORTED" in result.output
-    assert "Joins are not supported" in result.output
+    assert "Only LEFT JOIN is supported" in result.output
 
 
 def test_check_cli_reports_unsupported_original_sql(tmp_path) -> None:
@@ -98,3 +98,29 @@ def test_suggest_cli_reports_predicate_pushdown(tmp_path) -> None:
     assert result.exit_code == 0
     assert "predicate_pushdown" in result.output
     assert "SELECT user_id, revenue" in result.output
+
+
+def test_suggest_cli_reports_join_elimination(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    query.write_text(
+        """
+        SELECT f.user_id, f.revenue
+        FROM fact_orders f
+        LEFT JOIN dim_users u ON f.user_id = u.user_id
+        """
+    )
+    schema.write_text(
+        """
+tables:
+  dim_users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(main, ["suggest", str(query), "--schema", str(schema)])
+
+    assert result.exit_code == 0
+    assert "remove_unused_left_join" in result.output
+    assert "FROM fact_orders f" in result.output

@@ -1,0 +1,4 @@
+tables:
+  dim_users:
+    unique:
+      - [user_id]

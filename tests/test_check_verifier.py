@@ -53,6 +53,22 @@ def test_check_proves_predicate_pushdown() -> None:
     assert result.status == VerificationStatus.PROVEN_EQUIVALENT
 
 
+def test_check_proves_unused_left_join_elimination() -> None:
+    original = parse_select(
+        """
+        SELECT f.user_id, f.revenue
+        FROM fact_orders f
+        LEFT JOIN dim_users u ON f.user_id = u.user_id
+        """
+    )
+    rewritten = parse_select("SELECT f.user_id, f.revenue FROM fact_orders f")
+    constraints = ConstraintCatalog(tables={"dim_users": TableConstraints(unique=[("user_id",)])})
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+
+
 def test_check_disproves_distinct_removal_without_unique_key() -> None:
     original = parse_select("SELECT DISTINCT user_id FROM users")
     rewritten = parse_select("SELECT user_id FROM users")
