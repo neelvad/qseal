@@ -28,12 +28,12 @@ def parse_select(sql: str) -> SelectQuery:
 
     _reject_unsupported_clauses(parsed)
 
-    table = _table_name(from_expr.this)
+    source = _source(from_expr.this)
     projections = [_projection_to_column(expr) for expr in parsed.expressions]
     predicates = _where_predicates(parsed.args.get("where"))
 
     return SelectQuery(
-        table=table,
+        **source,
         projections=tuple(projections),
         predicates=tuple(predicates),
         distinct=parsed.args.get("distinct") is not None,
@@ -41,10 +41,41 @@ def parse_select(sql: str) -> SelectQuery:
     )
 
 
-def _table_name(node: exp.Expression) -> str:
-    if not isinstance(node, exp.Table):
-        raise UnsupportedSqlError("Only direct table references are supported.")
-    return node.name
+def _source(node: exp.Expression) -> dict[str, object]:
+    if isinstance(node, exp.Table):
+        return {"table": node.name}
+    if isinstance(node, exp.Subquery):
+        if not isinstance(node.this, exp.Select):
+            raise UnsupportedSqlError("Only SELECT subqueries are supported.")
+        return {
+            "subquery": _parse_select_expression(node.this),
+            "alias": node.alias or None,
+        }
+    raise UnsupportedSqlError("Only direct tables and simple subqueries are supported.")
+
+
+def _parse_select_expression(parsed: exp.Select) -> SelectQuery:
+    from_expr = parsed.args.get("from_")
+    if from_expr is None or from_expr.this is None:
+        raise UnsupportedSqlError("SELECT statements must include a FROM table.")
+
+    joins = parsed.args.get("joins") or []
+    if joins:
+        raise UnsupportedSqlError("Joins are not supported by this rewrite yet.")
+
+    _reject_unsupported_clauses(parsed)
+
+    source = _source(from_expr.this)
+    projections = [_projection_to_column(expr) for expr in parsed.expressions]
+    predicates = _where_predicates(parsed.args.get("where"))
+
+    return SelectQuery(
+        **source,
+        projections=tuple(projections),
+        predicates=tuple(predicates),
+        distinct=parsed.args.get("distinct") is not None,
+        raw_sql=parsed.sql(dialect="snowflake"),
+    )
 
 
 def _projection_to_column(node: exp.Expression) -> ColumnRef:

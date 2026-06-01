@@ -1,6 +1,7 @@
 from snowprove.constraints.model import ConstraintCatalog
 from snowprove.ir.model import SelectQuery
 from snowprove.rewrites.base import VerificationStatus
+from snowprove.rewrites.predicate_pushdown import PredicatePushdown
 from snowprove.verifier.model import VerificationResult
 
 
@@ -20,6 +21,27 @@ def check_equivalence(
     if _is_distinct_removal(original, rewritten):
         return _check_distinct_removal(original, rewritten, constraints)
 
+    pushdown = PredicatePushdown().apply(original, constraints)
+    if (
+        pushdown.status == VerificationStatus.PROVEN_EQUIVALENT
+        and pushdown.rewritten_sql is not None
+    ):
+        try:
+            from snowprove.parser.sqlglot_parser import parse_select
+
+            expected = parse_select(pushdown.rewritten_sql)
+        except Exception:
+            expected = rewritten
+
+        if _same_normalized_query(expected, rewritten):
+            return VerificationResult(
+                status=VerificationStatus.PROVEN_EQUIVALENT,
+                original_sql=original.raw_sql,
+                rewritten_sql=rewritten.raw_sql,
+                assumptions=pushdown.assumptions,
+                reason=pushdown.reason,
+            )
+
     return VerificationResult(
         status=VerificationStatus.UNKNOWN,
         original_sql=original.raw_sql,
@@ -28,11 +50,23 @@ def check_equivalence(
     )
 
 
+def _same_normalized_query(left: SelectQuery, right: SelectQuery) -> bool:
+    return (
+        left.table == right.table
+        and left.subquery == right.subquery
+        and left.alias == right.alias
+        and left.projections == right.projections
+        and left.predicates == right.predicates
+        and left.distinct == right.distinct
+    )
+
+
 def _is_distinct_removal(original: SelectQuery, rewritten: SelectQuery) -> bool:
     return (
         original.distinct
         and not rewritten.distinct
         and original.table == rewritten.table
+        and original.subquery == rewritten.subquery
         and original.projections == rewritten.projections
         and original.predicates == rewritten.predicates
     )
@@ -44,7 +78,16 @@ def _check_distinct_removal(
     constraints: ConstraintCatalog,
 ) -> VerificationResult:
     projected_columns = tuple(column.name for column in original.projections)
-    table = constraints.table(original.table)
+    table_name = original.table_name()
+    if table_name is None:
+        return VerificationResult(
+            status=VerificationStatus.UNSUPPORTED,
+            original_sql=original.raw_sql,
+            rewritten_sql=rewritten.raw_sql,
+            reason="DISTINCT removal checks are only supported for direct table queries.",
+        )
+
+    table = constraints.table(table_name)
 
     if table is not None and table.has_unique_key(projected_columns):
         return VerificationResult(
@@ -52,7 +95,7 @@ def _check_distinct_removal(
             original_sql=original.raw_sql,
             rewritten_sql=rewritten.raw_sql,
             assumptions=(
-                f"{original.table} has a trusted unique key contained in "
+                f"{table_name} has a trusted unique key contained in "
                 f"({', '.join(projected_columns)}).",
             ),
             reason="DISTINCT cannot remove rows when the projection contains a unique key.",
@@ -64,7 +107,7 @@ def _check_distinct_removal(
         rewritten_sql=rewritten.raw_sql,
         reason="Removing DISTINCT is unsafe without a trusted uniqueness constraint.",
         counterexample=(
-            f"If {original.table} contains two rows with the same "
+            f"If {table_name} contains two rows with the same "
             f"({', '.join(projected_columns)}) values, the original returns one row "
             "and the rewrite returns both rows."
         ),

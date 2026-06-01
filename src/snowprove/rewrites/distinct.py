@@ -15,13 +15,22 @@ class RemoveRedundantDistinct:
                 reason="Query does not use DISTINCT.",
             )
 
-        table = constraints.table(query.table)
+        table_name = query.table_name()
+        if table_name is None:
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.UNSUPPORTED,
+                original_sql=query.raw_sql,
+                reason="DISTINCT removal is only supported for direct table queries.",
+            )
+
+        table = constraints.table(table_name)
         if table is None:
             return RewriteSuggestion(
                 rule_name=self.rule_name,
                 status=VerificationStatus.UNKNOWN,
                 original_sql=query.raw_sql,
-                reason=f"No trusted constraints found for table {query.table}.",
+                reason=f"No trusted constraints found for table {table_name}.",
             )
 
         projected_columns = tuple(column.name for column in query.projections)
@@ -39,7 +48,7 @@ class RemoveRedundantDistinct:
             original_sql=query.raw_sql,
             rewritten_sql=query.without_distinct_sql(),
             assumptions=(
-                f"{query.table} has a trusted unique key contained in "
+                f"{table_name} has a trusted unique key contained in "
                 f"({', '.join(projected_columns)}).",
             ),
         )

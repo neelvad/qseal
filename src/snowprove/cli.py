@@ -8,6 +8,7 @@ from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.report.text import render_suggestion_report, render_verification_report
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.rewrites.distinct import RemoveRedundantDistinct
+from snowprove.rewrites.predicate_pushdown import PredicatePushdown
 from snowprove.verifier.check import check_equivalence
 from snowprove.verifier.model import VerificationResult
 
@@ -34,7 +35,12 @@ def suggest(query_path: Path, schema_path: Path) -> None:
     try:
         query = parse_select(raw_sql)
         constraints = load_constraints(schema_path)
-        suggestion = RemoveRedundantDistinct().apply(query, constraints)
+        suggestion = _first_applicable_suggestion(
+            [
+                RemoveRedundantDistinct().apply(query, constraints),
+                PredicatePushdown().apply(query, constraints),
+            ]
+        )
     except UnsupportedSqlError as error:
         suggestion = RewriteSuggestion(
             rule_name=RemoveRedundantDistinct.rule_name,
@@ -44,6 +50,13 @@ def suggest(query_path: Path, schema_path: Path) -> None:
         )
 
     console.print(render_suggestion_report(suggestion))
+
+
+def _first_applicable_suggestion(suggestions: list[RewriteSuggestion]) -> RewriteSuggestion:
+    for suggestion in suggestions:
+        if suggestion.status != VerificationStatus.NOT_APPLICABLE:
+            return suggestion
+    return suggestions[0]
 
 
 @main.command()

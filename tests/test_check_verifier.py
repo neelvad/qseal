@@ -35,6 +35,24 @@ def test_check_does_not_apply_distinct_rule_when_predicates_differ() -> None:
     assert result.status == VerificationStatus.UNKNOWN
 
 
+def test_check_proves_predicate_pushdown() -> None:
+    original = parse_select(
+        """
+        SELECT user_id, revenue
+        FROM (
+          SELECT user_id, revenue
+          FROM orders
+        ) x
+        WHERE revenue > 0
+        """
+    )
+    rewritten = parse_select("SELECT user_id, revenue FROM orders WHERE revenue > 0")
+
+    result = check_equivalence(original, rewritten, ConstraintCatalog())
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+
+
 def test_check_disproves_distinct_removal_without_unique_key() -> None:
     original = parse_select("SELECT DISTINCT user_id FROM users")
     rewritten = parse_select("SELECT user_id FROM users")

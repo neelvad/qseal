@@ -76,3 +76,25 @@ def test_check_cli_reports_unsupported_original_sql(tmp_path) -> None:
     assert result.exit_code == 0
     assert "UNSUPPORTED" in result.output
     assert "Original query unsupported" in result.output
+
+
+def test_suggest_cli_reports_predicate_pushdown(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    query.write_text(
+        """
+        SELECT user_id, revenue
+        FROM (
+          SELECT user_id, revenue
+          FROM orders
+        ) x
+        WHERE revenue > 0
+        """
+    )
+    schema.write_text("tables: {}\n")
+
+    result = CliRunner().invoke(main, ["suggest", str(query), "--schema", str(schema)])
+
+    assert result.exit_code == 0
+    assert "predicate_pushdown" in result.output
+    assert "SELECT user_id, revenue" in result.output
