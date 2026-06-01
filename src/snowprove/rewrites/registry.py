@@ -1,0 +1,38 @@
+from collections.abc import Sequence
+from typing import Protocol
+
+from snowprove.constraints.model import ConstraintCatalog
+from snowprove.ir.model import SelectQuery
+from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
+from snowprove.rewrites.distinct import RemoveRedundantDistinct
+from snowprove.rewrites.join_elimination import RemoveUnusedLeftJoin
+from snowprove.rewrites.predicate_pushdown import PredicatePushdown
+
+
+class RewriteRule(Protocol):
+    rule_name: str
+
+    def apply(self, query: SelectQuery, constraints: ConstraintCatalog) -> RewriteSuggestion:
+        pass
+
+
+DEFAULT_RULES: tuple[RewriteRule, ...] = (
+    RemoveUnusedLeftJoin(),
+    RemoveRedundantDistinct(),
+    PredicatePushdown(),
+)
+
+
+def suggest_rewrites(
+    query: SelectQuery,
+    constraints: ConstraintCatalog,
+    rules: Sequence[RewriteRule] = DEFAULT_RULES,
+) -> list[RewriteSuggestion]:
+    return [rule.apply(query, constraints) for rule in rules]
+
+
+def first_applicable_suggestion(suggestions: Sequence[RewriteSuggestion]) -> RewriteSuggestion:
+    for suggestion in suggestions:
+        if suggestion.status != VerificationStatus.NOT_APPLICABLE:
+            return suggestion
+    return suggestions[0]
