@@ -84,6 +84,10 @@ unknown and unsupported results.
 `--diff` prints unified diffs for proven rewrites with generated SQL. It is
 read-only and does not modify project files.
 
+`--fail-on findings` exits nonzero only when at least one proven rewrite finding
+exists. Unsupported SQL, unknown equivalence, missing constraints, and uncompiled
+dbt/Jinja are not treated as failures under this policy.
+
 Snowprove does not currently compile dbt projects or resolve `ref()` calls. A
 model containing dbt/Jinja syntax is reported as `UNSUPPORTED` when `--all` is
 used.

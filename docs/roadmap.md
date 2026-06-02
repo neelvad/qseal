@@ -34,7 +34,7 @@ conservative, not by pretending to verify all Snowflake SQL.
 
 - JSON reports suitable for CI consumption
 - unified diff output for reviewable rewrite suggestions
-- optional nonzero exit modes for policy checks
+- nonzero exit mode for proven rewrite findings
 - GitHub comment/report examples
 - dbt model scanning experiments
 

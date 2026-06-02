@@ -191,10 +191,15 @@ dbt/Jinja syntax:
 uv run snowprove dbt scan examples/dbt_project --all
 uv run snowprove dbt scan examples/dbt_project --diff
 uv run snowprove dbt scan examples/dbt_project --format json
+uv run snowprove dbt scan examples/dbt_project --fail-on findings
 ```
 
 `--diff` is read-only. It prints unified diffs for proven rewrites and does not
 modify model files.
+
+`--fail-on findings` exits nonzero only when Snowprove finds at least one
+`PROVEN_EQUIVALENT` rewrite. `UNKNOWN` and `UNSUPPORTED` results do not fail the
+command.
 
 ## Current Scope
 
