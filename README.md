@@ -26,6 +26,13 @@ uv run snowprove check examples/distinct/original.sql examples/distinct/rewritte
 `suggest` proposes the first applicable verified rewrite. `check` verifies a
 specific original/rewritten query pair.
 
+Useful options:
+
+```bash
+uv run snowprove suggest examples/distinct/original.sql --schema examples/distinct/schema.yml --all
+uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --format json
+```
+
 ## Examples
 
 ### Redundant DISTINCT Removal
@@ -145,4 +152,9 @@ Explicitly out of scope for now:
 - external verifier backends
 - Snowflake connections
 
-See [docs/scope.md](docs/scope.md) for the current proof and product boundaries.
+## Project Docs
+
+- [Scope](docs/scope.md): current proof and product boundaries
+- [Architecture](docs/architecture.md): package layout and execution flow
+- [Roadmap](docs/roadmap.md): planned phases
+- [Contributing](CONTRIBUTING.md): local development and rewrite-rule guidance
