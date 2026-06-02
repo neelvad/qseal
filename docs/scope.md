@@ -94,3 +94,7 @@ used.
 
 Use `--compiled-dir` to scan already-compiled dbt SQL. Schema constraints are
 still loaded from the source dbt project's `models/` YAML files.
+
+Use `--use-compiled` to auto-discover a single compiled SQL directory under
+`target/compiled/`. If that directory is missing, empty, or ambiguous, Snowprove
+returns a discovery error instead of guessing.

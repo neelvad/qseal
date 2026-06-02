@@ -192,6 +192,7 @@ uv run snowprove dbt scan examples/dbt_project --all
 uv run snowprove dbt scan examples/dbt_project --diff
 uv run snowprove dbt scan examples/dbt_project --format json
 uv run snowprove dbt scan examples/dbt_project --fail-on findings
+uv run snowprove dbt scan examples/dbt_project --use-compiled
 uv run snowprove dbt scan examples/dbt_project --compiled-dir examples/dbt_project/target/compiled/snowprove/models
 ```
 
@@ -205,6 +206,10 @@ command.
 `--compiled-dir` lets Snowprove read already-compiled dbt SQL while still using
 constraints from the source project's `models/` schema files. Snowprove does not
 run `dbt compile` itself.
+
+`--use-compiled` auto-discovers a single compiled SQL directory under
+`target/compiled/`. If multiple compiled directories are found, Snowprove asks
+for an explicit `--compiled-dir`.
 
 ## Current Scope
 

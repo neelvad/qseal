@@ -22,6 +22,7 @@ conservative, not by pretending to verify all Snowflake SQL.
 - document which dbt tests are treated as proof assumptions
 - scan dbt model SQL files directly
 - scan already-compiled dbt SQL via `--compiled-dir`
+- auto-discover compiled SQL with `--use-compiled`
 - future: invoke `dbt compile` directly
 
 ## v0.3: Snowflake Explain Integration
