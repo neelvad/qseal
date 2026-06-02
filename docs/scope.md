@@ -72,3 +72,15 @@ step.
 
 Snowprove also does not attempt full Snowflake SQL equivalence. The current
 subset is meant to be small enough to audit.
+
+## dbt Project Scans
+
+`snowprove dbt scan` discovers SQL files under `models/**/*.sql` and dbt schema
+files under `models/**/*.yml` and `models/**/*.yaml`.
+
+Default scan output reports only proven rewrite findings. `--all` includes
+unknown and unsupported results.
+
+Snowprove does not currently compile dbt projects or resolve `ref()` calls. A
+model containing dbt/Jinja syntax is reported as `UNSUPPORTED` when `--all` is
+used.

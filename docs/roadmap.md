@@ -20,7 +20,8 @@ conservative, not by pretending to verify all Snowflake SQL.
 - map `unique` tests to trusted unique constraints
 - map `not_null` tests to trusted nullability constraints
 - document which dbt tests are treated as proof assumptions
-- future: scan dbt model SQL files directly
+- scan dbt model SQL files directly
+- future: compile dbt/Jinja before scanning
 
 ## v0.3: Snowflake Explain Integration
 

@@ -33,6 +33,7 @@ uv run snowprove suggest examples/distinct/original.sql --schema examples/distin
 uv run snowprove suggest examples/predicate_pushdown/original.sql --schema examples/distinct/schema.yml --rule predicate_pushdown
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --format json
 uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
+uv run snowprove dbt scan examples/dbt_project
 ```
 
 ## Examples
@@ -174,6 +175,23 @@ Result: PROVEN_EQUIVALENT
 Rewrite: remove_redundant_not_null_filter
 ```
 
+### dbt Project Scan
+
+Snowprove can scan dbt model SQL files under a project's `models/` directory:
+
+```bash
+uv run snowprove dbt scan examples/dbt_project
+```
+
+Default scan output only reports proven rewrite findings. Use `--all` to include
+unknown and unsupported results, including models that contain uncompiled
+dbt/Jinja syntax:
+
+```bash
+uv run snowprove dbt scan examples/dbt_project --all
+uv run snowprove dbt scan examples/dbt_project --format json
+```
+
 ## Current Scope
 
 Currently modeled:
@@ -189,6 +207,7 @@ Currently modeled:
 - unused `LEFT JOIN` elimination when the joined key is known unique
 - redundant `IS NOT NULL` filter removal when the column is trusted non-null
 - trusted constraints loaded from Snowprove YAML or dbt `schema.yml`
+- dbt project scans over `models/**/*.sql`
 
 Explicitly out of scope for now:
 
@@ -202,6 +221,7 @@ Explicitly out of scope for now:
 - semi-structured `VARIANT` / `FLATTEN`
 - external verifier backends
 - Snowflake connections
+- dbt manifest parsing and automatic `ref()` resolution
 
 ## Project Docs
 
