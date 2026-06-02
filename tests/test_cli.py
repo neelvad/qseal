@@ -470,3 +470,31 @@ def test_dbt_scan_cli_does_not_fail_on_unsupported_with_findings_policy(tmp_path
 
     assert result.exit_code == 0
     assert "UNSUPPORTED" in result.output
+
+
+def test_dbt_scan_cli_can_scan_compiled_dir(tmp_path) -> None:
+    models = tmp_path / "models"
+    compiled = tmp_path / "target" / "compiled" / "project" / "models"
+    models.mkdir()
+    compiled.mkdir(parents=True)
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM {{ ref('dim_users') }}")
+    (compiled / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["dbt", "scan", str(tmp_path), "--compiled-dir", str(compiled)],
+    )
+
+    assert result.exit_code == 0
+    assert "remove_redundant_distinct" in result.output

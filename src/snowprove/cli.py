@@ -85,6 +85,12 @@ def dbt_group() -> None:
     show_default=True,
     help="Exit nonzero only for the selected proven-result policy.",
 )
+@click.option(
+    "--compiled-dir",
+    "compiled_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Directory containing compiled dbt SQL files to scan instead of models/ SQL.",
+)
 def dbt_scan(
     project_path: Path,
     show_all: bool,
@@ -92,6 +98,7 @@ def dbt_scan(
     output_format: str,
     show_diff: bool,
     fail_on: str,
+    compiled_path: Path | None,
 ) -> None:
     """Scan dbt model SQL files for verified rewrite opportunities."""
     if show_diff and output_format == "json":
@@ -102,6 +109,7 @@ def dbt_scan(
             project_path,
             rules=select_rules(selected_rules),
             include_all=show_all,
+            compiled_path=compiled_path,
         )
     except DbtProjectDiscoveryError as error:
         raise click.ClickException(str(error)) from error
