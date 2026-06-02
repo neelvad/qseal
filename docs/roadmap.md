@@ -12,6 +12,7 @@ conservative, not by pretending to verify all Snowflake SQL.
 - redundant `DISTINCT` removal
 - predicate pushdown through simple projection subqueries
 - unused `LEFT JOIN` elimination
+- redundant `IS NOT NULL` filter removal
 
 ## v0.2: dbt Constraint Ingestion
 

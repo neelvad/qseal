@@ -151,6 +151,29 @@ uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.
 The `unique` test becomes a trusted unique-key constraint. The `not_null` test
 becomes trusted `nullable: false` metadata.
 
+### Redundant NOT NULL Filter Removal
+
+When a column is trusted non-null, Snowprove can remove an `IS NOT NULL` filter:
+
+```sql
+SELECT user_id
+FROM dim_users
+WHERE user_id IS NOT NULL;
+```
+
+Run:
+
+```bash
+uv run snowprove suggest examples/dbt/not_null.sql --schema examples/dbt/schema.yml
+```
+
+Result:
+
+```text
+Result: PROVEN_EQUIVALENT
+Rewrite: remove_redundant_not_null_filter
+```
+
 ## Current Scope
 
 Currently modeled:
@@ -164,6 +187,7 @@ Currently modeled:
 - `DISTINCT` removal when projected columns are known unique
 - predicate pushdown through simple projection subqueries
 - unused `LEFT JOIN` elimination when the joined key is known unique
+- redundant `IS NOT NULL` filter removal when the column is trusted non-null
 - trusted constraints loaded from Snowprove YAML or dbt `schema.yml`
 
 Explicitly out of scope for now:

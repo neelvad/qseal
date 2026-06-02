@@ -58,6 +58,11 @@ Removes an unused `LEFT JOIN` when:
 This avoids the common failure mode where a supposedly unused join duplicates
 rows because the right side is not actually unique.
 
+### `remove_redundant_not_null_filter`
+
+Removes `IS NOT NULL` predicates when the filtered column is trusted non-null.
+This currently applies only to direct table queries.
+
 ## Non-Goals
 
 Snowprove does not prove that a query is faster. Runtime depends on Snowflake
