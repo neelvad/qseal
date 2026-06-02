@@ -6,6 +6,7 @@ from snowprove.ir.model import SelectQuery
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.rewrites.distinct import RemoveRedundantDistinct
 from snowprove.rewrites.join_elimination import RemoveUnusedLeftJoin
+from snowprove.rewrites.not_null_filter import RemoveRedundantNotNullFilter
 from snowprove.rewrites.predicate_pushdown import PredicatePushdown
 
 
@@ -18,6 +19,7 @@ class RewriteRule(Protocol):
 
 DEFAULT_RULES: tuple[RewriteRule, ...] = (
     RemoveUnusedLeftJoin(),
+    RemoveRedundantNotNullFilter(),
     RemoveRedundantDistinct(),
     PredicatePushdown(),
 )

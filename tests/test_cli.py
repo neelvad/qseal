@@ -197,7 +197,6 @@ def test_suggest_cli_can_report_all_json(tmp_path) -> None:
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert [item["rule_name"] for item in payload] == [
-        "remove_unused_left_join",
         "remove_redundant_distinct",
         "predicate_pushdown",
     ]
@@ -311,6 +310,29 @@ def test_suggest_cli_can_select_rule(tmp_path) -> None:
 
     assert result.exit_code == 0
     assert "predicate_pushdown" in result.output
+
+
+def test_suggest_cli_reports_not_null_filter_removal_from_dbt_schema(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    query.write_text("SELECT user_id FROM users WHERE email IS NOT NULL")
+    schema.write_text(
+        """
+version: 2
+models:
+  - name: users
+    columns:
+      - name: email
+        tests:
+          - not_null
+"""
+    )
+
+    result = CliRunner().invoke(main, ["suggest", str(query), "--schema", str(schema)])
+
+    assert result.exit_code == 0
+    assert "remove_redundant_not_null_filter" in result.output
+    assert "SELECT user_id" in result.output
 
 
 def test_suggest_cli_rejects_unknown_rule(tmp_path) -> None:

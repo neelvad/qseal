@@ -1,6 +1,10 @@
 import json
 
-from snowprove.report.json import render_suggestion_json, render_verification_json
+from snowprove.report.json import (
+    render_suggestion_json,
+    render_suggestions_json,
+    render_verification_json,
+)
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.verifier.model import VerificationResult
 
@@ -35,3 +39,25 @@ def test_render_verification_json() -> None:
 
     assert payload["status"] == "UNKNOWN"
     assert payload["reason"] == "No rule applies."
+
+
+def test_render_suggestions_json_omits_not_applicable_results() -> None:
+    payload = json.loads(
+        render_suggestions_json(
+            [
+                RewriteSuggestion(
+                    rule_name="not_applicable",
+                    status=VerificationStatus.NOT_APPLICABLE,
+                    original_sql="SELECT 1",
+                ),
+                RewriteSuggestion(
+                    rule_name="proven",
+                    status=VerificationStatus.PROVEN_EQUIVALENT,
+                    original_sql="SELECT 1",
+                    rewritten_sql="SELECT 1;",
+                ),
+            ]
+        )
+    )
+
+    assert [item["rule_name"] for item in payload] == ["proven"]

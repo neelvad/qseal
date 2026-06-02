@@ -69,6 +69,22 @@ def test_check_proves_unused_left_join_elimination() -> None:
     assert result.status == VerificationStatus.PROVEN_EQUIVALENT
 
 
+def test_check_proves_redundant_not_null_filter_removal() -> None:
+    original = parse_select("SELECT user_id FROM users WHERE email IS NOT NULL")
+    rewritten = parse_select("SELECT user_id FROM users")
+    constraints = ConstraintCatalog(
+        tables={
+            "users": TableConstraints(
+                columns={"email": {"nullable": False}},
+            )
+        }
+    )
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+
+
 def test_check_disproves_distinct_removal_without_unique_key() -> None:
     original = parse_select("SELECT DISTINCT user_id FROM users")
     rewritten = parse_select("SELECT user_id FROM users")

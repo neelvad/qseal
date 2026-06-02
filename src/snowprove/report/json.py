@@ -2,7 +2,7 @@ import json
 from collections.abc import Sequence
 from typing import Any
 
-from snowprove.rewrites.base import RewriteSuggestion
+from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.verifier.model import VerificationResult
 
 
@@ -11,7 +11,12 @@ def render_suggestion_json(suggestion: RewriteSuggestion) -> str:
 
 
 def render_suggestions_json(suggestions: Sequence[RewriteSuggestion]) -> str:
-    return _dumps([suggestion.model_dump(mode="json") for suggestion in suggestions])
+    visible = [
+        suggestion
+        for suggestion in suggestions
+        if suggestion.status != VerificationStatus.NOT_APPLICABLE
+    ]
+    return _dumps([suggestion.model_dump(mode="json") for suggestion in visible])
 
 
 def render_verification_json(result: VerificationResult) -> str:

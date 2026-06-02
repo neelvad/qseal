@@ -1,0 +1,51 @@
+from snowprove.constraints.model import ColumnConstraint, ConstraintCatalog, TableConstraints
+from snowprove.parser.sqlglot_parser import parse_select
+from snowprove.rewrites.base import VerificationStatus
+from snowprove.rewrites.not_null_filter import RemoveRedundantNotNullFilter
+
+
+def test_removes_redundant_not_null_filter() -> None:
+    query = parse_select("SELECT user_id FROM users WHERE email IS NOT NULL")
+    constraints = ConstraintCatalog(
+        tables={
+            "users": TableConstraints(
+                columns={"email": ColumnConstraint(nullable=False)},
+            )
+        }
+    )
+
+    suggestion = RemoveRedundantNotNullFilter().apply(query, constraints)
+
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rewritten_sql == "SELECT user_id\nFROM users;"
+
+
+def test_preserves_non_redundant_predicates() -> None:
+    query = parse_select("SELECT user_id FROM users WHERE email IS NOT NULL AND status = 'active'")
+    constraints = ConstraintCatalog(
+        tables={
+            "users": TableConstraints(
+                columns={"email": ColumnConstraint(nullable=False)},
+            )
+        }
+    )
+
+    suggestion = RemoveRedundantNotNullFilter().apply(query, constraints)
+
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rewritten_sql == "SELECT user_id\nFROM users\nWHERE status = 'active';"
+
+
+def test_does_not_remove_nullable_not_null_filter() -> None:
+    query = parse_select("SELECT user_id FROM users WHERE email IS NOT NULL")
+    constraints = ConstraintCatalog(
+        tables={
+            "users": TableConstraints(
+                columns={"email": ColumnConstraint(nullable=True)},
+            )
+        }
+    )
+
+    suggestion = RemoveRedundantNotNullFilter().apply(query, constraints)
+
+    assert suggestion.status == VerificationStatus.NOT_APPLICABLE

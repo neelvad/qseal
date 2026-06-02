@@ -2,6 +2,7 @@ from snowprove.constraints.model import ConstraintCatalog
 from snowprove.ir.model import SelectQuery
 from snowprove.rewrites.base import VerificationStatus
 from snowprove.rewrites.join_elimination import RemoveUnusedLeftJoin
+from snowprove.rewrites.not_null_filter import RemoveRedundantNotNullFilter
 from snowprove.rewrites.predicate_pushdown import PredicatePushdown
 from snowprove.verifier.model import VerificationResult
 
@@ -21,6 +22,21 @@ def check_equivalence(
 
     if _is_distinct_removal(original, rewritten):
         return _check_distinct_removal(original, rewritten, constraints)
+
+    not_null_filter = RemoveRedundantNotNullFilter().apply(original, constraints)
+    if (
+        not_null_filter.status == VerificationStatus.PROVEN_EQUIVALENT
+        and not_null_filter.rewritten_sql is not None
+    ):
+        expected = _parse_expected(not_null_filter.rewritten_sql, rewritten)
+        if _same_normalized_query(expected, rewritten):
+            return VerificationResult(
+                status=VerificationStatus.PROVEN_EQUIVALENT,
+                original_sql=original.raw_sql,
+                rewritten_sql=rewritten.raw_sql,
+                assumptions=not_null_filter.assumptions,
+                reason=not_null_filter.reason,
+            )
 
     join_elimination = RemoveUnusedLeftJoin().apply(original, constraints)
     if (
