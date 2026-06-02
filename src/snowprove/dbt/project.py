@@ -12,6 +12,23 @@ class DbtProjectDiscoveryError(ValueError):
     pass
 
 
+def discover_compiled_sql_path(project_path: Path) -> Path:
+    compiled_root = project_path / "target" / "compiled"
+    if not compiled_root.exists() or not compiled_root.is_dir():
+        raise DbtProjectDiscoveryError(f"dbt compiled directory not found: {compiled_root}")
+
+    candidates = _compiled_sql_candidates(compiled_root)
+    if not candidates:
+        raise DbtProjectDiscoveryError(f"No compiled SQL files found under: {compiled_root}")
+    if len(candidates) > 1:
+        formatted = ", ".join(str(candidate) for candidate in candidates)
+        raise DbtProjectDiscoveryError(
+            "Multiple compiled SQL directories found. "
+            f"Use --compiled-dir to choose one: {formatted}"
+        )
+    return candidates[0]
+
+
 def discover_dbt_project(
     project_path: Path,
     compiled_path: Path | None = None,
@@ -43,3 +60,29 @@ def discover_dbt_project(
             )
         ),
     )
+
+
+def _compiled_sql_candidates(compiled_root: Path) -> list[Path]:
+    sql_files = sorted(compiled_root.rglob("*.sql"))
+    if not sql_files:
+        return []
+
+    model_dirs = sorted(
+        {
+            parent
+            for sql_file in sql_files
+            for parent in sql_file.parents
+            if parent != compiled_root and parent.name == "models"
+        }
+    )
+    if model_dirs:
+        return model_dirs
+
+    project_dirs = sorted(
+        {
+            sql_file.relative_to(compiled_root).parts[0]
+            for sql_file in sql_files
+            if sql_file.relative_to(compiled_root).parts
+        }
+    )
+    return [compiled_root / project_dir for project_dir in project_dirs]

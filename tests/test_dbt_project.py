@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from snowprove.dbt.project import DbtProjectDiscoveryError, discover_dbt_project
+from snowprove.dbt.project import (
+    DbtProjectDiscoveryError,
+    discover_compiled_sql_path,
+    discover_dbt_project,
+)
 
 
 def test_discovers_dbt_project_files(tmp_path: Path) -> None:
@@ -40,3 +44,28 @@ def test_discovers_compiled_sql_files_when_compiled_path_is_provided(tmp_path: P
 
     assert project.model_sql_files == (compiled / "source_model.sql",)
     assert project.schema_yml_files == (models / "schema.yml",)
+
+
+def test_discovers_unambiguous_compiled_sql_path(tmp_path: Path) -> None:
+    compiled = tmp_path / "target" / "compiled" / "project" / "models"
+    compiled.mkdir(parents=True)
+    (compiled / "dim_users.sql").write_text("SELECT user_id FROM dim_users")
+
+    assert discover_compiled_sql_path(tmp_path) == compiled
+
+
+def test_rejects_missing_compiled_sql_path(tmp_path: Path) -> None:
+    with pytest.raises(DbtProjectDiscoveryError, match="compiled directory"):
+        discover_compiled_sql_path(tmp_path)
+
+
+def test_rejects_ambiguous_compiled_sql_paths(tmp_path: Path) -> None:
+    first = tmp_path / "target" / "compiled" / "first" / "models"
+    second = tmp_path / "target" / "compiled" / "second" / "models"
+    first.mkdir(parents=True)
+    second.mkdir(parents=True)
+    (first / "users.sql").write_text("SELECT user_id FROM users")
+    (second / "orders.sql").write_text("SELECT order_id FROM orders")
+
+    with pytest.raises(DbtProjectDiscoveryError, match="Multiple compiled SQL"):
+        discover_compiled_sql_path(tmp_path)
