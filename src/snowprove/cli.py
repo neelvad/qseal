@@ -3,8 +3,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from snowprove.constraints.dbt_loader import load_dbt_constraints
-from snowprove.constraints.yaml_loader import load_constraints
+from snowprove.constraints.loader import load_constraint_catalog
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.report.json import (
     render_suggestion_json,
@@ -25,7 +24,7 @@ from snowprove.verifier.model import VerificationResult
 console = Console()
 
 OutputFormat = click.Choice(["text", "json"], case_sensitive=False)
-SchemaFormat = click.Choice(["snowprove", "dbt"], case_sensitive=False)
+SchemaFormat = click.Choice(["auto", "snowprove", "dbt"], case_sensitive=False)
 
 
 @click.group()
@@ -45,7 +44,7 @@ def main() -> None:
 @click.option(
     "--schema-format",
     type=SchemaFormat,
-    default="snowprove",
+    default="auto",
     show_default=True,
     help="Schema constraint format.",
 )
@@ -113,7 +112,7 @@ def suggest(
 @click.option(
     "--schema-format",
     type=SchemaFormat,
-    default="snowprove",
+    default="auto",
     show_default=True,
     help="Schema constraint format.",
 )
@@ -177,6 +176,4 @@ def _print_verification(result: VerificationResult, output_format: str) -> None:
 
 
 def _load_constraints(path: Path, schema_format: str):
-    if schema_format == "dbt":
-        return load_dbt_constraints(path)
-    return load_constraints(path)
+    return load_constraint_catalog(path, schema_format)

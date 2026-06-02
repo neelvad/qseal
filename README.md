@@ -31,7 +31,7 @@ Useful options:
 ```bash
 uv run snowprove suggest examples/distinct/original.sql --schema examples/distinct/schema.yml --all
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --format json
-uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml --schema-format dbt
+uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
 ```
 
 ## Examples
@@ -144,7 +144,7 @@ models:
 Run:
 
 ```bash
-uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml --schema-format dbt
+uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
 ```
 
 The `unique` test becomes a trusted unique-key constraint. The `not_null` test
