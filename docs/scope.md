@@ -91,3 +91,6 @@ dbt/Jinja are not treated as failures under this policy.
 Snowprove does not currently compile dbt projects or resolve `ref()` calls. A
 model containing dbt/Jinja syntax is reported as `UNSUPPORTED` when `--all` is
 used.
+
+Use `--compiled-dir` to scan already-compiled dbt SQL. Schema constraints are
+still loaded from the source dbt project's `models/` YAML files.

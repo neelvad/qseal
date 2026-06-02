@@ -192,6 +192,7 @@ uv run snowprove dbt scan examples/dbt_project --all
 uv run snowprove dbt scan examples/dbt_project --diff
 uv run snowprove dbt scan examples/dbt_project --format json
 uv run snowprove dbt scan examples/dbt_project --fail-on findings
+uv run snowprove dbt scan examples/dbt_project --compiled-dir examples/dbt_project/target/compiled/snowprove/models
 ```
 
 `--diff` is read-only. It prints unified diffs for proven rewrites and does not
@@ -200,6 +201,10 @@ modify model files.
 `--fail-on findings` exits nonzero only when Snowprove finds at least one
 `PROVEN_EQUIVALENT` rewrite. `UNKNOWN` and `UNSUPPORTED` results do not fail the
 command.
+
+`--compiled-dir` lets Snowprove read already-compiled dbt SQL while still using
+constraints from the source project's `models/` schema files. Snowprove does not
+run `dbt compile` itself.
 
 ## Current Scope
 

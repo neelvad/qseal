@@ -21,7 +21,8 @@ conservative, not by pretending to verify all Snowflake SQL.
 - map `not_null` tests to trusted nullability constraints
 - document which dbt tests are treated as proof assumptions
 - scan dbt model SQL files directly
-- future: compile dbt/Jinja before scanning
+- scan already-compiled dbt SQL via `--compiled-dir`
+- future: invoke `dbt compile` directly
 
 ## v0.3: Snowflake Explain Integration
 
