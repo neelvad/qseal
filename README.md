@@ -211,6 +211,9 @@ run `dbt compile` itself.
 `target/compiled/`. If multiple compiled directories are found, Snowprove asks
 for an explicit `--compiled-dir`.
 
+When compiled SQL is scanned, reports and diffs prefer the matching source model
+path under `models/` while still showing the compiled SQL path used for parsing.
+
 ## Current Scope
 
 Currently modeled:

@@ -23,6 +23,7 @@ conservative, not by pretending to verify all Snowflake SQL.
 - scan dbt model SQL files directly
 - scan already-compiled dbt SQL via `--compiled-dir`
 - auto-discover compiled SQL with `--use-compiled`
+- map compiled SQL findings back to source model paths
 - future: invoke `dbt compile` directly
 
 ## v0.3: Snowflake Explain Integration
