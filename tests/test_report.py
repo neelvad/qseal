@@ -32,6 +32,8 @@ def test_render_dbt_scan_diff_report() -> None:
             results=(
                 DbtModelScanResult(
                     path="/tmp/project/models/users.sql",
+                    scanned_path="/tmp/project/models/users.sql",
+                    source_path="/tmp/project/models/users.sql",
                     suggestions=(
                         RewriteSuggestion(
                             rule_name="remove_redundant_distinct",

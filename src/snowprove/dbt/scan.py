@@ -14,6 +14,8 @@ class DbtModelScanResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     path: Path
+    scanned_path: Path
+    source_path: Path | None = None
     suggestions: tuple[RewriteSuggestion, ...] = Field(default_factory=tuple)
 
     def has_proven_findings(self) -> bool:
@@ -47,7 +49,14 @@ def scan_dbt_project(
     for model_path in project.model_sql_files:
         suggestions = _scan_model(model_path, constraints, rules, include_all)
         if suggestions:
-            results.append(DbtModelScanResult(path=model_path, suggestions=tuple(suggestions)))
+            results.append(
+                DbtModelScanResult(
+                    path=model_path,
+                    scanned_path=model_path,
+                    source_path=_source_path_for_model(project_path, compiled_path, model_path),
+                    suggestions=tuple(suggestions),
+                )
+            )
 
     return DbtScanResult(
         project_path=project_path,
@@ -120,6 +129,23 @@ def _visible_suggestions(
         for suggestion in suggestions
         if suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
     ]
+
+
+def _source_path_for_model(
+    project_path: Path,
+    compiled_path: Path | None,
+    model_path: Path,
+) -> Path | None:
+    if compiled_path is None:
+        return model_path
+
+    try:
+        relative = model_path.relative_to(compiled_path)
+    except ValueError:
+        return None
+
+    source_path = project_path / "models" / relative
+    return source_path if source_path.exists() else None
 
 
 def _load_project_constraints(schema_paths: tuple[Path, ...]) -> ConstraintCatalog:

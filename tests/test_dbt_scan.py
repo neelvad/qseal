@@ -26,6 +26,9 @@ models:
     assert result.model_count == 1
     assert result.has_proven_findings()
     assert len(result.results) == 1
+    assert result.results[0].path == models / "dim_users.sql"
+    assert result.results[0].scanned_path == models / "dim_users.sql"
+    assert result.results[0].source_path == models / "dim_users.sql"
     assert result.results[0].suggestions[0].status == VerificationStatus.PROVEN_EQUIVALENT
 
 
@@ -78,3 +81,5 @@ models:
 
     assert result.model_count == 1
     assert result.has_proven_findings()
+    assert result.results[0].scanned_path == compiled / "dim_users.sql"
+    assert result.results[0].source_path == models / "dim_users.sql"
