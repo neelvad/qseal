@@ -371,3 +371,27 @@ models:
     assert result.exit_code == 0
     assert "Scanned models: 1" in result.output
     assert "remove_redundant_distinct" in result.output
+
+
+def test_dbt_scan_cli_reports_json(tmp_path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = CliRunner().invoke(main, ["dbt", "scan", str(tmp_path), "--format", "json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["model_count"] == 1
+    assert payload["results"][0]["suggestions"][0]["rule_name"] == "remove_redundant_distinct"

@@ -1,6 +1,8 @@
 import json
 
+from snowprove.dbt.scan import DbtScanResult
 from snowprove.report.json import (
+    render_dbt_scan_json,
     render_suggestion_json,
     render_suggestions_json,
     render_verification_json,
@@ -61,3 +63,12 @@ def test_render_suggestions_json_omits_not_applicable_results() -> None:
     )
 
     assert [item["rule_name"] for item in payload] == ["proven"]
+
+
+def test_render_dbt_scan_json() -> None:
+    payload = json.loads(
+        render_dbt_scan_json(DbtScanResult(project_path="/tmp/project", model_count=0))
+    )
+
+    assert payload["project_path"] == "/tmp/project"
+    assert payload["model_count"] == 0

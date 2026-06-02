@@ -8,6 +8,7 @@ from snowprove.dbt.project import DbtProjectDiscoveryError
 from snowprove.dbt.scan import scan_dbt_project
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.report.json import (
+    render_dbt_scan_json,
     render_suggestion_json,
     render_suggestions_json,
     render_verification_json,
@@ -61,7 +62,20 @@ def dbt_group() -> None:
     type=RuleChoice,
     help="Only run a specific rewrite rule. Can be passed more than once.",
 )
-def dbt_scan(project_path: Path, show_all: bool, selected_rules: tuple[str, ...]) -> None:
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+def dbt_scan(
+    project_path: Path,
+    show_all: bool,
+    selected_rules: tuple[str, ...],
+    output_format: str,
+) -> None:
     """Scan dbt model SQL files for verified rewrite opportunities."""
     try:
         result = scan_dbt_project(
@@ -72,7 +86,10 @@ def dbt_scan(project_path: Path, show_all: bool, selected_rules: tuple[str, ...]
     except DbtProjectDiscoveryError as error:
         raise click.ClickException(str(error)) from error
 
-    console.print(render_dbt_scan_report(result))
+    if output_format == "json":
+        click.echo(render_dbt_scan_json(result))
+    else:
+        console.print(render_dbt_scan_report(result))
 
 
 @main.command()
