@@ -498,3 +498,50 @@ models:
 
     assert result.exit_code == 0
     assert "remove_redundant_distinct" in result.output
+
+
+def test_dbt_scan_cli_can_use_compiled_sql(tmp_path) -> None:
+    models = tmp_path / "models"
+    compiled = tmp_path / "target" / "compiled" / "project" / "models"
+    models.mkdir()
+    compiled.mkdir(parents=True)
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM {{ ref('dim_users') }}")
+    (compiled / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = CliRunner().invoke(main, ["dbt", "scan", str(tmp_path), "--use-compiled"])
+
+    assert result.exit_code == 0
+    assert "remove_redundant_distinct" in result.output
+
+
+def test_dbt_scan_cli_rejects_use_compiled_with_compiled_dir(tmp_path) -> None:
+    models = tmp_path / "models"
+    compiled = tmp_path / "target" / "compiled" / "project" / "models"
+    models.mkdir()
+    compiled.mkdir(parents=True)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "dbt",
+            "scan",
+            str(tmp_path),
+            "--use-compiled",
+            "--compiled-dir",
+            str(compiled),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "cannot be used together" in result.output

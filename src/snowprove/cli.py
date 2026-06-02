@@ -4,7 +4,7 @@ import click
 from rich.console import Console
 
 from snowprove.constraints.loader import load_constraint_catalog
-from snowprove.dbt.project import DbtProjectDiscoveryError
+from snowprove.dbt.project import DbtProjectDiscoveryError, discover_compiled_sql_path
 from snowprove.dbt.scan import scan_dbt_project
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.report.json import (
@@ -91,6 +91,11 @@ def dbt_group() -> None:
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Directory containing compiled dbt SQL files to scan instead of models/ SQL.",
 )
+@click.option(
+    "--use-compiled",
+    is_flag=True,
+    help="Auto-discover and scan compiled SQL under target/compiled/.",
+)
 def dbt_scan(
     project_path: Path,
     show_all: bool,
@@ -99,12 +104,17 @@ def dbt_scan(
     show_diff: bool,
     fail_on: str,
     compiled_path: Path | None,
+    use_compiled: bool,
 ) -> None:
     """Scan dbt model SQL files for verified rewrite opportunities."""
     if show_diff and output_format == "json":
         raise click.ClickException("--diff is only supported with --format text.")
+    if compiled_path is not None and use_compiled:
+        raise click.ClickException("--compiled-dir and --use-compiled cannot be used together.")
 
     try:
+        if use_compiled:
+            compiled_path = discover_compiled_sql_path(project_path)
         result = scan_dbt_project(
             project_path,
             rules=select_rules(selected_rules),
