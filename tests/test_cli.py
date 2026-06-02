@@ -395,3 +395,41 @@ models:
     payload = json.loads(result.output)
     assert payload["model_count"] == 1
     assert payload["results"][0]["suggestions"][0]["rule_name"] == "remove_redundant_distinct"
+
+
+def test_dbt_scan_cli_reports_diff(tmp_path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    model = models / "dim_users.sql"
+    model.write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = CliRunner().invoke(main, ["dbt", "scan", str(tmp_path), "--diff"])
+
+    assert result.exit_code == 0
+    assert f"--- {model}" in result.output
+    assert "-SELECT DISTINCT user_id" in result.output
+    assert "+SELECT user_id" in result.output
+
+
+def test_dbt_scan_cli_rejects_diff_json_combination(tmp_path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+
+    result = CliRunner().invoke(
+        main,
+        ["dbt", "scan", str(tmp_path), "--diff", "--format", "json"],
+    )
+
+    assert result.exit_code != 0
+    assert "--diff is only supported" in result.output

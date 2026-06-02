@@ -19,7 +19,6 @@ def render_rewrite_diff(path: Path, suggestion: RewriteSuggestion) -> str | None
             rewritten,
             fromfile=str(path),
             tofile=str(path),
-            lineterm="",
         )
     )
 

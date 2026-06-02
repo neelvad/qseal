@@ -1,5 +1,6 @@
 from rich.text import Text
 
+from snowprove.report.diff import render_rewrite_diff
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.verifier.model import VerificationResult
 
@@ -100,6 +101,26 @@ def render_dbt_scan_report(scan_result) -> Text:
                     output.append(f"    {line}\n")
 
     return output
+
+
+def render_dbt_scan_diff_report(scan_result) -> str:
+    output = []
+    diff_count = 0
+
+    for result in scan_result.results:
+        for suggestion in result.suggestions:
+            diff = render_rewrite_diff(result.path, suggestion)
+            if diff is None:
+                continue
+            if diff_count:
+                output.append("")
+            output.append(diff)
+            diff_count += 1
+
+    if diff_count == 0:
+        return "No rewrite diffs.\n"
+
+    return "\n".join(output)
 
 
 def _status_style(status: VerificationStatus) -> str:

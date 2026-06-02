@@ -14,6 +14,7 @@ from snowprove.report.json import (
     render_verification_json,
 )
 from snowprove.report.text import (
+    render_dbt_scan_diff_report,
     render_dbt_scan_report,
     render_suggestion_report,
     render_suggestions_report,
@@ -70,13 +71,23 @@ def dbt_group() -> None:
     show_default=True,
     help="Output format.",
 )
+@click.option(
+    "--diff",
+    "show_diff",
+    is_flag=True,
+    help="Print unified diffs for proven rewrites instead of the normal scan report.",
+)
 def dbt_scan(
     project_path: Path,
     show_all: bool,
     selected_rules: tuple[str, ...],
     output_format: str,
+    show_diff: bool,
 ) -> None:
     """Scan dbt model SQL files for verified rewrite opportunities."""
+    if show_diff and output_format == "json":
+        raise click.ClickException("--diff is only supported with --format text.")
+
     try:
         result = scan_dbt_project(
             project_path,
@@ -88,6 +99,8 @@ def dbt_scan(
 
     if output_format == "json":
         click.echo(render_dbt_scan_json(result))
+    elif show_diff:
+        click.echo(render_dbt_scan_diff_report(result))
     else:
         console.print(render_dbt_scan_report(result))
 
