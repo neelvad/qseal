@@ -23,6 +23,22 @@ DEFAULT_RULES: tuple[RewriteRule, ...] = (
 )
 
 
+def rule_names(rules: Sequence[RewriteRule] = DEFAULT_RULES) -> tuple[str, ...]:
+    return tuple(rule.rule_name for rule in rules)
+
+
+def rules_by_name(rules: Sequence[RewriteRule] = DEFAULT_RULES) -> dict[str, RewriteRule]:
+    return {rule.rule_name: rule for rule in rules}
+
+
+def select_rules(names: Sequence[str] | None) -> tuple[RewriteRule, ...]:
+    if not names:
+        return DEFAULT_RULES
+
+    available = rules_by_name()
+    return tuple(available[name] for name in names)
+
+
 def suggest_rewrites(
     query: SelectQuery,
     constraints: ConstraintCatalog,

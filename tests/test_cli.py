@@ -280,3 +280,49 @@ models:
 
     assert result.exit_code == 0
     assert "PROVEN_EQUIVALENT" in result.output
+
+
+def test_suggest_cli_can_select_rule(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    query.write_text(
+        """
+        SELECT user_id, revenue
+        FROM (
+          SELECT user_id, revenue
+          FROM orders
+        ) x
+        WHERE revenue > 0
+        """
+    )
+    schema.write_text("tables: {}\n")
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "suggest",
+            str(query),
+            "--schema",
+            str(schema),
+            "--rule",
+            "predicate_pushdown",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "predicate_pushdown" in result.output
+
+
+def test_suggest_cli_rejects_unknown_rule(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    query.write_text("SELECT user_id FROM users")
+    schema.write_text("tables: {}\n")
+
+    result = CliRunner().invoke(
+        main,
+        ["suggest", str(query), "--schema", str(schema), "--rule", "missing"],
+    )
+
+    assert result.exit_code != 0
+    assert "Invalid value for '--rule'" in result.output

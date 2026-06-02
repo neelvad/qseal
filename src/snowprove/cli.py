@@ -17,7 +17,12 @@ from snowprove.report.text import (
 )
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.rewrites.distinct import RemoveRedundantDistinct
-from snowprove.rewrites.registry import first_applicable_suggestion, suggest_rewrites
+from snowprove.rewrites.registry import (
+    first_applicable_suggestion,
+    rule_names,
+    select_rules,
+    suggest_rewrites,
+)
 from snowprove.verifier.check import check_equivalence
 from snowprove.verifier.model import VerificationResult
 
@@ -25,6 +30,7 @@ console = Console()
 
 OutputFormat = click.Choice(["text", "json"], case_sensitive=False)
 SchemaFormat = click.Choice(["auto", "snowprove", "dbt"], case_sensitive=False)
+RuleChoice = click.Choice(rule_names(), case_sensitive=False)
 
 
 @click.group()
@@ -55,6 +61,13 @@ def main() -> None:
     help="Show every applicable rewrite result instead of only the first.",
 )
 @click.option(
+    "--rule",
+    "selected_rules",
+    multiple=True,
+    type=RuleChoice,
+    help="Only run a specific rewrite rule. Can be passed more than once.",
+)
+@click.option(
     "--format",
     "output_format",
     type=OutputFormat,
@@ -67,6 +80,7 @@ def suggest(
     schema_path: Path,
     schema_format: str,
     show_all: bool,
+    selected_rules: tuple[str, ...],
     output_format: str,
 ) -> None:
     """Suggest verified-safe rewrites for one SQL query."""
@@ -74,7 +88,7 @@ def suggest(
     try:
         query = parse_select(raw_sql)
         constraints = _load_constraints(schema_path, schema_format)
-        suggestions = suggest_rewrites(query, constraints)
+        suggestions = suggest_rewrites(query, constraints, rules=select_rules(selected_rules))
     except UnsupportedSqlError as error:
         suggestions = [
             RewriteSuggestion(

@@ -30,6 +30,7 @@ Useful options:
 
 ```bash
 uv run snowprove suggest examples/distinct/original.sql --schema examples/distinct/schema.yml --all
+uv run snowprove suggest examples/predicate_pushdown/original.sql --schema examples/distinct/schema.yml --rule predicate_pushdown
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --format json
 uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
 ```
