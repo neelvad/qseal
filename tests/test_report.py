@@ -49,3 +49,58 @@ def test_render_dbt_scan_diff_report() -> None:
 
     assert "-SELECT DISTINCT user_id" in report
     assert "+SELECT user_id" in report
+
+
+def test_render_dbt_scan_diff_report_uses_source_path() -> None:
+    report = render_dbt_scan_diff_report(
+        DbtScanResult(
+            project_path="/tmp/project",
+            model_count=1,
+            results=(
+                DbtModelScanResult(
+                    path="/tmp/project/target/compiled/project/models/users.sql",
+                    scanned_path="/tmp/project/target/compiled/project/models/users.sql",
+                    source_path="/tmp/project/models/users.sql",
+                    suggestions=(
+                        RewriteSuggestion(
+                            rule_name="remove_redundant_distinct",
+                            status=VerificationStatus.PROVEN_EQUIVALENT,
+                            original_sql="SELECT DISTINCT user_id\nFROM users;",
+                            rewritten_sql="SELECT user_id\nFROM users;",
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+
+    assert "--- /tmp/project/models/users.sql" in report
+
+
+def test_render_dbt_scan_report_shows_source_and_scanned_paths() -> None:
+    from snowprove.report.text import render_dbt_scan_report
+
+    report = render_dbt_scan_report(
+        DbtScanResult(
+            project_path="/tmp/project",
+            model_count=1,
+            results=(
+                DbtModelScanResult(
+                    path="/tmp/project/target/compiled/project/models/users.sql",
+                    scanned_path="/tmp/project/target/compiled/project/models/users.sql",
+                    source_path="/tmp/project/models/users.sql",
+                    suggestions=(
+                        RewriteSuggestion(
+                            rule_name="remove_redundant_distinct",
+                            status=VerificationStatus.PROVEN_EQUIVALENT,
+                            original_sql="SELECT DISTINCT user_id\nFROM users;",
+                            rewritten_sql="SELECT user_id\nFROM users;",
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+
+    assert "/tmp/project/models/users.sql" in report.plain
+    assert "Scanned SQL: /tmp/project/target/compiled/project/models/users.sql" in report.plain

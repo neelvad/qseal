@@ -89,7 +89,9 @@ def render_dbt_scan_report(scan_result) -> Text:
 
     for result in scan_result.results:
         output.append("\n")
-        output.append(f"{result.path}\n", style="bold")
+        output.append(f"{result.display_path()}\n", style="bold")
+        if result.scanned_from_source():
+            output.append(f"  Scanned SQL: {result.scanned_path}\n")
         for suggestion in result.suggestions:
             output.append(f"  Result: {suggestion.status.value}\n")
             output.append(f"  Rewrite: {suggestion.rule_name}\n")
@@ -109,7 +111,7 @@ def render_dbt_scan_diff_report(scan_result) -> str:
 
     for result in scan_result.results:
         for suggestion in result.suggestions:
-            diff = render_rewrite_diff(result.path, suggestion)
+            diff = render_rewrite_diff(result.display_path(), suggestion)
             if diff is None:
                 continue
             if diff_count:

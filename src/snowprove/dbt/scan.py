@@ -24,6 +24,12 @@ class DbtModelScanResult(BaseModel):
             for suggestion in self.suggestions
         )
 
+    def display_path(self) -> Path:
+        return self.source_path or self.path
+
+    def scanned_from_source(self) -> bool:
+        return self.source_path is not None and self.source_path != self.scanned_path
+
 
 class DbtScanResult(BaseModel):
     model_config = ConfigDict(frozen=True)

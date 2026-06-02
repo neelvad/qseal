@@ -523,6 +523,9 @@ models:
 
     assert result.exit_code == 0
     assert "remove_redundant_distinct" in result.output
+    normalized_output = result.output.replace("\n", "")
+    assert str(models / "dim_users.sql") in normalized_output
+    assert str(compiled / "dim_users.sql") in normalized_output
 
 
 def test_dbt_scan_cli_rejects_use_compiled_with_compiled_dir(tmp_path) -> None:
