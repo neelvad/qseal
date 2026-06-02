@@ -226,3 +226,35 @@ tables:
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert payload["status"] == "PROVEN_EQUIVALENT"
+
+
+def test_suggest_cli_can_load_dbt_schema_format(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    query.write_text("SELECT DISTINCT user_id FROM dim_users")
+    schema.write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "suggest",
+            str(query),
+            "--schema",
+            str(schema),
+            "--schema-format",
+            "dbt",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "PROVEN_EQUIVALENT" in result.output

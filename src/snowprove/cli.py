@@ -3,6 +3,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
+from snowprove.constraints.dbt_loader import load_dbt_constraints
 from snowprove.constraints.yaml_loader import load_constraints
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.report.json import (
@@ -24,6 +25,7 @@ from snowprove.verifier.model import VerificationResult
 console = Console()
 
 OutputFormat = click.Choice(["text", "json"], case_sensitive=False)
+SchemaFormat = click.Choice(["snowprove", "dbt"], case_sensitive=False)
 
 
 @click.group()
@@ -39,6 +41,13 @@ def main() -> None:
     required=True,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="YAML file containing trusted schema constraints.",
+)
+@click.option(
+    "--schema-format",
+    type=SchemaFormat,
+    default="snowprove",
+    show_default=True,
+    help="Schema constraint format.",
 )
 @click.option(
     "--all",
@@ -57,6 +66,7 @@ def main() -> None:
 def suggest(
     query_path: Path,
     schema_path: Path,
+    schema_format: str,
     show_all: bool,
     output_format: str,
 ) -> None:
@@ -64,7 +74,7 @@ def suggest(
     raw_sql = query_path.read_text()
     try:
         query = parse_select(raw_sql)
-        constraints = load_constraints(schema_path)
+        constraints = _load_constraints(schema_path, schema_format)
         suggestions = suggest_rewrites(query, constraints)
     except UnsupportedSqlError as error:
         suggestions = [
@@ -101,6 +111,13 @@ def suggest(
     help="YAML file containing trusted schema constraints.",
 )
 @click.option(
+    "--schema-format",
+    type=SchemaFormat,
+    default="snowprove",
+    show_default=True,
+    help="Schema constraint format.",
+)
+@click.option(
     "--format",
     "output_format",
     type=OutputFormat,
@@ -112,6 +129,7 @@ def check(
     original_path: Path,
     rewritten_path: Path,
     schema_path: Path,
+    schema_format: str,
     output_format: str,
 ) -> None:
     """Check whether two supported SQL queries are equivalent."""
@@ -143,7 +161,7 @@ def check(
         return
 
     try:
-        constraints = load_constraints(schema_path)
+        constraints = _load_constraints(schema_path, schema_format)
     except ValueError as error:
         raise click.ClickException(str(error)) from error
 
@@ -156,3 +174,9 @@ def _print_verification(result: VerificationResult, output_format: str) -> None:
         click.echo(render_verification_json(result))
     else:
         console.print(render_verification_report(result))
+
+
+def _load_constraints(path: Path, schema_format: str):
+    if schema_format == "dbt":
+        return load_dbt_constraints(path)
+    return load_constraints(path)
