@@ -24,6 +24,7 @@ models:
     result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
 
     assert result.model_count == 1
+    assert result.has_proven_findings()
     assert len(result.results) == 1
     assert result.results[0].suggestions[0].status == VerificationStatus.PROVEN_EQUIVALENT
 
@@ -37,6 +38,7 @@ def test_scan_dbt_project_skips_jinja_by_default(tmp_path: Path) -> None:
     result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
 
     assert result.model_count == 1
+    assert not result.has_proven_findings()
     assert result.results == ()
 
 
@@ -49,4 +51,5 @@ def test_scan_dbt_project_can_include_unsupported_jinja(tmp_path: Path) -> None:
     result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES, include_all=True)
 
     assert result.model_count == 1
+    assert not result.has_proven_findings()
     assert result.results[0].suggestions[0].status == VerificationStatus.UNSUPPORTED

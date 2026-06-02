@@ -16,6 +16,12 @@ class DbtModelScanResult(BaseModel):
     path: Path
     suggestions: tuple[RewriteSuggestion, ...] = Field(default_factory=tuple)
 
+    def has_proven_findings(self) -> bool:
+        return any(
+            suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+            for suggestion in self.suggestions
+        )
+
 
 class DbtScanResult(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -23,6 +29,9 @@ class DbtScanResult(BaseModel):
     project_path: Path
     model_count: int
     results: tuple[DbtModelScanResult, ...] = Field(default_factory=tuple)
+
+    def has_proven_findings(self) -> bool:
+        return any(result.has_proven_findings() for result in self.results)
 
 
 def scan_dbt_project(
