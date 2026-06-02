@@ -81,6 +81,9 @@ files under `models/**/*.yml` and `models/**/*.yaml`.
 Default scan output reports only proven rewrite findings. `--all` includes
 unknown and unsupported results.
 
+`--diff` prints unified diffs for proven rewrites with generated SQL. It is
+read-only and does not modify project files.
+
 Snowprove does not currently compile dbt projects or resolve `ref()` calls. A
 model containing dbt/Jinja syntax is reported as `UNSUPPORTED` when `--all` is
 used.

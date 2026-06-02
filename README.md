@@ -189,8 +189,12 @@ dbt/Jinja syntax:
 
 ```bash
 uv run snowprove dbt scan examples/dbt_project --all
+uv run snowprove dbt scan examples/dbt_project --diff
 uv run snowprove dbt scan examples/dbt_project --format json
 ```
+
+`--diff` is read-only. It prints unified diffs for proven rewrites and does not
+modify model files.
 
 ## Current Scope
 

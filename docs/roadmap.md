@@ -33,6 +33,7 @@ conservative, not by pretending to verify all Snowflake SQL.
 ## v0.4: CI and PR Workflows
 
 - JSON reports suitable for CI consumption
+- unified diff output for reviewable rewrite suggestions
 - optional nonzero exit modes for policy checks
 - GitHub comment/report examples
 - dbt model scanning experiments
