@@ -15,10 +15,11 @@ conservative, not by pretending to verify all Snowflake SQL.
 
 ## v0.2: dbt Constraint Ingestion
 
-- read dbt-style `schema.yml`
+- read dbt-style `schema.yml` column tests
 - map `unique` tests to trusted unique constraints
 - map `not_null` tests to trusted nullability constraints
 - document which dbt tests are treated as proof assumptions
+- future: scan dbt model SQL files directly
 
 ## v0.3: Snowflake Explain Integration
 

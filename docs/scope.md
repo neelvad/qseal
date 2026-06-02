@@ -24,8 +24,17 @@ tables:
       - [user_id]
 ```
 
-Snowprove treats this YAML as trusted. It does not currently inspect Snowflake,
-dbt tests, or production data to validate that the constraint is true.
+Snowprove treats this YAML as trusted. It does not currently inspect Snowflake
+or production data to validate that the constraint is true.
+
+Snowprove can also load dbt-style `schema.yml` files with `--schema-format dbt`.
+Currently supported dbt tests:
+
+- column `unique` -> trusted single-column unique key
+- column `not_null` -> trusted `nullable: false`
+
+These dbt tests are still treated as assumptions. Snowprove does not run dbt
+tests or verify that they passed.
 
 ## Supported Rewrite Rules
 

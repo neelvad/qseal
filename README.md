@@ -31,6 +31,7 @@ Useful options:
 ```bash
 uv run snowprove suggest examples/distinct/original.sql --schema examples/distinct/schema.yml --all
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --format json
+uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml --schema-format dbt
 ```
 
 ## Examples
@@ -124,6 +125,31 @@ Result: PROVEN_EQUIVALENT
 Rewrite: remove_unused_left_join
 ```
 
+### dbt Schema Constraints
+
+Snowprove can read dbt-style column tests as trusted assumptions:
+
+```yaml
+version: 2
+
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+          - not_null
+```
+
+Run:
+
+```bash
+uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml --schema-format dbt
+```
+
+The `unique` test becomes a trusted unique-key constraint. The `not_null` test
+becomes trusted `nullable: false` metadata.
+
 ## Current Scope
 
 Currently modeled:
@@ -137,7 +163,7 @@ Currently modeled:
 - `DISTINCT` removal when projected columns are known unique
 - predicate pushdown through simple projection subqueries
 - unused `LEFT JOIN` elimination when the joined key is known unique
-- trusted constraints loaded from YAML
+- trusted constraints loaded from Snowprove YAML or dbt `schema.yml`
 
 Explicitly out of scope for now:
 
