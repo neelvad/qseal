@@ -1,3 +1,5 @@
+import json
+
 from click.testing import CliRunner
 
 from snowprove.cli import main
@@ -146,3 +148,81 @@ def test_suggest_cli_can_report_all_applicable_results(tmp_path) -> None:
     assert result.exit_code == 0
     assert "remove_redundant_distinct" in result.output
     assert "predicate_pushdown" in result.output
+
+
+def test_suggest_cli_can_report_json(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    query.write_text("SELECT DISTINCT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["suggest", str(query), "--schema", str(schema), "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["status"] == "PROVEN_EQUIVALENT"
+    assert payload["rule_name"] == "remove_redundant_distinct"
+
+
+def test_suggest_cli_can_report_all_json(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    query.write_text(
+        """
+        SELECT DISTINCT user_id
+        FROM (
+          SELECT user_id
+          FROM users
+        ) x
+        WHERE user_id = 1
+        """
+    )
+    schema.write_text("tables: {}\n")
+
+    result = CliRunner().invoke(
+        main,
+        ["suggest", str(query), "--schema", str(schema), "--all", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert [item["rule_name"] for item in payload] == [
+        "remove_unused_left_join",
+        "remove_redundant_distinct",
+        "predicate_pushdown",
+    ]
+
+
+def test_check_cli_can_report_json(tmp_path) -> None:
+    original = tmp_path / "original.sql"
+    rewritten = tmp_path / "rewritten.sql"
+    schema = tmp_path / "schema.yml"
+    original.write_text("SELECT DISTINCT user_id FROM users")
+    rewritten.write_text("SELECT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["check", str(original), str(rewritten), "--schema", str(schema), "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["status"] == "PROVEN_EQUIVALENT"
