@@ -7,3 +7,15 @@ models:
         tests:
           - unique
           - not_null
+  - name: fact_orders
+    columns:
+      - name: order_id
+        tests:
+          - unique
+          - not_null
+      - name: user_id
+        tests:
+          - not_null
+      - name: revenue
+        tests:
+          - not_null
