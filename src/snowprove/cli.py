@@ -5,7 +5,11 @@ from rich.console import Console
 
 from snowprove.constraints.yaml_loader import load_constraints
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
-from snowprove.report.text import render_suggestion_report, render_verification_report
+from snowprove.report.text import (
+    render_suggestion_report,
+    render_suggestions_report,
+    render_verification_report,
+)
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.rewrites.distinct import RemoveRedundantDistinct
 from snowprove.rewrites.registry import first_applicable_suggestion, suggest_rewrites
@@ -29,22 +33,33 @@ def main() -> None:
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="YAML file containing trusted schema constraints.",
 )
-def suggest(query_path: Path, schema_path: Path) -> None:
+@click.option(
+    "--all",
+    "show_all",
+    is_flag=True,
+    help="Show every applicable rewrite result instead of only the first.",
+)
+def suggest(query_path: Path, schema_path: Path, show_all: bool) -> None:
     """Suggest verified-safe rewrites for one SQL query."""
     raw_sql = query_path.read_text()
     try:
         query = parse_select(raw_sql)
         constraints = load_constraints(schema_path)
-        suggestion = first_applicable_suggestion(suggest_rewrites(query, constraints))
+        suggestions = suggest_rewrites(query, constraints)
     except UnsupportedSqlError as error:
-        suggestion = RewriteSuggestion(
-            rule_name=RemoveRedundantDistinct.rule_name,
-            status=VerificationStatus.UNSUPPORTED,
-            original_sql=raw_sql.strip(),
-            reason=str(error),
-        )
+        suggestions = [
+            RewriteSuggestion(
+                rule_name=RemoveRedundantDistinct.rule_name,
+                status=VerificationStatus.UNSUPPORTED,
+                original_sql=raw_sql.strip(),
+                reason=str(error),
+            )
+        ]
 
-    console.print(render_suggestion_report(suggestion))
+    if show_all:
+        console.print(render_suggestions_report(suggestions))
+    else:
+        console.print(render_suggestion_report(first_applicable_suggestion(suggestions)))
 
 
 @main.command()

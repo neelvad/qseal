@@ -30,6 +30,29 @@ def render_suggestion_report(suggestion: RewriteSuggestion) -> Text:
     return output
 
 
+def render_suggestions_report(suggestions: list[RewriteSuggestion]) -> Text:
+    output = Text()
+    visible = [
+        suggestion
+        for suggestion in suggestions
+        if suggestion.status != VerificationStatus.NOT_APPLICABLE
+    ]
+
+    if not visible:
+        output.append("Result: ", style="bold")
+        output.append(f"{VerificationStatus.NOT_APPLICABLE.value}\n", style="yellow")
+        output.append("Reason: ", style="bold")
+        output.append("No rewrite rules apply to this query.\n")
+        return output
+
+    for index, suggestion in enumerate(visible):
+        if index:
+            output.append("\n")
+        output.append(render_suggestion_report(suggestion))
+
+    return output
+
+
 def render_verification_report(result: VerificationResult) -> Text:
     output = Text()
 

@@ -124,3 +124,25 @@ tables:
     assert result.exit_code == 0
     assert "remove_unused_left_join" in result.output
     assert "FROM fact_orders f" in result.output
+
+
+def test_suggest_cli_can_report_all_applicable_results(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    query.write_text(
+        """
+        SELECT DISTINCT user_id
+        FROM (
+          SELECT user_id
+          FROM users
+        ) x
+        WHERE user_id = 1
+        """
+    )
+    schema.write_text("tables: {}\n")
+
+    result = CliRunner().invoke(main, ["suggest", str(query), "--schema", str(schema), "--all"])
+
+    assert result.exit_code == 0
+    assert "remove_redundant_distinct" in result.output
+    assert "predicate_pushdown" in result.output
