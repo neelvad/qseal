@@ -16,6 +16,17 @@ def test_parse_select_with_where_predicates() -> None:
     ]
 
 
+def test_parse_select_with_null_predicates() -> None:
+    query = parse_select(
+        "SELECT user_id FROM users WHERE deleted_at IS NULL AND email IS NOT NULL"
+    )
+
+    assert [predicate.to_sql() for predicate in query.predicates] == [
+        "deleted_at IS NULL",
+        "email IS NOT NULL",
+    ]
+
+
 def test_rejects_unsupported_where_expression() -> None:
     with pytest.raises(UnsupportedSqlError, match="Only ANDed"):
         parse_select("SELECT user_id FROM users WHERE user_id = 1 OR status = 'active'")

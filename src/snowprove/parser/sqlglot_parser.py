@@ -137,7 +137,11 @@ def _predicate_expression(node: exp.Expression) -> list[Predicate]:
         ]
     if isinstance(node, exp.EQ | exp.GT | exp.GTE | exp.LT | exp.LTE):
         return [_comparison(node)]
-    raise UnsupportedSqlError("Only ANDed column/literal WHERE comparisons are supported.")
+    if isinstance(node, exp.Is | exp.Not):
+        return [_null_predicate(node)]
+    raise UnsupportedSqlError(
+        "Only ANDed column/literal comparisons and NULL predicates are supported."
+    )
 
 
 def _comparison(node: exp.Expression) -> Predicate:
@@ -151,6 +155,28 @@ def _comparison(node: exp.Expression) -> Predicate:
             value=str(node.expression.this),
             is_string=bool(node.expression.is_string),
         ),
+    )
+
+
+def _null_predicate(node: exp.Expression) -> Predicate:
+    if isinstance(node, exp.Not):
+        inner = node.this
+        operator = "IS NOT NULL"
+    else:
+        inner = node
+        operator = "IS NULL"
+
+    if (
+        not isinstance(inner, exp.Is)
+        or not isinstance(inner.this, exp.Column)
+        or not isinstance(inner.expression, exp.Null)
+    ):
+        raise UnsupportedSqlError("Only IS NULL and IS NOT NULL predicates are supported.")
+
+    return Predicate(
+        left=ColumnRef(table=inner.this.table or None, name=inner.this.name),
+        operator=operator,
+        right=None,
     )
 
 

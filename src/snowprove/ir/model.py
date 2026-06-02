@@ -36,9 +36,11 @@ class Predicate(BaseModel):
 
     left: ColumnRef
     operator: str
-    right: LiteralValue
+    right: LiteralValue | None = None
 
     def to_sql(self) -> str:
+        if self.right is None:
+            return f"{self.left.to_sql()} {self.operator}"
         return f"{self.left.to_sql()} {self.operator} {self.right.to_sql()}"
 
     def unqualified(self) -> Predicate:

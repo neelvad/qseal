@@ -44,6 +44,24 @@ def test_pushes_predicate_while_preserving_inner_predicates() -> None:
     )
 
 
+def test_pushes_null_predicate_through_simple_projection_subquery() -> None:
+    query = parse_select(
+        """
+        SELECT user_id, email
+        FROM (
+          SELECT user_id, email
+          FROM users
+        ) x
+        WHERE email IS NOT NULL
+        """
+    )
+
+    suggestion = PredicatePushdown().apply(query, ConstraintCatalog())
+
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rewritten_sql == "SELECT user_id, email\nFROM users\nWHERE email IS NOT NULL;"
+
+
 def test_refuses_pushdown_when_predicate_references_unprojected_column() -> None:
     query = parse_select(
         """
