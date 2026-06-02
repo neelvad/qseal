@@ -433,3 +433,40 @@ def test_dbt_scan_cli_rejects_diff_json_combination(tmp_path) -> None:
 
     assert result.exit_code != 0
     assert "--diff is only supported" in result.output
+
+
+def test_dbt_scan_cli_can_fail_on_findings(tmp_path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = CliRunner().invoke(main, ["dbt", "scan", str(tmp_path), "--fail-on", "findings"])
+
+    assert result.exit_code == 1
+    assert "remove_redundant_distinct" in result.output
+
+
+def test_dbt_scan_cli_does_not_fail_on_unsupported_with_findings_policy(tmp_path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "orders.sql").write_text("SELECT order_id FROM {{ ref('orders') }}")
+    (models / "schema.yml").write_text("models: []")
+
+    result = CliRunner().invoke(
+        main,
+        ["dbt", "scan", str(tmp_path), "--all", "--fail-on", "findings"],
+    )
+
+    assert result.exit_code == 0
+    assert "UNSUPPORTED" in result.output

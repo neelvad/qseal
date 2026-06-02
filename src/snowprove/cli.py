@@ -36,6 +36,7 @@ console = Console()
 OutputFormat = click.Choice(["text", "json"], case_sensitive=False)
 SchemaFormat = click.Choice(["auto", "snowprove", "dbt"], case_sensitive=False)
 RuleChoice = click.Choice(rule_names(), case_sensitive=False)
+FailOn = click.Choice(["none", "findings"], case_sensitive=False)
 
 
 @click.group()
@@ -77,12 +78,20 @@ def dbt_group() -> None:
     is_flag=True,
     help="Print unified diffs for proven rewrites instead of the normal scan report.",
 )
+@click.option(
+    "--fail-on",
+    type=FailOn,
+    default="none",
+    show_default=True,
+    help="Exit nonzero only for the selected proven-result policy.",
+)
 def dbt_scan(
     project_path: Path,
     show_all: bool,
     selected_rules: tuple[str, ...],
     output_format: str,
     show_diff: bool,
+    fail_on: str,
 ) -> None:
     """Scan dbt model SQL files for verified rewrite opportunities."""
     if show_diff and output_format == "json":
@@ -103,6 +112,9 @@ def dbt_scan(
         click.echo(render_dbt_scan_diff_report(result))
     else:
         console.print(render_dbt_scan_report(result))
+
+    if fail_on == "findings" and result.has_proven_findings():
+        raise click.exceptions.Exit(1)
 
 
 @main.command()
