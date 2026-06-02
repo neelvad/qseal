@@ -1,0 +1,52 @@
+from pathlib import Path
+
+from snowprove.dbt.scan import scan_dbt_project
+from snowprove.rewrites.base import VerificationStatus
+from snowprove.rewrites.registry import DEFAULT_RULES
+
+
+def test_scan_dbt_project_returns_proven_findings(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.model_count == 1
+    assert len(result.results) == 1
+    assert result.results[0].suggestions[0].status == VerificationStatus.PROVEN_EQUIVALENT
+
+
+def test_scan_dbt_project_skips_jinja_by_default(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "orders.sql").write_text("SELECT order_id FROM {{ ref('orders') }}")
+    (models / "schema.yml").write_text("models: []")
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.model_count == 1
+    assert result.results == ()
+
+
+def test_scan_dbt_project_can_include_unsupported_jinja(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "orders.sql").write_text("SELECT order_id FROM {{ ref('orders') }}")
+    (models / "schema.yml").write_text("models: []")
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES, include_all=True)
+
+    assert result.model_count == 1
+    assert result.results[0].suggestions[0].status == VerificationStatus.UNSUPPORTED

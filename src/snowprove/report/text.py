@@ -75,6 +75,33 @@ def render_verification_report(result: VerificationResult) -> Text:
     return output
 
 
+def render_dbt_scan_report(scan_result) -> Text:
+    output = Text()
+    output.append("Scanned models: ", style="bold")
+    output.append(f"{scan_result.model_count}\n")
+    output.append("Findings: ", style="bold")
+    output.append(f"{len(scan_result.results)}\n")
+
+    if not scan_result.results:
+        output.append("No rewrite findings.\n")
+        return output
+
+    for result in scan_result.results:
+        output.append("\n")
+        output.append(f"{result.path}\n", style="bold")
+        for suggestion in result.suggestions:
+            output.append(f"  Result: {suggestion.status.value}\n")
+            output.append(f"  Rewrite: {suggestion.rule_name}\n")
+            if suggestion.reason:
+                output.append(f"  Reason: {suggestion.reason}\n")
+            if suggestion.rewritten_sql:
+                output.append("  Rewritten SQL:\n")
+                for line in suggestion.rewritten_sql.splitlines():
+                    output.append(f"    {line}\n")
+
+    return output
+
+
 def _status_style(status: VerificationStatus) -> str:
     if status == VerificationStatus.PROVEN_EQUIVALENT:
         return "green"

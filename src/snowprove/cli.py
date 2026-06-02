@@ -4,6 +4,8 @@ import click
 from rich.console import Console
 
 from snowprove.constraints.loader import load_constraint_catalog
+from snowprove.dbt.project import DbtProjectDiscoveryError
+from snowprove.dbt.scan import scan_dbt_project
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.report.json import (
     render_suggestion_json,
@@ -11,6 +13,7 @@ from snowprove.report.json import (
     render_verification_json,
 )
 from snowprove.report.text import (
+    render_dbt_scan_report,
     render_suggestion_report,
     render_suggestions_report,
     render_verification_report,
@@ -36,6 +39,40 @@ RuleChoice = click.Choice(rule_names(), case_sensitive=False)
 @click.group()
 def main() -> None:
     """Verified-safe SQL rewrites for a constrained Snowflake SQL subset."""
+
+
+@main.group(name="dbt")
+def dbt_group() -> None:
+    """dbt project workflows."""
+
+
+@dbt_group.command(name="scan")
+@click.argument("project_path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option(
+    "--all",
+    "show_all",
+    is_flag=True,
+    help="Show unknown and unsupported scan results in addition to proven rewrites.",
+)
+@click.option(
+    "--rule",
+    "selected_rules",
+    multiple=True,
+    type=RuleChoice,
+    help="Only run a specific rewrite rule. Can be passed more than once.",
+)
+def dbt_scan(project_path: Path, show_all: bool, selected_rules: tuple[str, ...]) -> None:
+    """Scan dbt model SQL files for verified rewrite opportunities."""
+    try:
+        result = scan_dbt_project(
+            project_path,
+            rules=select_rules(selected_rules),
+            include_all=show_all,
+        )
+    except DbtProjectDiscoveryError as error:
+        raise click.ClickException(str(error)) from error
+
+    console.print(render_dbt_scan_report(result))
 
 
 @main.command()

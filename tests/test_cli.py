@@ -348,3 +348,26 @@ def test_suggest_cli_rejects_unknown_rule(tmp_path) -> None:
 
     assert result.exit_code != 0
     assert "Invalid value for '--rule'" in result.output
+
+
+def test_dbt_scan_cli_reports_findings(tmp_path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = CliRunner().invoke(main, ["dbt", "scan", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "Scanned models: 1" in result.output
+    assert "remove_redundant_distinct" in result.output
