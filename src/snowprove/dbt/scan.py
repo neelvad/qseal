@@ -38,8 +38,9 @@ def scan_dbt_project(
     project_path: Path,
     rules: tuple[RewriteRule, ...],
     include_all: bool = False,
+    compiled_path: Path | None = None,
 ) -> DbtScanResult:
-    project = discover_dbt_project(project_path)
+    project = discover_dbt_project(project_path, compiled_path=compiled_path)
     constraints = _load_project_constraints(project.schema_yml_files)
     results = []
 

@@ -53,3 +53,28 @@ def test_scan_dbt_project_can_include_unsupported_jinja(tmp_path: Path) -> None:
     assert result.model_count == 1
     assert not result.has_proven_findings()
     assert result.results[0].suggestions[0].status == VerificationStatus.UNSUPPORTED
+
+
+def test_scan_dbt_project_can_scan_compiled_sql(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    compiled = tmp_path / "target" / "compiled" / "project" / "models"
+    models.mkdir()
+    compiled.mkdir(parents=True)
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM {{ ref('dim_users') }}")
+    (compiled / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES, compiled_path=compiled)
+
+    assert result.model_count == 1
+    assert result.has_proven_findings()
