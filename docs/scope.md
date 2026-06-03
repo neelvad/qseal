@@ -92,7 +92,13 @@ Scan reports include summary counts for visible results:
 read-only and does not modify project files.
 
 `--write-patches DIR` writes patch files for proven rewrites. It also does not
-modify project files; applying patches is an explicit separate step.
+modify project files. Patch file paths preserve the model path and append the
+rewrite rule name.
+
+`--apply-patches` applies proven rewrites directly to model SQL files. It is
+explicitly opt-in. Snowprove refuses to apply a rewrite when the scan came from
+compiled SQL or when the current source file no longer exactly matches the
+verified original SQL.
 
 `--fail-on findings` exits nonzero only when at least one proven rewrite finding
 exists. Unsupported SQL, unknown equivalence, missing constraints, and uncompiled

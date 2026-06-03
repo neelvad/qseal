@@ -13,7 +13,7 @@ from snowprove.report.json import (
     render_suggestions_json,
     render_verification_json,
 )
-from snowprove.report.patch import write_dbt_scan_patches
+from snowprove.report.patch import apply_dbt_scan_patches, write_dbt_scan_patches
 from snowprove.report.text import (
     render_dbt_scan_diff_report,
     render_dbt_scan_report,
@@ -99,6 +99,11 @@ def dbt_group() -> None:
     help="Write unified diff patch files for proven rewrites to this directory.",
 )
 @click.option(
+    "--apply-patches",
+    is_flag=True,
+    help="Apply proven rewrites directly to model SQL files.",
+)
+@click.option(
     "--use-compiled",
     is_flag=True,
     help="Auto-discover and scan compiled SQL under target/compiled/.",
@@ -112,6 +117,7 @@ def dbt_scan(
     fail_on: str,
     compiled_path: Path | None,
     patch_dir: Path | None,
+    apply_patches: bool,
     use_compiled: bool,
 ) -> None:
     """Scan dbt model SQL files for verified rewrite opportunities."""
@@ -119,6 +125,12 @@ def dbt_scan(
         raise click.ClickException("--diff is only supported with --format text.")
     if patch_dir is not None and output_format == "json":
         raise click.ClickException("--write-patches is only supported with --format text.")
+    if apply_patches and output_format == "json":
+        raise click.ClickException("--apply-patches is only supported with --format text.")
+    if apply_patches and show_all:
+        raise click.ClickException("--apply-patches cannot be used with --all.")
+    if apply_patches and patch_dir is not None:
+        raise click.ClickException("--apply-patches and --write-patches cannot be used together.")
     if compiled_path is not None and use_compiled:
         raise click.ClickException("--compiled-dir and --use-compiled cannot be used together.")
 
@@ -146,6 +158,19 @@ def dbt_scan(
         console.print(f"Patch files written: {len(written)}")
         for path in written:
             console.print(f"  {path}")
+
+    if apply_patches:
+        applied = apply_dbt_scan_patches(result)
+        applied_count = sum(1 for item in applied if item.applied)
+        skipped = tuple(item for item in applied if not item.applied)
+        console.print(f"Patches applied: {applied_count}")
+        for item in applied:
+            if item.applied:
+                console.print(f"  {item.path} ({item.rule_name})")
+            else:
+                console.print(f"  skipped {item.path} ({item.rule_name}): {item.reason}")
+        if skipped:
+            raise click.ClickException("Some proven rewrites could not be applied.")
 
     if fail_on == "findings" and result.has_proven_findings():
         raise click.exceptions.Exit(1)

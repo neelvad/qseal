@@ -38,6 +38,7 @@ conservative, not by pretending to verify all Snowflake SQL.
 - JSON reports suitable for CI consumption
 - unified diff output for reviewable rewrite suggestions
 - patch file output for reviewable rewrite suggestions
+- opt-in patch application for verified dbt rewrites
 - nonzero exit mode for proven rewrite findings
 - GitHub comment/report examples
 - dbt model scanning experiments

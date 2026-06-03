@@ -191,6 +191,7 @@ dbt/Jinja syntax:
 uv run snowprove dbt scan examples/dbt_project --all
 uv run snowprove dbt scan examples/dbt_project --diff
 uv run snowprove dbt scan examples/dbt_project --write-patches patches/
+uv run snowprove dbt scan examples/dbt_project --apply-patches
 uv run snowprove dbt scan examples/dbt_project --format json
 uv run snowprove dbt scan examples/dbt_project --fail-on findings
 uv run snowprove dbt scan examples/dbt_project --use-compiled
@@ -202,6 +203,12 @@ modify model files.
 
 `--write-patches DIR` writes those read-only unified diffs as `.patch` files.
 The patches can be reviewed or applied later with tools such as `git apply`.
+Patch file paths preserve the model path and append the rewrite rule name, for
+example `patches/models/dim_users.sql.remove_redundant_distinct.patch`.
+
+`--apply-patches` applies proven rewrites directly to model SQL files. It is
+explicitly opt-in and refuses to apply when Snowprove scanned compiled SQL or
+when the source file no longer exactly matches the verified original SQL.
 
 Scan reports include project-level summary counts by result status and rewrite
 rule. JSON output includes the same data under the `summary` key.

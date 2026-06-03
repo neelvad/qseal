@@ -584,6 +584,33 @@ models:
     assert "-SELECT DISTINCT user_id" in patch_path.read_text()
 
 
+def test_dbt_scan_cli_can_apply_patches(tmp_path) -> None:
+    models = tmp_path / "models"
+    model = models / "dim_users.sql"
+    models.mkdir()
+    model.write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["dbt", "scan", str(tmp_path), "--apply-patches"],
+    )
+
+    assert result.exit_code == 0
+    assert "Patches applied: 1" in result.output
+    assert model.read_text() == "SELECT user_id\nFROM dim_users;\n"
+
+
 def test_dbt_scan_cli_rejects_write_patches_json_combination(tmp_path) -> None:
     models = tmp_path / "models"
     models.mkdir()
@@ -603,3 +630,56 @@ def test_dbt_scan_cli_rejects_write_patches_json_combination(tmp_path) -> None:
 
     assert result.exit_code != 0
     assert "--write-patches is only supported" in result.output
+
+
+def test_dbt_scan_cli_rejects_apply_patches_json_combination(tmp_path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "dbt",
+            "scan",
+            str(tmp_path),
+            "--apply-patches",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--apply-patches is only supported" in result.output
+
+
+def test_dbt_scan_cli_rejects_apply_patches_with_all(tmp_path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+
+    result = CliRunner().invoke(
+        main,
+        ["dbt", "scan", str(tmp_path), "--apply-patches", "--all"],
+    )
+
+    assert result.exit_code != 0
+    assert "--apply-patches cannot be used with --all" in result.output
+
+
+def test_dbt_scan_cli_rejects_apply_and_write_patches_together(tmp_path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "dbt",
+            "scan",
+            str(tmp_path),
+            "--apply-patches",
+            "--write-patches",
+            str(tmp_path / "patches"),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--apply-patches and --write-patches cannot be used together" in result.output

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from snowprove.dbt.scan import DbtModelScanResult, DbtScanResult
-from snowprove.report.patch import write_dbt_scan_patches
+from snowprove.report.patch import apply_dbt_scan_patches, write_dbt_scan_patches
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 
 
@@ -34,3 +34,101 @@ def test_write_dbt_scan_patches(tmp_path: Path) -> None:
     assert written == (output / "models" / "users.sql.remove_redundant_distinct.patch",)
     assert "-SELECT DISTINCT user_id" in written[0].read_text()
     assert "+SELECT user_id" in written[0].read_text()
+
+
+def test_apply_dbt_scan_patches_rewrites_matching_source(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    model = project / "models" / "users.sql"
+    model.parent.mkdir(parents=True)
+    model.write_text("SELECT DISTINCT user_id\nFROM users\n")
+    result = DbtScanResult(
+        project_path=project,
+        model_count=1,
+        results=(
+            DbtModelScanResult(
+                path=model,
+                scanned_path=model,
+                source_path=model,
+                suggestions=(
+                    RewriteSuggestion(
+                        rule_name="remove_redundant_distinct",
+                        status=VerificationStatus.PROVEN_EQUIVALENT,
+                        original_sql="SELECT DISTINCT user_id\nFROM users",
+                        rewritten_sql="SELECT user_id\nFROM users;",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    applied = apply_dbt_scan_patches(result)
+
+    assert len(applied) == 1
+    assert applied[0].applied is True
+    assert model.read_text() == "SELECT user_id\nFROM users;\n"
+
+
+def test_apply_dbt_scan_patches_skips_mismatched_source(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    model = project / "models" / "users.sql"
+    model.parent.mkdir(parents=True)
+    model.write_text("SELECT user_id\nFROM users\n")
+    result = DbtScanResult(
+        project_path=project,
+        model_count=1,
+        results=(
+            DbtModelScanResult(
+                path=model,
+                scanned_path=model,
+                source_path=model,
+                suggestions=(
+                    RewriteSuggestion(
+                        rule_name="remove_redundant_distinct",
+                        status=VerificationStatus.PROVEN_EQUIVALENT,
+                        original_sql="SELECT DISTINCT user_id\nFROM users",
+                        rewritten_sql="SELECT user_id\nFROM users;",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    applied = apply_dbt_scan_patches(result)
+
+    assert applied[0].applied is False
+    assert "no longer matches" in str(applied[0].reason)
+    assert model.read_text() == "SELECT user_id\nFROM users\n"
+
+
+def test_apply_dbt_scan_patches_skips_compiled_scan_results(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    model = project / "models" / "users.sql"
+    compiled = project / "target" / "compiled" / "project" / "models" / "users.sql"
+    model.parent.mkdir(parents=True)
+    compiled.parent.mkdir(parents=True)
+    model.write_text("{{ ref('users') }}\n")
+    result = DbtScanResult(
+        project_path=project,
+        model_count=1,
+        results=(
+            DbtModelScanResult(
+                path=compiled,
+                scanned_path=compiled,
+                source_path=model,
+                suggestions=(
+                    RewriteSuggestion(
+                        rule_name="remove_redundant_distinct",
+                        status=VerificationStatus.PROVEN_EQUIVALENT,
+                        original_sql="SELECT DISTINCT user_id\nFROM users",
+                        rewritten_sql="SELECT user_id\nFROM users;",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    applied = apply_dbt_scan_patches(result)
+
+    assert applied[0].applied is False
+    assert "compiled SQL" in str(applied[0].reason)
+    assert model.read_text() == "{{ ref('users') }}\n"
