@@ -189,6 +189,7 @@ tables:
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
+    assert payload["artifact_type"] == "suggestion"
     assert payload["status"] == "PROVEN_EQUIVALENT"
     assert payload["rule_name"] == "remove_redundant_distinct"
 
@@ -215,7 +216,8 @@ def test_suggest_cli_can_report_all_json(tmp_path) -> None:
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
-    assert [item["rule_name"] for item in payload] == [
+    assert payload["artifact_type"] == "suggestions"
+    assert [item["rule_name"] for item in payload["results"]] == [
         "remove_redundant_distinct",
         "predicate_pushdown",
     ]
@@ -243,6 +245,8 @@ tables:
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
+    assert payload["artifact_type"] == "verification"
+    assert payload["proven"] is True
     assert payload["status"] == "PROVEN_EQUIVALENT"
 
 

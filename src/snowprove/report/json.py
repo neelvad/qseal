@@ -7,7 +7,10 @@ from snowprove.verifier.model import VerificationResult
 
 
 def render_suggestion_json(suggestion: RewriteSuggestion) -> str:
-    return _dumps(suggestion.model_dump(mode="json"))
+    payload = suggestion.model_dump(mode="json")
+    payload["schema_version"] = 1
+    payload["artifact_type"] = "suggestion"
+    return _dumps(payload)
 
 
 def render_suggestions_json(suggestions: Sequence[RewriteSuggestion]) -> str:
@@ -16,15 +19,27 @@ def render_suggestions_json(suggestions: Sequence[RewriteSuggestion]) -> str:
         for suggestion in suggestions
         if suggestion.status != VerificationStatus.NOT_APPLICABLE
     ]
-    return _dumps([suggestion.model_dump(mode="json") for suggestion in visible])
+    return _dumps(
+        {
+            "schema_version": 1,
+            "artifact_type": "suggestions",
+            "results": [suggestion.model_dump(mode="json") for suggestion in visible],
+        }
+    )
 
 
 def render_verification_json(result: VerificationResult) -> str:
-    return _dumps(result.model_dump(mode="json"))
+    payload = result.model_dump(mode="json")
+    payload["schema_version"] = 1
+    payload["artifact_type"] = "verification"
+    payload["proven"] = result.status == VerificationStatus.PROVEN_EQUIVALENT
+    return _dumps(payload)
 
 
 def render_dbt_scan_json(scan_result) -> str:
     payload = scan_result.model_dump(mode="json")
+    payload["schema_version"] = 1
+    payload["artifact_type"] = "dbt_scan"
     for index, result in enumerate(scan_result.results):
         payload["results"][index]["apply_ready"] = result.apply_ready()
         payload["results"][index]["apply_blocker"] = result.apply_blocker()

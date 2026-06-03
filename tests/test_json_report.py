@@ -23,6 +23,8 @@ def test_render_suggestion_json() -> None:
         )
     )
 
+    assert payload["schema_version"] == 1
+    assert payload["artifact_type"] == "suggestion"
     assert payload["rule_name"] == "rule"
     assert payload["status"] == "PROVEN_EQUIVALENT"
 
@@ -39,6 +41,9 @@ def test_render_verification_json() -> None:
         )
     )
 
+    assert payload["schema_version"] == 1
+    assert payload["artifact_type"] == "verification"
+    assert payload["proven"] is False
     assert payload["status"] == "UNKNOWN"
     assert payload["reason"] == "No rule applies."
 
@@ -62,7 +67,9 @@ def test_render_suggestions_json_omits_not_applicable_results() -> None:
         )
     )
 
-    assert [item["rule_name"] for item in payload] == ["proven"]
+    assert payload["schema_version"] == 1
+    assert payload["artifact_type"] == "suggestions"
+    assert [item["rule_name"] for item in payload["results"]] == ["proven"]
 
 
 def test_render_dbt_scan_json() -> None:
@@ -90,6 +97,8 @@ def test_render_dbt_scan_json() -> None:
         )
     )
 
+    assert payload["schema_version"] == 1
+    assert payload["artifact_type"] == "dbt_scan"
     assert payload["project_path"] == "/tmp/project"
     assert payload["model_count"] == 1
     assert payload["results"][0]["apply_ready"] is True

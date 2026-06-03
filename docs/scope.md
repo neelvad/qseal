@@ -13,6 +13,19 @@ when the parser, rewrite rule, and verifier all support the relevant SQL shape.
   pair.
 - `UNSUPPORTED`: the SQL uses syntax or semantics outside the modeled subset.
 
+## JSON Artifacts
+
+JSON output includes a top-level `schema_version` and `artifact_type`. Current
+artifact types are:
+
+- `suggestion`
+- `suggestions`
+- `verification`
+- `dbt_scan`
+
+The `verification` artifact also includes a boolean `proven` field for CI tools
+that only need to know whether the query pair was proven equivalent.
+
 ## Trusted Assumptions
 
 Constraints are explicit inputs. For example:
