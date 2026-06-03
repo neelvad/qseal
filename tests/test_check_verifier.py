@@ -12,6 +12,7 @@ def test_check_proves_distinct_removal_with_unique_key() -> None:
     result = check_equivalence(original, rewritten, constraints)
 
     assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "remove_redundant_distinct"
     assert result.assumptions
 
 
@@ -61,6 +62,7 @@ def test_check_proves_predicate_pushdown() -> None:
     result = check_equivalence(original, rewritten, ConstraintCatalog())
 
     assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "predicate_pushdown"
 
 
 def test_check_proves_unused_left_join_elimination() -> None:
@@ -77,6 +79,7 @@ def test_check_proves_unused_left_join_elimination() -> None:
     result = check_equivalence(original, rewritten, constraints)
 
     assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "remove_unused_left_join"
 
 
 def test_check_proves_join_distinct_to_exists() -> None:
@@ -102,6 +105,7 @@ def test_check_proves_join_distinct_to_exists() -> None:
     result = check_equivalence(original, rewritten, ConstraintCatalog())
 
     assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "rewrite_join_distinct_to_exists"
 
 
 def test_check_proves_redundant_not_null_filter_removal() -> None:
@@ -128,4 +132,5 @@ def test_check_disproves_distinct_removal_without_unique_key() -> None:
     result = check_equivalence(original, rewritten, constraints)
 
     assert result.status == VerificationStatus.NOT_EQUIVALENT
+    assert result.rule_name == "remove_redundant_distinct"
     assert result.counterexample is not None

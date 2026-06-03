@@ -248,6 +248,68 @@ tables:
     assert payload["artifact_type"] == "verification"
     assert payload["proven"] is True
     assert payload["status"] == "PROVEN_EQUIVALENT"
+    assert payload["rule_name"] == "remove_redundant_distinct"
+    assert payload["inputs"]["original_path"] == str(original)
+    assert payload["inputs"]["rewritten_path"] == str(rewritten)
+    assert payload["inputs"]["schema_path"] == str(schema)
+    assert payload["inputs"]["schema_format"] == "auto"
+
+
+def test_check_cli_can_fail_on_unproven(tmp_path) -> None:
+    original = tmp_path / "original.sql"
+    rewritten = tmp_path / "rewritten.sql"
+    schema = tmp_path / "schema.yml"
+    original.write_text("SELECT DISTINCT user_id FROM users")
+    rewritten.write_text("SELECT user_id FROM users")
+    schema.write_text("tables: {}\n")
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "check",
+            str(original),
+            str(rewritten),
+            "--schema",
+            str(schema),
+            "--fail-on",
+            "unproven",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "NOT_EQUIVALENT" in result.output
+
+
+def test_check_cli_does_not_fail_on_proven_with_unproven_policy(tmp_path) -> None:
+    original = tmp_path / "original.sql"
+    rewritten = tmp_path / "rewritten.sql"
+    schema = tmp_path / "schema.yml"
+    original.write_text("SELECT DISTINCT user_id FROM users")
+    rewritten.write_text("SELECT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "check",
+            str(original),
+            str(rewritten),
+            "--schema",
+            str(schema),
+            "--fail-on",
+            "unproven",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "PROVEN_EQUIVALENT" in result.output
 
 
 def test_suggest_cli_can_load_dbt_schema_format(tmp_path) -> None:

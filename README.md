@@ -32,9 +32,14 @@ Useful options:
 uv run snowprove suggest examples/distinct/original.sql --schema examples/distinct/schema.yml --all
 uv run snowprove suggest examples/predicate_pushdown/original.sql --schema examples/distinct/schema.yml --rule predicate_pushdown
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --format json
+uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --fail-on unproven
 uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
 uv run snowprove dbt scan examples/dbt_project
 ```
+
+`check --fail-on unproven` exits nonzero unless Snowprove proves the query pair
+equivalent. This is the intended contract for future untrusted candidate
+generators, including LLM-generated rewrites.
 
 ## Examples
 

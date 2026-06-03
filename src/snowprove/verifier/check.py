@@ -18,6 +18,7 @@ def check_equivalence(
             status=VerificationStatus.PROVEN_EQUIVALENT,
             original_sql=original.raw_sql,
             rewritten_sql=rewritten.raw_sql,
+            rule_name="normalized_identity",
             reason="Queries normalize to the same supported IR.",
         )
 
@@ -35,6 +36,7 @@ def check_equivalence(
                 status=VerificationStatus.PROVEN_EQUIVALENT,
                 original_sql=original.raw_sql,
                 rewritten_sql=rewritten.raw_sql,
+                rule_name=not_null_filter.rule_name,
                 assumptions=not_null_filter.assumptions,
                 reason=not_null_filter.reason,
             )
@@ -50,6 +52,7 @@ def check_equivalence(
                 status=VerificationStatus.PROVEN_EQUIVALENT,
                 original_sql=original.raw_sql,
                 rewritten_sql=rewritten.raw_sql,
+                rule_name=join_elimination.rule_name,
                 assumptions=join_elimination.assumptions,
                 reason=join_elimination.reason,
             )
@@ -65,6 +68,7 @@ def check_equivalence(
                 status=VerificationStatus.PROVEN_EQUIVALENT,
                 original_sql=original.raw_sql,
                 rewritten_sql=rewritten.raw_sql,
+                rule_name=join_distinct_to_exists.rule_name,
                 assumptions=join_distinct_to_exists.assumptions,
                 reason=join_distinct_to_exists.reason,
             )
@@ -81,6 +85,7 @@ def check_equivalence(
                 status=VerificationStatus.PROVEN_EQUIVALENT,
                 original_sql=original.raw_sql,
                 rewritten_sql=rewritten.raw_sql,
+                rule_name=pushdown.rule_name,
                 assumptions=pushdown.assumptions,
                 reason=pushdown.reason,
             )
@@ -142,6 +147,7 @@ def _check_distinct_removal(
             status=VerificationStatus.UNSUPPORTED,
             original_sql=original.raw_sql,
             rewritten_sql=rewritten.raw_sql,
+            rule_name="remove_redundant_distinct",
             reason="DISTINCT removal checks are only supported for direct table queries.",
         )
 
@@ -152,6 +158,7 @@ def _check_distinct_removal(
             status=VerificationStatus.PROVEN_EQUIVALENT,
             original_sql=original.raw_sql,
             rewritten_sql=rewritten.raw_sql,
+            rule_name="remove_redundant_distinct",
             assumptions=(
                 f"{table_name} has a trusted unique key contained in "
                 f"({', '.join(projected_columns)}).",
@@ -163,6 +170,7 @@ def _check_distinct_removal(
         status=VerificationStatus.NOT_EQUIVALENT,
         original_sql=original.raw_sql,
         rewritten_sql=rewritten.raw_sql,
+        rule_name="remove_redundant_distinct",
         reason="Removing DISTINCT is unsafe without a trusted uniqueness constraint.",
         counterexample=(
             f"If {table_name} contains two rows with the same "

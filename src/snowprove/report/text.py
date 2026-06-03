@@ -60,6 +60,10 @@ def render_verification_report(result: VerificationResult) -> Text:
     output.append("Result: ", style="bold")
     output.append(f"{result.status.value}\n", style=_status_style(result.status))
 
+    if result.rule_name:
+        output.append("Verifier rule: ", style="bold")
+        output.append(f"{result.rule_name}\n")
+
     if result.assumptions:
         output.append("Assumptions:\n", style="bold")
         for assumption in result.assumptions:

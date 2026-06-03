@@ -23,8 +23,14 @@ artifact types are:
 - `verification`
 - `dbt_scan`
 
-The `verification` artifact also includes a boolean `proven` field for CI tools
-that only need to know whether the query pair was proven equivalent.
+The `verification` artifact also includes:
+
+- `proven`: boolean shortcut for `status == PROVEN_EQUIVALENT`
+- `rule_name`: verifier rule that proved or disproved the pair, when available
+- `inputs`: original, rewritten, schema path, and schema format metadata
+
+Use `snowprove check ... --fail-on unproven` to exit nonzero unless the query
+pair is proven equivalent.
 
 ## Trusted Assumptions
 

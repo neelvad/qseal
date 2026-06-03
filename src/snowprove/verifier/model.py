@@ -9,6 +9,8 @@ class VerificationResult(BaseModel):
     status: VerificationStatus
     original_sql: str
     rewritten_sql: str
+    rule_name: str | None = None
     assumptions: tuple[str, ...] = Field(default_factory=tuple)
     reason: str | None = None
     counterexample: str | None = None
+    inputs: dict[str, str] = Field(default_factory=dict)

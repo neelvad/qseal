@@ -38,6 +38,7 @@ OutputFormat = click.Choice(["text", "json"], case_sensitive=False)
 SchemaFormat = click.Choice(["auto", "snowprove", "dbt"], case_sensitive=False)
 RuleChoice = click.Choice(rule_names(), case_sensitive=False)
 FailOn = click.Choice(["none", "findings"], case_sensitive=False)
+CheckFailOn = click.Choice(["none", "unproven"], case_sensitive=False)
 
 
 @click.group()
@@ -289,12 +290,20 @@ def suggest(
     show_default=True,
     help="Output format.",
 )
+@click.option(
+    "--fail-on",
+    type=CheckFailOn,
+    default="none",
+    show_default=True,
+    help="Exit nonzero when the verification does not satisfy the selected policy.",
+)
 def check(
     original_path: Path,
     rewritten_path: Path,
     schema_path: Path,
     schema_format: str,
     output_format: str,
+    fail_on: str,
 ) -> None:
     """Check whether two supported SQL queries are equivalent."""
     original_sql = original_path.read_text()
@@ -308,8 +317,14 @@ def check(
             original_sql=original_sql.strip(),
             rewritten_sql=rewritten_sql.strip(),
             reason=f"Original query unsupported: {error}",
+            inputs=_verification_inputs(
+                original_path,
+                rewritten_path,
+                schema_path,
+                schema_format,
+            ),
         )
-        _print_verification(result, output_format)
+        _print_verification(result, output_format, fail_on)
         return
 
     try:
@@ -320,8 +335,14 @@ def check(
             original_sql=original_sql.strip(),
             rewritten_sql=rewritten_sql.strip(),
             reason=f"Rewritten query unsupported: {error}",
+            inputs=_verification_inputs(
+                original_path,
+                rewritten_path,
+                schema_path,
+                schema_format,
+            ),
         )
-        _print_verification(result, output_format)
+        _print_verification(result, output_format, fail_on)
         return
 
     try:
@@ -330,14 +351,41 @@ def check(
         raise click.ClickException(str(error)) from error
 
     result = check_equivalence(original, rewritten, constraints)
-    _print_verification(result, output_format)
+    result = result.model_copy(
+        update={
+            "inputs": _verification_inputs(
+                original_path,
+                rewritten_path,
+                schema_path,
+                schema_format,
+            )
+        }
+    )
+    _print_verification(result, output_format, fail_on)
 
 
-def _print_verification(result: VerificationResult, output_format: str) -> None:
+def _print_verification(result: VerificationResult, output_format: str, fail_on: str) -> None:
     if output_format == "json":
         click.echo(render_verification_json(result))
     else:
         console.print(render_verification_report(result))
+
+    if fail_on == "unproven" and result.status != VerificationStatus.PROVEN_EQUIVALENT:
+        raise click.exceptions.Exit(1)
+
+
+def _verification_inputs(
+    original_path: Path,
+    rewritten_path: Path,
+    schema_path: Path,
+    schema_format: str,
+) -> dict[str, str]:
+    return {
+        "original_path": str(original_path),
+        "rewritten_path": str(rewritten_path),
+        "schema_path": str(schema_path),
+        "schema_format": schema_format,
+    }
 
 
 def _load_constraints(path: Path, schema_format: str):

@@ -36,6 +36,7 @@ def test_render_verification_json() -> None:
                 status=VerificationStatus.UNKNOWN,
                 original_sql="SELECT 1",
                 rewritten_sql="SELECT 2",
+                inputs={"original_path": "original.sql"},
                 reason="No rule applies.",
             )
         )
@@ -45,6 +46,7 @@ def test_render_verification_json() -> None:
     assert payload["artifact_type"] == "verification"
     assert payload["proven"] is False
     assert payload["status"] == "UNKNOWN"
+    assert payload["inputs"]["original_path"] == "original.sql"
     assert payload["reason"] == "No rule applies."
 
 
