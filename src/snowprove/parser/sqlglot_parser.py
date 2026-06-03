@@ -2,7 +2,15 @@ import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ParseError
 
-from snowprove.ir.model import ColumnRef, Join, JoinCondition, LiteralValue, Predicate, SelectQuery
+from snowprove.ir.model import (
+    ColumnRef,
+    ExistsPredicate,
+    Join,
+    JoinCondition,
+    LiteralValue,
+    Predicate,
+    SelectQuery,
+)
 
 
 class UnsupportedSqlError(ValueError):
@@ -137,13 +145,13 @@ def _reject_unsupported_clauses(parsed: exp.Select) -> None:
             raise UnsupportedSqlError(f"{clause_name} is not supported yet.")
 
 
-def _where_predicates(where: exp.Where | None) -> list[Predicate]:
+def _where_predicates(where: exp.Where | None) -> list[Predicate | ExistsPredicate]:
     if where is None:
         return []
     return _predicate_expression(where.this)
 
 
-def _predicate_expression(node: exp.Expression) -> list[Predicate]:
+def _predicate_expression(node: exp.Expression) -> list[Predicate | ExistsPredicate]:
     if isinstance(node, exp.And):
         return [
             *_predicate_expression(node.this),
@@ -153,8 +161,11 @@ def _predicate_expression(node: exp.Expression) -> list[Predicate]:
         return [_comparison(node)]
     if isinstance(node, exp.Is | exp.Not):
         return [_null_predicate(node)]
+    if isinstance(node, exp.Exists):
+        return [_exists_predicate(node)]
     raise UnsupportedSqlError(
-        "Only ANDed column/literal comparisons and NULL predicates are supported."
+        "Only ANDed column/literal comparisons, NULL predicates, and simple EXISTS "
+        "predicates are supported."
     )
 
 
@@ -191,6 +202,50 @@ def _null_predicate(node: exp.Expression) -> Predicate:
         left=ColumnRef(table=inner.this.table or None, name=inner.this.name),
         operator=operator,
         right=None,
+    )
+
+
+def _exists_predicate(node: exp.Exists) -> ExistsPredicate:
+    select = node.this
+    if not isinstance(select, exp.Select):
+        raise UnsupportedSqlError("EXISTS predicates must contain a SELECT subquery.")
+
+    _reject_unsupported_clauses(select)
+    if select.args.get("joins"):
+        raise UnsupportedSqlError("EXISTS subqueries with JOINs are not supported yet.")
+    if select.args.get("distinct") is not None:
+        raise UnsupportedSqlError("EXISTS subqueries with DISTINCT are not supported yet.")
+
+    expressions = select.expressions
+    if len(expressions) != 1 or not isinstance(expressions[0], exp.Literal):
+        raise UnsupportedSqlError("EXISTS subqueries must project literal 1.")
+    if str(expressions[0].this) != "1":
+        raise UnsupportedSqlError("EXISTS subqueries must project literal 1.")
+
+    from_expr = select.args.get("from_")
+    if from_expr is None or not isinstance(from_expr.this, exp.Table):
+        raise UnsupportedSqlError("EXISTS subqueries must read from one direct table.")
+
+    where = select.args.get("where")
+    if not isinstance(where, exp.Where) or not isinstance(where.this, exp.EQ):
+        raise UnsupportedSqlError("EXISTS subqueries must use one equality WHERE predicate.")
+    if not isinstance(where.this.this, exp.Column) or not isinstance(
+        where.this.expression,
+        exp.Column,
+    ):
+        raise UnsupportedSqlError("EXISTS predicates must compare two columns.")
+
+    return ExistsPredicate(
+        table=from_expr.this.name,
+        table_sql=_relation_sql_without_alias(from_expr.this),
+        alias=from_expr.this.alias or None,
+        condition=JoinCondition(
+            left=ColumnRef(table=where.this.this.table or None, name=where.this.this.name),
+            right=ColumnRef(
+                table=where.this.expression.table or None,
+                name=where.this.expression.name,
+            ),
+        ),
     )
 
 

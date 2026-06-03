@@ -1,5 +1,5 @@
 from snowprove.constraints.model import ConstraintCatalog
-from snowprove.ir.model import Join, SelectQuery
+from snowprove.ir.model import Join, Predicate, SelectQuery
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 
 
@@ -64,8 +64,17 @@ class RemoveUnusedLeftJoin:
 def _uses_joined_relation(query: SelectQuery, join: Join) -> bool:
     joined_name = join.relation_name()
     projected = any(column.table == joined_name for column in query.projections)
-    filtered = any(predicate.left.table == joined_name for predicate in query.predicates)
+    filtered = any(
+        _predicate_uses_joined_relation(predicate, joined_name)
+        for predicate in query.predicates
+    )
     return projected or filtered
+
+
+def _predicate_uses_joined_relation(predicate, joined_name: str) -> bool:
+    if not isinstance(predicate, Predicate):
+        return True
+    return predicate.left.table == joined_name
 
 
 def _right_join_key(join: Join) -> str | None:

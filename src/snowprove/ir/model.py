@@ -57,6 +57,29 @@ class JoinCondition(BaseModel):
         return f"{self.left.to_sql()} = {self.right.to_sql()}"
 
 
+class ExistsPredicate(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    table: str
+    table_sql: str | None = None
+    alias: str | None = None
+    condition: JoinCondition
+
+    def source_sql(self) -> str:
+        table_sql = self.table_sql or self.table
+        alias = f" {self.alias}" if self.alias else ""
+        return f"{table_sql}{alias}"
+
+    def to_sql(self) -> str:
+        return (
+            "EXISTS (\n"
+            "  SELECT 1\n"
+            f"  FROM {self.source_sql()}\n"
+            f"  WHERE {self.condition.to_sql()}\n"
+            ")"
+        )
+
+
 class Join(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -85,7 +108,7 @@ class SelectQuery(BaseModel):
     alias: str | None = None
     joins: tuple[Join, ...] = ()
     projections: tuple[ColumnRef, ...]
-    predicates: tuple[Predicate, ...] = ()
+    predicates: tuple[Predicate | ExistsPredicate, ...] = ()
     distinct: bool
     raw_sql: str
 

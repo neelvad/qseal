@@ -242,10 +242,13 @@ Currently modeled:
 - simple direct table sources
 - one simple subquery source
 - simple `WHERE` predicates with `AND`
+- `INNER JOIN ... ON a.col = b.col`
 - `LEFT JOIN ... ON a.col = b.col`
+- simple `WHERE EXISTS (SELECT 1 FROM ... WHERE a.col = b.col)` predicates
 - table aliases
 - `DISTINCT` removal when projected columns are known unique
 - predicate pushdown through simple projection subqueries
+- `JOIN` + `DISTINCT` rewrites to `EXISTS` for left-relation projections
 - unused `LEFT JOIN` elimination when the joined key is known unique
 - redundant `IS NOT NULL` filter removal when the column is trusted non-null
 - trusted constraints loaded from Snowprove YAML or dbt `schema.yml`
@@ -256,9 +259,9 @@ Explicitly out of scope for now:
 - windows and `QUALIFY`
 - `ORDER BY` and `LIMIT`
 - aggregation and `GROUP BY`
-- `OR`, `IN`, `EXISTS`, and subquery predicates
+- `OR`, `IN`, and general subquery predicates
 - join reordering
-- `INNER JOIN` rewrites
+- general `INNER JOIN` rewrites beyond the narrow `EXISTS` pattern
 - UDFs
 - semi-structured `VARIANT` / `FLATTEN`
 - external verifier backends

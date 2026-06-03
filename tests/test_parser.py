@@ -37,6 +37,29 @@ def test_parse_select_with_null_predicates() -> None:
     ]
 
 
+def test_parse_select_with_exists_predicate() -> None:
+    query = parse_select(
+        """
+        SELECT u.user_id
+        FROM users u
+        WHERE EXISTS (
+          SELECT 1
+          FROM orders o
+          WHERE o.user_id = u.user_id
+        )
+        """
+    )
+
+    assert len(query.predicates) == 1
+    assert query.predicates[0].to_sql() == (
+        "EXISTS (\n"
+        "  SELECT 1\n"
+        "  FROM orders o\n"
+        "  WHERE o.user_id = u.user_id\n"
+        ")"
+    )
+
+
 def test_rejects_unsupported_where_expression() -> None:
     with pytest.raises(UnsupportedSqlError, match="Only ANDed"):
         parse_select("SELECT user_id FROM users WHERE user_id = 1 OR status = 'active'")

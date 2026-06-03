@@ -8,7 +8,9 @@ class RemoveRedundantNotNullFilter:
 
     def apply(self, query: SelectQuery, constraints: ConstraintCatalog) -> RewriteSuggestion:
         not_null_predicates = [
-            predicate for predicate in query.predicates if predicate.operator == "IS NOT NULL"
+            predicate
+            for predicate in query.predicates
+            if isinstance(predicate, Predicate) and predicate.operator == "IS NOT NULL"
         ]
         if not not_null_predicates:
             return RewriteSuggestion(

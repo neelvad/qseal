@@ -1,5 +1,5 @@
 from snowprove.constraints.model import ConstraintCatalog
-from snowprove.ir.model import ColumnRef, SelectQuery
+from snowprove.ir.model import ColumnRef, Predicate, SelectQuery
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 
 
@@ -32,6 +32,14 @@ class PredicatePushdown:
                 status=VerificationStatus.UNSUPPORTED,
                 original_sql=query.raw_sql,
                 reason="Predicate pushdown with DISTINCT is not supported yet.",
+            )
+
+        if any(not isinstance(predicate, Predicate) for predicate in query.predicates):
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.UNSUPPORTED,
+                original_sql=query.raw_sql,
+                reason="Predicate pushdown with EXISTS predicates is not supported yet.",
             )
 
         if not inner.is_direct_table():

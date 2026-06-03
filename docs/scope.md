@@ -63,6 +63,13 @@ rows because the right side is not actually unique.
 Removes `IS NOT NULL` predicates when the filtered column is trusted non-null.
 This currently applies only to direct table queries.
 
+### `rewrite_join_distinct_to_exists`
+
+Rewrites a narrow `SELECT DISTINCT ... INNER JOIN ...` pattern to `WHERE EXISTS`
+when projected columns all come from the left relation and the join is only used
+to require at least one matching row. This avoids join row multiplication before
+deduplication.
+
 ## Non-Goals
 
 Snowprove does not prove that a query is faster. Runtime depends on Snowflake

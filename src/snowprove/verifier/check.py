@@ -1,6 +1,7 @@
 from snowprove.constraints.model import ConstraintCatalog
 from snowprove.ir.model import SelectQuery
 from snowprove.rewrites.base import VerificationStatus
+from snowprove.rewrites.join_distinct_exists import RewriteJoinDistinctToExists
 from snowprove.rewrites.join_elimination import RemoveUnusedLeftJoin
 from snowprove.rewrites.not_null_filter import RemoveRedundantNotNullFilter
 from snowprove.rewrites.predicate_pushdown import PredicatePushdown
@@ -51,6 +52,21 @@ def check_equivalence(
                 rewritten_sql=rewritten.raw_sql,
                 assumptions=join_elimination.assumptions,
                 reason=join_elimination.reason,
+            )
+
+    join_distinct_to_exists = RewriteJoinDistinctToExists().apply(original, constraints)
+    if (
+        join_distinct_to_exists.status == VerificationStatus.PROVEN_EQUIVALENT
+        and join_distinct_to_exists.rewritten_sql is not None
+    ):
+        expected = _parse_expected(join_distinct_to_exists.rewritten_sql, rewritten)
+        if _same_normalized_query(expected, rewritten):
+            return VerificationResult(
+                status=VerificationStatus.PROVEN_EQUIVALENT,
+                original_sql=original.raw_sql,
+                rewritten_sql=rewritten.raw_sql,
+                assumptions=join_distinct_to_exists.assumptions,
+                reason=join_distinct_to_exists.reason,
             )
 
     pushdown = PredicatePushdown().apply(original, constraints)

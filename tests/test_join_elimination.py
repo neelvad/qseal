@@ -53,6 +53,26 @@ def test_refuses_join_elimination_when_joined_table_is_projected() -> None:
     assert suggestion.status == VerificationStatus.UNKNOWN
 
 
+def test_refuses_join_elimination_with_exists_predicate() -> None:
+    query = parse_select(
+        """
+        SELECT f.user_id
+        FROM fact_orders f
+        LEFT JOIN dim_users u ON f.user_id = u.user_id
+        WHERE EXISTS (
+          SELECT 1
+          FROM user_flags uf
+          WHERE uf.user_id = u.user_id
+        )
+        """
+    )
+    constraints = ConstraintCatalog(tables={"dim_users": TableConstraints(unique=[("user_id",)])})
+
+    suggestion = RemoveUnusedLeftJoin().apply(query, constraints)
+
+    assert suggestion.status == VerificationStatus.UNKNOWN
+
+
 def test_refuses_join_elimination_without_unique_right_key() -> None:
     query = parse_select(
         """

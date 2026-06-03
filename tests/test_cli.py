@@ -128,6 +128,25 @@ tables:
     assert "FROM fact_orders f" in result.output
 
 
+def test_suggest_cli_reports_join_distinct_to_exists(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    query.write_text(
+        """
+        SELECT DISTINCT u.user_id
+        FROM users u
+        JOIN orders o ON u.user_id = o.user_id
+        """
+    )
+    schema.write_text("tables: {}\n")
+
+    result = CliRunner().invoke(main, ["suggest", str(query), "--schema", str(schema)])
+
+    assert result.exit_code == 0
+    assert "rewrite_join_distinct_to_exists" in result.output
+    assert "WHERE EXISTS" in result.output
+
+
 def test_suggest_cli_can_report_all_applicable_results(tmp_path) -> None:
     query = tmp_path / "query.sql"
     schema = tmp_path / "schema.yml"
