@@ -190,6 +190,7 @@ dbt/Jinja syntax:
 ```bash
 uv run snowprove dbt scan examples/dbt_project --all
 uv run snowprove dbt scan examples/dbt_project --diff
+uv run snowprove dbt scan examples/dbt_project --write-patches patches/
 uv run snowprove dbt scan examples/dbt_project --format json
 uv run snowprove dbt scan examples/dbt_project --fail-on findings
 uv run snowprove dbt scan examples/dbt_project --use-compiled
@@ -198,6 +199,9 @@ uv run snowprove dbt scan examples/dbt_project --compiled-dir examples/dbt_proje
 
 `--diff` is read-only. It prints unified diffs for proven rewrites and does not
 modify model files.
+
+`--write-patches DIR` writes those read-only unified diffs as `.patch` files.
+The patches can be reviewed or applied later with tools such as `git apply`.
 
 Scan reports include project-level summary counts by result status and rewrite
 rule. JSON output includes the same data under the `summary` key.

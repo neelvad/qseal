@@ -91,6 +91,9 @@ Scan reports include summary counts for visible results:
 `--diff` prints unified diffs for proven rewrites with generated SQL. It is
 read-only and does not modify project files.
 
+`--write-patches DIR` writes patch files for proven rewrites. It also does not
+modify project files; applying patches is an explicit separate step.
+
 `--fail-on findings` exits nonzero only when at least one proven rewrite finding
 exists. Unsupported SQL, unknown equivalence, missing constraints, and uncompiled
 dbt/Jinja are not treated as failures under this policy.
