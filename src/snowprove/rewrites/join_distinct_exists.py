@@ -1,5 +1,5 @@
 from snowprove.constraints.model import ConstraintCatalog
-from snowprove.ir.model import ExistsPredicate, Join, SelectQuery
+from snowprove.ir.model import ExistsPredicate, Join, Predicate, SelectQuery
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 
 
@@ -34,17 +34,6 @@ class RewriteJoinDistinctToExists:
                 reason="JOIN to EXISTS rewrite is only supported for direct table queries.",
             )
 
-        if query.predicates:
-            return RewriteSuggestion(
-                rule_name=self.rule_name,
-                status=VerificationStatus.UNSUPPORTED,
-                original_sql=query.raw_sql,
-                reason=(
-                    "JOIN to EXISTS rewrite with existing WHERE predicates "
-                    "is not supported yet."
-                ),
-            )
-
         left_relation = query.table_alias or query.table
         if left_relation is None:
             return RewriteSuggestion(
@@ -52,6 +41,16 @@ class RewriteJoinDistinctToExists:
                 status=VerificationStatus.UNSUPPORTED,
                 original_sql=query.raw_sql,
                 reason="Could not identify the left relation.",
+            )
+
+        if not _predicates_only_reference_left_relation(query.predicates, left_relation):
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.UNKNOWN,
+                original_sql=query.raw_sql,
+                reason=(
+                    "Existing WHERE predicates must be simple filters on the left relation."
+                ),
             )
 
         if any(column.table != left_relation for column in query.projections):
@@ -75,6 +74,7 @@ class RewriteJoinDistinctToExists:
                 "distinct": False,
                 "joins": (),
                 "predicates": (
+                    *query.predicates,
                     ExistsPredicate(
                         table=join.table,
                         table_sql=join.table_sql,
@@ -101,3 +101,13 @@ def _join_condition_connects_left_and_right(join: Join, left_relation: str) -> b
     left = join.condition.left.table
     right = join.condition.right.table
     return {left, right} == {left_relation, right_relation}
+
+
+def _predicates_only_reference_left_relation(
+    predicates: tuple[Predicate | ExistsPredicate, ...],
+    left_relation: str,
+) -> bool:
+    return all(
+        isinstance(predicate, Predicate) and predicate.left.table == left_relation
+        for predicate in predicates
+    )

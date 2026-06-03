@@ -108,6 +108,34 @@ def test_check_proves_join_distinct_to_exists() -> None:
     assert result.rule_name == "rewrite_join_distinct_to_exists"
 
 
+def test_check_proves_join_distinct_to_exists_with_left_predicate() -> None:
+    original = parse_select(
+        """
+        SELECT DISTINCT u.user_id
+        FROM users u
+        JOIN orders o ON u.user_id = o.user_id
+        WHERE u.status = 'active'
+        """
+    )
+    rewritten = parse_select(
+        """
+        SELECT u.user_id
+        FROM users u
+        WHERE u.status = 'active'
+          AND EXISTS (
+            SELECT 1
+            FROM orders o
+            WHERE u.user_id = o.user_id
+          )
+        """
+    )
+
+    result = check_equivalence(original, rewritten, ConstraintCatalog())
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "rewrite_join_distinct_to_exists"
+
+
 def test_check_proves_redundant_not_null_filter_removal() -> None:
     original = parse_select("SELECT user_id FROM users WHERE email IS NOT NULL")
     rewritten = parse_select("SELECT user_id FROM users")
