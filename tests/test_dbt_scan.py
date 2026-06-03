@@ -86,6 +86,12 @@ def test_scan_dbt_project_can_include_unsupported_jinja(tmp_path: Path) -> None:
     assert not result.has_proven_findings()
     assert result.status_counts() == {"UNSUPPORTED": 1}
     assert result.rule_counts() == {"dbt_scan": 1}
+    assert result.reason_counts() == {
+        "Model contains dbt/Jinja syntax and must be compiled before scanning.": 1
+    }
+    assert result.summary()["reason_counts"] == {
+        "Model contains dbt/Jinja syntax and must be compiled before scanning.": 1
+    }
     assert result.results[0].suggestions[0].status == VerificationStatus.UNSUPPORTED
 
 

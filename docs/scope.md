@@ -117,6 +117,7 @@ Scan reports include summary counts for visible results:
 - number of proven rewrite findings
 - counts by result status
 - counts by rewrite rule
+- counts by repeated reason, useful for prioritizing unsupported SQL shapes
 
 `--report-file PATH` writes a versioned JSON `dbt_scan` artifact to disk. This
 can be used with text output, diff output, or JSON stdout. When used with

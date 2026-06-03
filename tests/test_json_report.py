@@ -108,6 +108,7 @@ def test_render_dbt_scan_json() -> None:
     assert payload["results"][0]["apply_blocker"] is None
     assert payload["results"][0]["patches"] == []
     assert payload["summary"]["proven_finding_count"] == 1
+    assert payload["summary"]["reason_counts"] == {}
 
 
 def test_render_dbt_scan_json_includes_patch_paths() -> None:

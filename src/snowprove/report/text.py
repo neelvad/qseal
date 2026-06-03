@@ -96,6 +96,10 @@ def render_dbt_scan_report(scan_result) -> Text:
         output.append("Rules:\n", style="bold")
         for rule_name, count in scan_result.rule_counts().items():
             output.append(f"  {rule_name}: {count}\n")
+        if scan_result.reason_counts():
+            output.append("Reasons:\n", style="bold")
+            for reason, count in scan_result.reason_counts().items():
+                output.append(f"  {count}x {reason}\n")
 
     if not scan_result.results:
         output.append("No rewrite findings.\n")

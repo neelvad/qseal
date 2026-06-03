@@ -112,3 +112,35 @@ def test_render_dbt_scan_report_shows_source_and_scanned_paths() -> None:
     assert "Summary:" in report.plain
     assert "PROVEN_EQUIVALENT: 1" in report.plain
     assert "remove_redundant_distinct: 1" in report.plain
+
+
+def test_render_dbt_scan_report_shows_reason_counts() -> None:
+    from snowprove.report.text import render_dbt_scan_report
+
+    report = render_dbt_scan_report(
+        DbtScanResult(
+            project_path="/tmp/project",
+            model_count=1,
+            results=(
+                DbtModelScanResult(
+                    path="/tmp/project/models/users.sql",
+                    scanned_path="/tmp/project/models/users.sql",
+                    source_path="/tmp/project/models/users.sql",
+                    suggestions=(
+                        RewriteSuggestion(
+                            rule_name="dbt_scan",
+                            status=VerificationStatus.UNSUPPORTED,
+                            original_sql="SELECT * FROM {{ ref('users') }}",
+                            reason=(
+                                "Model contains dbt/Jinja syntax and must be compiled "
+                                "before scanning."
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+
+    assert "Reasons:" in report.plain
+    assert "1x Model contains dbt/Jinja syntax" in report.plain

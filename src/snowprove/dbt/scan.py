@@ -77,6 +77,14 @@ class DbtScanResult(BaseModel):
                 counts[suggestion.rule_name] = counts.get(suggestion.rule_name, 0) + 1
         return counts
 
+    def reason_counts(self) -> dict[str, int]:
+        counts = {}
+        for result in self.results:
+            for suggestion in result.suggestions:
+                if suggestion.reason:
+                    counts[suggestion.reason] = counts.get(suggestion.reason, 0) + 1
+        return counts
+
     def summary(self) -> dict[str, object]:
         return {
             "model_count": self.model_count,
@@ -84,6 +92,7 @@ class DbtScanResult(BaseModel):
             "proven_finding_count": self.proven_finding_count(),
             "status_counts": self.status_counts(),
             "rule_counts": self.rule_counts(),
+            "reason_counts": self.reason_counts(),
         }
 
 
