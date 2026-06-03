@@ -35,6 +35,31 @@ models:
     assert result.results[0].suggestions[0].status == VerificationStatus.PROVEN_EQUIVALENT
 
 
+def test_scan_dbt_project_matches_constraints_for_qualified_relations(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "dim_users.sql").write_text(
+        "SELECT DISTINCT user_id FROM analytics.public.dim_users"
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    suggestion = result.results[0].suggestions[0]
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rewritten_sql == "SELECT user_id\nFROM analytics.public.dim_users;"
+
+
 def test_scan_dbt_project_skips_jinja_by_default(tmp_path: Path) -> None:
     models = tmp_path / "models"
     models.mkdir()

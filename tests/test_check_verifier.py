@@ -35,6 +35,16 @@ def test_check_does_not_apply_distinct_rule_when_predicates_differ() -> None:
     assert result.status == VerificationStatus.UNKNOWN
 
 
+def test_check_does_not_equate_different_qualified_relations() -> None:
+    original = parse_select("SELECT DISTINCT user_id FROM analytics.public.users")
+    rewritten = parse_select("SELECT user_id FROM analytics.staging.users")
+    constraints = ConstraintCatalog(tables={"users": TableConstraints(unique=[("user_id",)])})
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.UNKNOWN
+
+
 def test_check_proves_predicate_pushdown() -> None:
     original = parse_select(
         """

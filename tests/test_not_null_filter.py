@@ -20,6 +20,24 @@ def test_removes_redundant_not_null_filter() -> None:
     assert suggestion.rewritten_sql == "SELECT user_id\nFROM users;"
 
 
+def test_removes_redundant_not_null_filter_from_qualified_relation() -> None:
+    query = parse_select(
+        "SELECT user_id FROM analytics.public.users WHERE email IS NOT NULL"
+    )
+    constraints = ConstraintCatalog(
+        tables={
+            "users": TableConstraints(
+                columns={"email": ColumnConstraint(nullable=False)},
+            )
+        }
+    )
+
+    suggestion = RemoveRedundantNotNullFilter().apply(query, constraints)
+
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rewritten_sql == "SELECT user_id\nFROM analytics.public.users;"
+
+
 def test_preserves_non_redundant_predicates() -> None:
     query = parse_select("SELECT user_id FROM users WHERE email IS NOT NULL AND status = 'active'")
     constraints = ConstraintCatalog(

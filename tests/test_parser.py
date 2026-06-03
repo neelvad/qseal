@@ -16,6 +16,16 @@ def test_parse_select_with_where_predicates() -> None:
     ]
 
 
+def test_parse_select_preserves_qualified_relation_sql() -> None:
+    query = parse_select("SELECT DISTINCT user_id FROM analytics.public.dim_users")
+
+    assert query.table == "dim_users"
+    assert query.table_sql == "analytics.public.dim_users"
+    assert query.without_distinct_sql() == (
+        "SELECT user_id\nFROM analytics.public.dim_users;"
+    )
+
+
 def test_parse_select_with_null_predicates() -> None:
     query = parse_select(
         "SELECT user_id FROM users WHERE deleted_at IS NULL AND email IS NOT NULL"
@@ -50,5 +60,21 @@ def test_parse_simple_left_join() -> None:
     assert query.table_alias == "f"
     assert len(query.joins) == 1
     assert query.joins[0].table == "dim_users"
+    assert query.joins[0].table_sql == "dim_users"
     assert query.joins[0].alias == "u"
     assert query.joins[0].condition.to_sql() == "f.user_id = u.user_id"
+
+
+def test_parse_left_join_preserves_qualified_relation_sql() -> None:
+    query = parse_select(
+        """
+        SELECT f.user_id
+        FROM analytics.public.fact_orders f
+        LEFT JOIN analytics.public.dim_users u ON f.user_id = u.user_id
+        """
+    )
+
+    assert query.table == "fact_orders"
+    assert query.table_sql == "analytics.public.fact_orders"
+    assert query.joins[0].table == "dim_users"
+    assert query.joins[0].table_sql == "analytics.public.dim_users"

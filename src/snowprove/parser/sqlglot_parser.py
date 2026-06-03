@@ -41,7 +41,11 @@ def parse_select(sql: str) -> SelectQuery:
 
 def _source(node: exp.Expression) -> dict[str, object]:
     if isinstance(node, exp.Table):
-        return {"table": node.name, "table_alias": node.alias or None}
+        return {
+            "table": node.name,
+            "table_sql": _relation_sql_without_alias(node),
+            "table_alias": node.alias or None,
+        }
     if isinstance(node, exp.Subquery):
         if not isinstance(node.this, exp.Select):
             raise UnsupportedSqlError("Only SELECT subqueries are supported.")
@@ -99,6 +103,7 @@ def _join(node: exp.Join) -> Join:
     return Join(
         join_type="LEFT",
         table=node.this.name,
+        table_sql=_relation_sql_without_alias(node.this),
         alias=node.this.alias or None,
         condition=JoinCondition(
             left=ColumnRef(table=condition.this.table or None, name=condition.this.name),
@@ -192,3 +197,9 @@ def _operator(node: exp.Expression) -> str:
     if isinstance(node, exp.LTE):
         return "<="
     raise UnsupportedSqlError("Unsupported WHERE comparison operator.")
+
+
+def _relation_sql_without_alias(node: exp.Table) -> str:
+    relation = node.copy()
+    relation.set("alias", None)
+    return relation.sql(dialect="snowflake")

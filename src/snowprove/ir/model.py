@@ -62,6 +62,7 @@ class Join(BaseModel):
 
     join_type: str
     table: str
+    table_sql: str | None = None
     alias: str | None = None
     condition: JoinCondition
 
@@ -69,14 +70,16 @@ class Join(BaseModel):
         return self.alias or self.table
 
     def to_sql(self) -> str:
+        table_sql = self.table_sql or self.table
         alias = f" {self.alias}" if self.alias else ""
-        return f"{self.join_type} JOIN {self.table}{alias} ON {self.condition.to_sql()}"
+        return f"{self.join_type} JOIN {table_sql}{alias} ON {self.condition.to_sql()}"
 
 
 class SelectQuery(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     table: str | None = None
+    table_sql: str | None = None
     table_alias: str | None = None
     subquery: SelectQuery | None = None
     alias: str | None = None
@@ -94,8 +97,9 @@ class SelectQuery(BaseModel):
 
     def source_sql(self) -> str:
         if self.table is not None:
+            table_sql = self.table_sql or self.table
             alias = f" {self.table_alias}" if self.table_alias else ""
-            return f"{self.table}{alias}"
+            return f"{table_sql}{alias}"
         if self.subquery is not None:
             subquery_sql = self.subquery.to_sql().removesuffix(";")
             alias = f" {self.alias}" if self.alias else ""

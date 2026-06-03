@@ -78,6 +78,10 @@ subset is meant to be small enough to audit.
 `snowprove dbt scan` discovers SQL files under `models/**/*.sql` and dbt schema
 files under `models/**/*.yml` and `models/**/*.yaml`.
 
+Compiled Snowflake SQL can use fully qualified relation names such as
+`database.schema.model_name`. Snowprove preserves those qualified names in
+generated rewrites while matching dbt constraints by the unqualified model name.
+
 Default scan output reports only proven rewrite findings. `--all` includes
 unknown and unsupported results.
 

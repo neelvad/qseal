@@ -80,6 +80,7 @@ def check_equivalence(
 def _same_normalized_query(left: SelectQuery, right: SelectQuery) -> bool:
     return (
         left.table == right.table
+        and left.table_sql == right.table_sql
         and left.table_alias == right.table_alias
         and left.subquery == right.subquery
         and left.alias == right.alias
@@ -104,6 +105,7 @@ def _is_distinct_removal(original: SelectQuery, rewritten: SelectQuery) -> bool:
         original.distinct
         and not rewritten.distinct
         and original.table == rewritten.table
+        and original.table_sql == rewritten.table_sql
         and original.table_alias == rewritten.table_alias
         and original.subquery == rewritten.subquery
         and original.joins == rewritten.joins
