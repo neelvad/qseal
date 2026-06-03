@@ -87,6 +87,11 @@ def dbt_group() -> None:
     help="Exit nonzero only for the selected proven-result policy.",
 )
 @click.option(
+    "--report-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write a versioned JSON scan artifact to this file.",
+)
+@click.option(
     "--compiled-dir",
     "compiled_path",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
@@ -115,6 +120,7 @@ def dbt_scan(
     output_format: str,
     show_diff: bool,
     fail_on: str,
+    report_file: Path | None,
     compiled_path: Path | None,
     patch_dir: Path | None,
     apply_patches: bool,
@@ -146,12 +152,19 @@ def dbt_scan(
     except DbtProjectDiscoveryError as error:
         raise click.ClickException(str(error)) from error
 
+    json_report = render_dbt_scan_json(result)
+
     if output_format == "json":
-        click.echo(render_dbt_scan_json(result))
+        click.echo(json_report)
     elif show_diff:
         click.echo(render_dbt_scan_diff_report(result))
     else:
         console.print(render_dbt_scan_report(result))
+
+    if report_file is not None:
+        report_file.parent.mkdir(parents=True, exist_ok=True)
+        report_file.write_text(f"{json_report}\n")
+        click.echo(f"Report file written: {report_file}", err=True)
 
     if patch_dir is not None:
         written = write_dbt_scan_patches(result, patch_dir)

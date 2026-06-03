@@ -425,6 +425,63 @@ models:
     assert payload["results"][0]["suggestions"][0]["rule_name"] == "remove_redundant_distinct"
 
 
+def test_dbt_scan_cli_writes_report_file(tmp_path) -> None:
+    models = tmp_path / "models"
+    report = tmp_path / "artifacts" / "snowprove.json"
+    models.mkdir()
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["dbt", "scan", str(tmp_path), "--report-file", str(report)],
+    )
+
+    assert result.exit_code == 0
+    assert "Report file written:" in result.output
+    payload = json.loads(report.read_text())
+    assert payload["artifact_type"] == "dbt_scan"
+    assert payload["summary"]["proven_finding_count"] == 1
+
+
+def test_dbt_scan_cli_can_write_report_file_with_json_stdout(tmp_path) -> None:
+    models = tmp_path / "models"
+    report = tmp_path / "snowprove.json"
+    models.mkdir()
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["dbt", "scan", str(tmp_path), "--format", "json", "--report-file", str(report)],
+    )
+
+    assert result.exit_code == 0
+    stdout = json.loads(result.stdout)
+    file_payload = json.loads(report.read_text())
+    assert stdout == file_payload
+
+
 def test_dbt_scan_cli_reports_diff(tmp_path) -> None:
     models = tmp_path / "models"
     models.mkdir()

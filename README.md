@@ -193,6 +193,7 @@ uv run snowprove dbt scan examples/dbt_project --diff
 uv run snowprove dbt scan examples/dbt_project --write-patches patches/
 uv run snowprove dbt scan examples/dbt_project --apply-patches
 uv run snowprove dbt scan examples/dbt_project --format json
+uv run snowprove dbt scan examples/dbt_project --report-file snowprove-report.json
 uv run snowprove dbt scan examples/dbt_project --fail-on findings
 uv run snowprove dbt scan examples/dbt_project --use-compiled
 uv run snowprove dbt scan examples/dbt_project --compiled-dir examples/dbt_project/target/compiled/snowprove/models
@@ -214,6 +215,10 @@ the direct-apply path is visible before running a mutating command.
 
 Scan reports include project-level summary counts by result status and rewrite
 rule. JSON output includes the same data under the `summary` key.
+
+`--report-file PATH` writes the same versioned JSON scan artifact to disk while
+leaving terminal output in the selected format. This is the preferred CI artifact
+path when humans still want text output in logs.
 
 `--fail-on findings` exits nonzero only when Snowprove finds at least one
 `PROVEN_EQUIVALENT` rewrite. `UNKNOWN` and `UNSUPPORTED` results do not fail the

@@ -112,6 +112,9 @@ Scan reports include summary counts for visible results:
 - counts by result status
 - counts by rewrite rule
 
+`--report-file PATH` writes a versioned JSON `dbt_scan` artifact to disk. This
+can be used with text output, diff output, or JSON stdout.
+
 For proven findings, scan reports also show whether the finding is apply-ready for
 `--apply-patches`. Compiled SQL findings are not apply-ready because the verified
 SQL is not the source model text.
