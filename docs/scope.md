@@ -81,6 +81,13 @@ files under `models/**/*.yml` and `models/**/*.yaml`.
 Default scan output reports only proven rewrite findings. `--all` includes
 unknown and unsupported results.
 
+Scan reports include summary counts for visible results:
+
+- number of scanned models
+- number of proven rewrite findings
+- counts by result status
+- counts by rewrite rule
+
 `--diff` prints unified diffs for proven rewrites with generated SQL. It is
 read-only and does not modify project files.
 

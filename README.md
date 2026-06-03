@@ -199,6 +199,9 @@ uv run snowprove dbt scan examples/dbt_project --compiled-dir examples/dbt_proje
 `--diff` is read-only. It prints unified diffs for proven rewrites and does not
 modify model files.
 
+Scan reports include project-level summary counts by result status and rewrite
+rule. JSON output includes the same data under the `summary` key.
+
 `--fail-on findings` exits nonzero only when Snowprove finds at least one
 `PROVEN_EQUIVALENT` rewrite. `UNKNOWN` and `UNSUPPORTED` results do not fail the
 command.
