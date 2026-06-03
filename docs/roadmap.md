@@ -40,7 +40,7 @@ conservative, not by pretending to verify all Snowflake SQL.
 - patch file output for reviewable rewrite suggestions
 - opt-in patch application for verified dbt rewrites
 - nonzero exit mode for proven rewrite findings
-- GitHub comment/report examples
+- GitHub Actions report artifact examples
 - dbt model scanning experiments
 
 ## Later Research Tracks

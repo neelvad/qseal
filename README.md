@@ -41,6 +41,8 @@ uv run snowprove dbt scan examples/dbt_project
 equivalent. This is the intended contract for future untrusted candidate
 generators, including LLM-generated rewrites.
 
+For CI examples, see [docs/github-actions.md](docs/github-actions.md).
+
 ## Examples
 
 ### Redundant DISTINCT Removal
