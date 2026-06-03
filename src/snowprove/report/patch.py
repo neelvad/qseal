@@ -16,7 +16,22 @@ class PatchApplyResult(BaseModel):
     reason: str | None = None
 
 
+class PatchWriteResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    path: Path
+    model_path: Path
+    rule_name: str
+
+
 def write_dbt_scan_patches(scan_result: DbtScanResult, output_dir: Path) -> tuple[Path, ...]:
+    return tuple(result.path for result in write_dbt_scan_patch_results(scan_result, output_dir))
+
+
+def write_dbt_scan_patch_results(
+    scan_result: DbtScanResult,
+    output_dir: Path,
+) -> tuple[PatchWriteResult, ...]:
     written = []
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -33,7 +48,13 @@ def write_dbt_scan_patches(scan_result: DbtScanResult, output_dir: Path) -> tupl
             )
             patch_path.parent.mkdir(parents=True, exist_ok=True)
             patch_path.write_text(diff)
-            written.append(patch_path)
+            written.append(
+                PatchWriteResult(
+                    path=patch_path,
+                    model_path=result.display_path(),
+                    rule_name=suggestion.rule_name,
+                )
+            )
 
     return tuple(written)
 

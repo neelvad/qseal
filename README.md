@@ -223,7 +223,8 @@ rule. JSON output includes the same data under the `summary` key.
 
 `--report-file PATH` writes the same versioned JSON scan artifact to disk while
 leaving terminal output in the selected format. This is the preferred CI artifact
-path when humans still want text output in logs.
+path when humans still want text output in logs. When combined with
+`--write-patches DIR`, the report includes the generated patch file paths.
 
 `--fail-on findings` exits nonzero only when Snowprove finds at least one
 `PROVEN_EQUIVALENT` rewrite. `UNKNOWN` and `UNSUPPORTED` results do not fail the

@@ -13,7 +13,7 @@ from snowprove.report.json import (
     render_suggestions_json,
     render_verification_json,
 )
-from snowprove.report.patch import apply_dbt_scan_patches, write_dbt_scan_patches
+from snowprove.report.patch import apply_dbt_scan_patches, write_dbt_scan_patch_results
 from snowprove.report.text import (
     render_dbt_scan_diff_report,
     render_dbt_scan_report,
@@ -153,7 +153,11 @@ def dbt_scan(
     except DbtProjectDiscoveryError as error:
         raise click.ClickException(str(error)) from error
 
-    json_report = render_dbt_scan_json(result)
+    patch_results = ()
+    if patch_dir is not None:
+        patch_results = write_dbt_scan_patch_results(result, patch_dir)
+
+    json_report = render_dbt_scan_json(result, patch_results=patch_results)
 
     if output_format == "json":
         click.echo(json_report)
@@ -168,10 +172,9 @@ def dbt_scan(
         click.echo(f"Report file written: {report_file}", err=True)
 
     if patch_dir is not None:
-        written = write_dbt_scan_patches(result, patch_dir)
-        console.print(f"Patch files written: {len(written)}")
-        for path in written:
-            console.print(f"  {path}")
+        console.print(f"Patch files written: {len(patch_results)}")
+        for patch in patch_results:
+            console.print(f"  {patch.path}")
 
     if apply_patches:
         applied = apply_dbt_scan_patches(result)

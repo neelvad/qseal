@@ -7,6 +7,7 @@ from snowprove.report.json import (
     render_suggestions_json,
     render_verification_json,
 )
+from snowprove.report.patch import PatchWriteResult
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.verifier.model import VerificationResult
 
@@ -105,4 +106,45 @@ def test_render_dbt_scan_json() -> None:
     assert payload["model_count"] == 1
     assert payload["results"][0]["apply_ready"] is True
     assert payload["results"][0]["apply_blocker"] is None
+    assert payload["results"][0]["patches"] == []
     assert payload["summary"]["proven_finding_count"] == 1
+
+
+def test_render_dbt_scan_json_includes_patch_paths() -> None:
+    payload = json.loads(
+        render_dbt_scan_json(
+            DbtScanResult(
+                project_path="/tmp/project",
+                model_count=1,
+                results=[
+                    {
+                        "path": "/tmp/project/models/users.sql",
+                        "scanned_path": "/tmp/project/models/users.sql",
+                        "source_path": "/tmp/project/models/users.sql",
+                        "suggestions": [
+                            {
+                                "rule_name": "remove_redundant_distinct",
+                                "status": "PROVEN_EQUIVALENT",
+                                "original_sql": "SELECT DISTINCT user_id FROM users",
+                                "rewritten_sql": "SELECT user_id FROM users;",
+                            }
+                        ],
+                    }
+                ],
+            ),
+            patch_results=[
+                PatchWriteResult(
+                    path="/tmp/project/patches/models/users.sql.remove.patch",
+                    model_path="/tmp/project/models/users.sql",
+                    rule_name="remove_redundant_distinct",
+                )
+            ],
+        )
+    )
+
+    assert payload["results"][0]["patches"] == [
+        {
+            "path": "/tmp/project/patches/models/users.sql.remove.patch",
+            "rule_name": "remove_redundant_distinct",
+        }
+    ]

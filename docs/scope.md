@@ -119,7 +119,9 @@ Scan reports include summary counts for visible results:
 - counts by rewrite rule
 
 `--report-file PATH` writes a versioned JSON `dbt_scan` artifact to disk. This
-can be used with text output, diff output, or JSON stdout.
+can be used with text output, diff output, or JSON stdout. When used with
+`--write-patches DIR`, the artifact includes patch paths on the matching scan
+results.
 
 For proven findings, scan reports also show whether the finding is apply-ready for
 `--apply-patches`. Compiled SQL findings are not apply-ready because the verified

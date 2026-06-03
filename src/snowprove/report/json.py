@@ -2,6 +2,7 @@ import json
 from collections.abc import Sequence
 from typing import Any
 
+from snowprove.report.patch import PatchWriteResult
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.verifier.model import VerificationResult
 
@@ -36,15 +37,34 @@ def render_verification_json(result: VerificationResult) -> str:
     return _dumps(payload)
 
 
-def render_dbt_scan_json(scan_result) -> str:
+def render_dbt_scan_json(
+    scan_result,
+    patch_results: Sequence[PatchWriteResult] = (),
+) -> str:
     payload = scan_result.model_dump(mode="json")
     payload["schema_version"] = 1
     payload["artifact_type"] = "dbt_scan"
+    patches_by_model = _patches_by_model(patch_results)
     for index, result in enumerate(scan_result.results):
         payload["results"][index]["apply_ready"] = result.apply_ready()
         payload["results"][index]["apply_blocker"] = result.apply_blocker()
+        payload["results"][index]["patches"] = patches_by_model.get(str(result.display_path()), [])
     payload["summary"] = scan_result.summary()
     return _dumps(payload)
+
+
+def _patches_by_model(
+    patch_results: Sequence[PatchWriteResult],
+) -> dict[str, list[dict[str, str]]]:
+    patches: dict[str, list[dict[str, str]]] = {}
+    for result in patch_results:
+        patches.setdefault(str(result.model_path), []).append(
+            {
+                "path": str(result.path),
+                "rule_name": result.rule_name,
+            }
+        )
+    return patches
 
 
 def _dumps(payload: Any) -> str:

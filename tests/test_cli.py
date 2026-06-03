@@ -726,6 +726,48 @@ models:
     assert "-SELECT DISTINCT user_id" in patch_path.read_text()
 
 
+def test_dbt_scan_cli_report_file_includes_patch_paths(tmp_path) -> None:
+    models = tmp_path / "models"
+    patches = tmp_path / "patches"
+    report = tmp_path / "snowprove-report.json"
+    models.mkdir()
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "dbt",
+            "scan",
+            str(tmp_path),
+            "--write-patches",
+            str(patches),
+            "--report-file",
+            str(report),
+        ],
+    )
+
+    assert result.exit_code == 0
+    patch_path = patches / "models" / "dim_users.sql.remove_redundant_distinct.patch"
+    payload = json.loads(report.read_text())
+    assert payload["results"][0]["patches"] == [
+        {
+            "path": str(patch_path),
+            "rule_name": "remove_redundant_distinct",
+        }
+    ]
+
+
 def test_dbt_scan_cli_can_apply_patches(tmp_path) -> None:
     models = tmp_path / "models"
     model = models / "dim_users.sql"
