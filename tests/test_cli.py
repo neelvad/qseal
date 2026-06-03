@@ -553,3 +553,53 @@ def test_dbt_scan_cli_rejects_use_compiled_with_compiled_dir(tmp_path) -> None:
 
     assert result.exit_code != 0
     assert "cannot be used together" in result.output
+
+
+def test_dbt_scan_cli_can_write_patches(tmp_path) -> None:
+    models = tmp_path / "models"
+    patches = tmp_path / "patches"
+    models.mkdir()
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["dbt", "scan", str(tmp_path), "--write-patches", str(patches)],
+    )
+
+    patch_path = patches / "models" / "dim_users.sql.remove_redundant_distinct.patch"
+    assert result.exit_code == 0
+    assert "Patch files written: 1" in result.output
+    assert patch_path.exists()
+    assert "-SELECT DISTINCT user_id" in patch_path.read_text()
+
+
+def test_dbt_scan_cli_rejects_write_patches_json_combination(tmp_path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "dbt",
+            "scan",
+            str(tmp_path),
+            "--write-patches",
+            str(tmp_path / "patches"),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--write-patches is only supported" in result.output

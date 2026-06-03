@@ -13,6 +13,7 @@ from snowprove.report.json import (
     render_suggestions_json,
     render_verification_json,
 )
+from snowprove.report.patch import write_dbt_scan_patches
 from snowprove.report.text import (
     render_dbt_scan_diff_report,
     render_dbt_scan_report,
@@ -92,6 +93,12 @@ def dbt_group() -> None:
     help="Directory containing compiled dbt SQL files to scan instead of models/ SQL.",
 )
 @click.option(
+    "--write-patches",
+    "patch_dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Write unified diff patch files for proven rewrites to this directory.",
+)
+@click.option(
     "--use-compiled",
     is_flag=True,
     help="Auto-discover and scan compiled SQL under target/compiled/.",
@@ -104,11 +111,14 @@ def dbt_scan(
     show_diff: bool,
     fail_on: str,
     compiled_path: Path | None,
+    patch_dir: Path | None,
     use_compiled: bool,
 ) -> None:
     """Scan dbt model SQL files for verified rewrite opportunities."""
     if show_diff and output_format == "json":
         raise click.ClickException("--diff is only supported with --format text.")
+    if patch_dir is not None and output_format == "json":
+        raise click.ClickException("--write-patches is only supported with --format text.")
     if compiled_path is not None and use_compiled:
         raise click.ClickException("--compiled-dir and --use-compiled cannot be used together.")
 
@@ -130,6 +140,12 @@ def dbt_scan(
         click.echo(render_dbt_scan_diff_report(result))
     else:
         console.print(render_dbt_scan_report(result))
+
+    if patch_dir is not None:
+        written = write_dbt_scan_patches(result, patch_dir)
+        console.print(f"Patch files written: {len(written)}")
+        for path in written:
+            console.print(f"  {path}")
 
     if fail_on == "findings" and result.has_proven_findings():
         raise click.exceptions.Exit(1)
