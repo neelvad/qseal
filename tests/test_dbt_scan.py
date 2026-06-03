@@ -25,6 +25,9 @@ models:
 
     assert result.model_count == 1
     assert result.has_proven_findings()
+    assert result.proven_finding_count() == 1
+    assert result.status_counts() == {"PROVEN_EQUIVALENT": 1}
+    assert result.rule_counts() == {"remove_redundant_distinct": 1}
     assert len(result.results) == 1
     assert result.results[0].path == models / "dim_users.sql"
     assert result.results[0].scanned_path == models / "dim_users.sql"
@@ -42,6 +45,7 @@ def test_scan_dbt_project_skips_jinja_by_default(tmp_path: Path) -> None:
 
     assert result.model_count == 1
     assert not result.has_proven_findings()
+    assert result.summary()["proven_finding_count"] == 0
     assert result.results == ()
 
 
@@ -55,6 +59,8 @@ def test_scan_dbt_project_can_include_unsupported_jinja(tmp_path: Path) -> None:
 
     assert result.model_count == 1
     assert not result.has_proven_findings()
+    assert result.status_counts() == {"UNSUPPORTED": 1}
+    assert result.rule_counts() == {"dbt_scan": 1}
     assert result.results[0].suggestions[0].status == VerificationStatus.UNSUPPORTED
 
 

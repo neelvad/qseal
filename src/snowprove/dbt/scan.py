@@ -41,6 +41,37 @@ class DbtScanResult(BaseModel):
     def has_proven_findings(self) -> bool:
         return any(result.has_proven_findings() for result in self.results)
 
+    def proven_finding_count(self) -> int:
+        return sum(
+            1
+            for result in self.results
+            for suggestion in result.suggestions
+            if suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+        )
+
+    def status_counts(self) -> dict[str, int]:
+        counts = {}
+        for result in self.results:
+            for suggestion in result.suggestions:
+                counts[suggestion.status.value] = counts.get(suggestion.status.value, 0) + 1
+        return counts
+
+    def rule_counts(self) -> dict[str, int]:
+        counts = {}
+        for result in self.results:
+            for suggestion in result.suggestions:
+                counts[suggestion.rule_name] = counts.get(suggestion.rule_name, 0) + 1
+        return counts
+
+    def summary(self) -> dict[str, object]:
+        return {
+            "model_count": self.model_count,
+            "result_count": len(self.results),
+            "proven_finding_count": self.proven_finding_count(),
+            "status_counts": self.status_counts(),
+            "rule_counts": self.rule_counts(),
+        }
+
 
 def scan_dbt_project(
     project_path: Path,
