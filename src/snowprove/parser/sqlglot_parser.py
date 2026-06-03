@@ -85,8 +85,9 @@ def _projection_to_column(node: exp.Expression) -> ColumnRef:
 
 
 def _join(node: exp.Join) -> Join:
-    if node.side != "LEFT":
-        raise UnsupportedSqlError("Only LEFT JOIN is supported yet.")
+    join_type = _join_type(node)
+    if join_type is None:
+        raise UnsupportedSqlError("Only INNER JOIN and LEFT JOIN are supported yet.")
     if not isinstance(node.this, exp.Table):
         raise UnsupportedSqlError("Only direct table JOIN targets are supported.")
 
@@ -101,7 +102,7 @@ def _join(node: exp.Join) -> Join:
         raise UnsupportedSqlError("JOIN conditions must compare two columns.")
 
     return Join(
-        join_type="LEFT",
+        join_type=join_type,
         table=node.this.name,
         table_sql=_relation_sql_without_alias(node.this),
         alias=node.this.alias or None,
@@ -113,6 +114,14 @@ def _join(node: exp.Join) -> Join:
             ),
         ),
     )
+
+
+def _join_type(node: exp.Join) -> str | None:
+    if node.side == "LEFT":
+        return "LEFT"
+    if node.side == "" and node.kind in ("", "INNER"):
+        return "INNER"
+    return None
 
 
 def _reject_unsupported_clauses(parsed: exp.Select) -> None:

@@ -65,6 +65,24 @@ def test_parse_simple_left_join() -> None:
     assert query.joins[0].condition.to_sql() == "f.user_id = u.user_id"
 
 
+def test_parse_simple_inner_join() -> None:
+    query = parse_select(
+        """
+        SELECT u.user_id
+        FROM users u
+        JOIN orders o ON u.user_id = o.user_id
+        """
+    )
+
+    assert query.table == "users"
+    assert query.table_alias == "u"
+    assert len(query.joins) == 1
+    assert query.joins[0].join_type == "INNER"
+    assert query.joins[0].table == "orders"
+    assert query.joins[0].alias == "o"
+    assert query.joins[0].to_sql() == "INNER JOIN orders o ON u.user_id = o.user_id"
+
+
 def test_parse_left_join_preserves_qualified_relation_sql() -> None:
     query = parse_select(
         """
