@@ -30,6 +30,20 @@ class DbtModelScanResult(BaseModel):
     def scanned_from_source(self) -> bool:
         return self.source_path is not None and self.source_path != self.scanned_path
 
+    def apply_ready(self) -> bool:
+        return self.has_proven_findings() and self.source_path == self.scanned_path
+
+    def apply_blocker(self) -> str | None:
+        if self.apply_ready():
+            return None
+        if not self.has_proven_findings():
+            return "No proven rewrite finding."
+        if self.source_path is None:
+            return "No matching source model file."
+        if self.source_path != self.scanned_path:
+            return "Scanned compiled SQL; source file was not verified directly."
+        return None
+
 
 class DbtScanResult(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -176,13 +190,28 @@ def _source_path_for_model(
     if compiled_path is None:
         return model_path
 
+    relative = _compiled_model_relative_path(compiled_path, model_path)
+    if relative is None:
+        return None
+
+    source_path = project_path / "models" / relative
+    return source_path if source_path.exists() else None
+
+
+def _compiled_model_relative_path(compiled_path: Path, model_path: Path) -> Path | None:
     try:
         relative = model_path.relative_to(compiled_path)
     except ValueError:
         return None
 
-    source_path = project_path / "models" / relative
-    return source_path if source_path.exists() else None
+    if relative.parts and relative.parts[0] == "models":
+        return Path(*relative.parts[1:])
+
+    if "models" in relative.parts:
+        models_index = relative.parts.index("models")
+        return Path(*relative.parts[models_index + 1 :])
+
+    return relative
 
 
 def _load_project_constraints(schema_paths: tuple[Path, ...]) -> ConstraintCatalog:

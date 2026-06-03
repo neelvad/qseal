@@ -25,6 +25,9 @@ def render_verification_json(result: VerificationResult) -> str:
 
 def render_dbt_scan_json(scan_result) -> str:
     payload = scan_result.model_dump(mode="json")
+    for index, result in enumerate(scan_result.results):
+        payload["results"][index]["apply_ready"] = result.apply_ready()
+        payload["results"][index]["apply_blocker"] = result.apply_blocker()
     payload["summary"] = scan_result.summary()
     return _dumps(payload)
 

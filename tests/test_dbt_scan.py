@@ -114,3 +114,57 @@ models:
     assert result.has_proven_findings()
     assert result.results[0].scanned_path == compiled / "dim_users.sql"
     assert result.results[0].source_path == models / "dim_users.sql"
+    assert result.results[0].apply_ready() is False
+    assert "compiled SQL" in str(result.results[0].apply_blocker())
+
+
+def test_scan_dbt_project_maps_compiled_project_root_to_source_models(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    compiled_root = tmp_path / "target" / "compiled" / "project"
+    compiled_models = compiled_root / "models"
+    models.mkdir()
+    compiled_models.mkdir(parents=True)
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM {{ ref('dim_users') }}")
+    (compiled_models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES, compiled_path=compiled_root)
+
+    assert result.results[0].scanned_path == compiled_models / "dim_users.sql"
+    assert result.results[0].source_path == models / "dim_users.sql"
+
+
+def test_scan_dbt_project_marks_package_compiled_sql_not_apply_ready(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    compiled_root = tmp_path / "target" / "compiled"
+    package_models = compiled_root / "dbt_utils" / "models"
+    models.mkdir()
+    package_models.mkdir(parents=True)
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: helper
+    columns:
+      - name: helper_id
+        tests:
+          - unique
+"""
+    )
+    (package_models / "helper.sql").write_text("SELECT DISTINCT helper_id FROM helper")
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES, compiled_path=compiled_root)
+
+    assert result.results[0].source_path is None
+    assert result.results[0].apply_ready() is False
+    assert result.results[0].apply_blocker() == "No matching source model file."

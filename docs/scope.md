@@ -92,6 +92,10 @@ Scan reports include summary counts for visible results:
 - counts by result status
 - counts by rewrite rule
 
+For proven findings, scan reports also show whether the finding is apply-ready for
+`--apply-patches`. Compiled SQL findings are not apply-ready because the verified
+SQL is not the source model text.
+
 `--diff` prints unified diffs for proven rewrites with generated SQL. It is
 read-only and does not modify project files.
 
@@ -116,8 +120,10 @@ Use `--compiled-dir` to scan already-compiled dbt SQL. Schema constraints are
 still loaded from the source dbt project's `models/` YAML files.
 
 Use `--use-compiled` to auto-discover a single compiled SQL directory under
-`target/compiled/`. If that directory is missing, empty, or ambiguous, Snowprove
-returns a discovery error instead of guessing.
+`target/compiled/`. If `dbt_project.yml` declares a project name, Snowprove
+prefers that local compiled project over compiled package directories. If the
+directory is missing, empty, or still ambiguous, Snowprove returns a discovery
+error instead of guessing.
 
 For compiled scans, Snowprove maps each compiled SQL file back to the matching
 source path under `models/` when the relative path exists. Text reports show the

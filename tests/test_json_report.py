@@ -67,9 +67,31 @@ def test_render_suggestions_json_omits_not_applicable_results() -> None:
 
 def test_render_dbt_scan_json() -> None:
     payload = json.loads(
-        render_dbt_scan_json(DbtScanResult(project_path="/tmp/project", model_count=0))
+        render_dbt_scan_json(
+            DbtScanResult(
+                project_path="/tmp/project",
+                model_count=1,
+                results=[
+                    {
+                        "path": "/tmp/project/models/users.sql",
+                        "scanned_path": "/tmp/project/models/users.sql",
+                        "source_path": "/tmp/project/models/users.sql",
+                        "suggestions": [
+                            {
+                                "rule_name": "remove_redundant_distinct",
+                                "status": "PROVEN_EQUIVALENT",
+                                "original_sql": "SELECT DISTINCT user_id FROM users",
+                                "rewritten_sql": "SELECT user_id FROM users;",
+                            }
+                        ],
+                    }
+                ],
+            )
+        )
     )
 
     assert payload["project_path"] == "/tmp/project"
-    assert payload["model_count"] == 0
-    assert payload["summary"]["proven_finding_count"] == 0
+    assert payload["model_count"] == 1
+    assert payload["results"][0]["apply_ready"] is True
+    assert payload["results"][0]["apply_blocker"] is None
+    assert payload["summary"]["proven_finding_count"] == 1

@@ -209,6 +209,8 @@ example `patches/models/dim_users.sql.remove_redundant_distinct.patch`.
 `--apply-patches` applies proven rewrites directly to model SQL files. It is
 explicitly opt-in and refuses to apply when Snowprove scanned compiled SQL or
 when the source file no longer exactly matches the verified original SQL.
+Scan reports show `Apply ready: yes` or `Apply ready: no` for proven findings so
+the direct-apply path is visible before running a mutating command.
 
 Scan reports include project-level summary counts by result status and rewrite
 rule. JSON output includes the same data under the `summary` key.
@@ -222,11 +224,15 @@ constraints from the source project's `models/` schema files. Snowprove does not
 run `dbt compile` itself.
 
 `--use-compiled` auto-discovers a single compiled SQL directory under
-`target/compiled/`. If multiple compiled directories are found, Snowprove asks
-for an explicit `--compiled-dir`.
+`target/compiled/`. If `dbt_project.yml` declares a project name, Snowprove
+prefers that local compiled project over compiled package directories. If
+multiple compiled directories remain, Snowprove asks for an explicit
+`--compiled-dir`.
 
 When compiled SQL is scanned, reports and diffs prefer the matching source model
 path under `models/` while still showing the compiled SQL path used for parsing.
+Compiled findings are useful for review, but are not directly apply-ready because
+the verified SQL is not the source model text.
 
 ## Current Scope
 

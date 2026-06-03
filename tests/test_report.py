@@ -104,6 +104,11 @@ def test_render_dbt_scan_report_shows_source_and_scanned_paths() -> None:
 
     assert "/tmp/project/models/users.sql" in report.plain
     assert "Scanned SQL: /tmp/project/target/compiled/project/models/users.sql" in report.plain
+    assert "Apply ready: no" in report.plain
+    assert (
+        "Apply blocker: Scanned compiled SQL; source file was not verified directly."
+        in report.plain
+    )
     assert "Summary:" in report.plain
     assert "PROVEN_EQUIVALENT: 1" in report.plain
     assert "remove_redundant_distinct: 1" in report.plain

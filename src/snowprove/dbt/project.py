@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import yaml
 from pydantic import BaseModel
 
 
@@ -16,6 +17,12 @@ def discover_compiled_sql_path(project_path: Path) -> Path:
     compiled_root = project_path / "target" / "compiled"
     if not compiled_root.exists() or not compiled_root.is_dir():
         raise DbtProjectDiscoveryError(f"dbt compiled directory not found: {compiled_root}")
+
+    project_name = _dbt_project_name(project_path)
+    if project_name is not None:
+        project_models = compiled_root / project_name / "models"
+        if project_models.exists() and tuple(project_models.rglob("*.sql")):
+            return project_models
 
     candidates = _compiled_sql_candidates(compiled_root)
     if not candidates:
@@ -60,6 +67,16 @@ def discover_dbt_project(
             )
         ),
     )
+
+
+def _dbt_project_name(project_path: Path) -> str | None:
+    project_yml = project_path / "dbt_project.yml"
+    if not project_yml.exists():
+        return None
+
+    payload = yaml.safe_load(project_yml.read_text()) or {}
+    name = payload.get("name")
+    return name if isinstance(name, str) and name else None
 
 
 def _compiled_sql_candidates(compiled_root: Path) -> list[Path]:

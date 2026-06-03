@@ -132,3 +132,35 @@ def test_apply_dbt_scan_patches_skips_compiled_scan_results(tmp_path: Path) -> N
     assert applied[0].applied is False
     assert "compiled SQL" in str(applied[0].reason)
     assert model.read_text() == "{{ ref('users') }}\n"
+
+
+def test_apply_dbt_scan_patches_skips_compiled_result_without_source(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    compiled = project / "target" / "compiled" / "dbt_utils" / "models" / "users.sql"
+    compiled.parent.mkdir(parents=True)
+    compiled.write_text("SELECT DISTINCT user_id\nFROM users\n")
+    result = DbtScanResult(
+        project_path=project,
+        model_count=1,
+        results=(
+            DbtModelScanResult(
+                path=compiled,
+                scanned_path=compiled,
+                source_path=None,
+                suggestions=(
+                    RewriteSuggestion(
+                        rule_name="remove_redundant_distinct",
+                        status=VerificationStatus.PROVEN_EQUIVALENT,
+                        original_sql="SELECT DISTINCT user_id\nFROM users",
+                        rewritten_sql="SELECT user_id\nFROM users;",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    applied = apply_dbt_scan_patches(result)
+
+    assert applied[0].applied is False
+    assert applied[0].reason == "No matching source model file."
+    assert compiled.read_text() == "SELECT DISTINCT user_id\nFROM users\n"

@@ -47,13 +47,13 @@ def apply_dbt_scan_patches(scan_result: DbtScanResult) -> tuple[PatchApplyResult
             continue
 
         path = result.display_path()
-        if result.scanned_from_source():
+        if not result.apply_ready():
             results.append(
                 PatchApplyResult(
                     path=path,
                     rule_name=suggestion.rule_name,
                     applied=False,
-                    reason="Scanned compiled SQL; source file was not verified directly.",
+                    reason=result.apply_blocker(),
                 )
             )
             continue

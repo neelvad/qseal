@@ -102,6 +102,10 @@ def render_dbt_scan_report(scan_result) -> Text:
         output.append(f"{result.display_path()}\n", style="bold")
         if result.scanned_from_source():
             output.append(f"  Scanned SQL: {result.scanned_path}\n")
+        if result.has_proven_findings():
+            output.append(f"  Apply ready: {'yes' if result.apply_ready() else 'no'}\n")
+            if result.apply_blocker():
+                output.append(f"  Apply blocker: {result.apply_blocker()}\n")
         for suggestion in result.suggestions:
             output.append(f"  Result: {suggestion.status.value}\n")
             output.append(f"  Rewrite: {suggestion.rule_name}\n")
