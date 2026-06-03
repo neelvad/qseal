@@ -26,6 +26,14 @@ def test_parse_select_preserves_qualified_relation_sql() -> None:
     )
 
 
+def test_parse_select_with_column_alias() -> None:
+    query = parse_select("SELECT user_id AS id FROM users")
+
+    assert query.projections[0].name == "user_id"
+    assert query.projections[0].alias == "id"
+    assert query.to_sql() == "SELECT user_id AS id\nFROM users;"
+
+
 def test_parse_select_with_null_predicates() -> None:
     query = parse_select(
         "SELECT user_id FROM users WHERE deleted_at IS NULL AND email IS NOT NULL"

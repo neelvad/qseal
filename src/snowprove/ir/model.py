@@ -8,14 +8,19 @@ class ColumnRef(BaseModel):
 
     name: str
     table: str | None = None
+    alias: str | None = None
 
     def to_sql(self) -> str:
-        if self.table:
-            return f"{self.table}.{self.name}"
-        return self.name
+        column = f"{self.table}.{self.name}" if self.table else self.name
+        if self.alias:
+            return f"{column} AS {self.alias}"
+        return column
 
     def unqualified(self) -> ColumnRef:
-        return ColumnRef(name=self.name)
+        return ColumnRef(name=self.name, alias=self.alias)
+
+    def without_alias(self) -> ColumnRef:
+        return ColumnRef(name=self.name, table=self.table)
 
 
 class LiteralValue(BaseModel):

@@ -89,6 +89,12 @@ def _parse_select_expression(parsed: exp.Select) -> SelectQuery:
 def _projection_to_column(node: exp.Expression) -> ColumnRef:
     if isinstance(node, exp.Column):
         return ColumnRef(table=node.table or None, name=node.name)
+    if isinstance(node, exp.Alias) and isinstance(node.this, exp.Column):
+        return ColumnRef(
+            table=node.this.table or None,
+            name=node.this.name,
+            alias=node.alias,
+        )
     raise UnsupportedSqlError("Only direct column projections are supported.")
 
 

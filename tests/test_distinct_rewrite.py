@@ -24,6 +24,16 @@ def test_removes_distinct_from_qualified_relation() -> None:
     assert suggestion.rewritten_sql == "SELECT user_id\nFROM analytics.public.users;"
 
 
+def test_removes_distinct_while_preserving_column_alias() -> None:
+    query = parse_select("SELECT DISTINCT user_id AS id FROM users")
+    constraints = ConstraintCatalog(tables={"users": TableConstraints(unique=[("user_id",)])})
+
+    suggestion = RemoveRedundantDistinct().apply(query, constraints)
+
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rewritten_sql == "SELECT user_id AS id\nFROM users;"
+
+
 def test_removes_distinct_while_preserving_where_predicates() -> None:
     query = parse_select("SELECT DISTINCT user_id FROM users WHERE status = 'active'")
     constraints = ConstraintCatalog(tables={"users": TableConstraints(unique=[("user_id",)])})
