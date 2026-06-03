@@ -24,7 +24,9 @@ def render_verification_json(result: VerificationResult) -> str:
 
 
 def render_dbt_scan_json(scan_result) -> str:
-    return _dumps(scan_result.model_dump(mode="json"))
+    payload = scan_result.model_dump(mode="json")
+    payload["summary"] = scan_result.summary()
+    return _dumps(payload)
 
 
 def _dumps(payload: Any) -> str:

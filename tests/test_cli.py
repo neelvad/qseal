@@ -370,6 +370,9 @@ models:
 
     assert result.exit_code == 0
     assert "Scanned models: 1" in result.output
+    assert "Findings: 1" in result.output
+    assert "Summary:" in result.output
+    assert "remove_redundant_distinct: 1" in result.output
     assert "remove_redundant_distinct" in result.output
 
 
@@ -394,6 +397,8 @@ models:
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert payload["model_count"] == 1
+    assert payload["summary"]["proven_finding_count"] == 1
+    assert payload["summary"]["rule_counts"]["remove_redundant_distinct"] == 1
     assert payload["results"][0]["suggestions"][0]["rule_name"] == "remove_redundant_distinct"
 
 

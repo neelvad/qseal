@@ -72,3 +72,4 @@ def test_render_dbt_scan_json() -> None:
 
     assert payload["project_path"] == "/tmp/project"
     assert payload["model_count"] == 0
+    assert payload["summary"]["proven_finding_count"] == 0

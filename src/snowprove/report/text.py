@@ -81,7 +81,17 @@ def render_dbt_scan_report(scan_result) -> Text:
     output.append("Scanned models: ", style="bold")
     output.append(f"{scan_result.model_count}\n")
     output.append("Findings: ", style="bold")
+    output.append(f"{scan_result.proven_finding_count()}\n")
+    output.append("Visible results: ", style="bold")
     output.append(f"{len(scan_result.results)}\n")
+
+    if scan_result.results:
+        output.append("\nSummary:\n", style="bold")
+        for status, count in scan_result.status_counts().items():
+            output.append(f"  {status}: {count}\n")
+        output.append("Rules:\n", style="bold")
+        for rule_name, count in scan_result.rule_counts().items():
+            output.append(f"  {rule_name}: {count}\n")
 
     if not scan_result.results:
         output.append("No rewrite findings.\n")
