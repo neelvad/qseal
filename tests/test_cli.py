@@ -538,6 +538,141 @@ tables:
     assert "Proven: 1" in check.output
 
 
+def test_candidates_check_cli_accepts_candidates_dir(tmp_path) -> None:
+    original = tmp_path / "original.sql"
+    candidates_dir = tmp_path / "candidates"
+    schema = tmp_path / "schema.yml"
+    candidates_dir.mkdir()
+    original.write_text("SELECT DISTINCT user_id FROM users")
+    (candidates_dir / "001_remove_redundant_distinct.sql").write_text(
+        "SELECT user_id\nFROM users;\n"
+    )
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "check",
+            str(original),
+            "--candidates-dir",
+            str(candidates_dir),
+            "--schema",
+            str(schema),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Candidates checked: 1" in result.output
+    assert "Proven: 1" in result.output
+
+
+def test_candidates_run_cli_generates_and_checks_candidates(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    output_dir = tmp_path / "candidates"
+    query.write_text("SELECT DISTINCT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "run",
+            str(query),
+            "--schema",
+            str(schema),
+            "--out",
+            str(output_dir),
+            "--fail-on",
+            "unproven",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Candidates generated: 1" in result.output
+    assert "Candidates checked: 1" in result.output
+    assert "Proven: 1" in result.output
+    assert (output_dir / "001_remove_redundant_distinct.sql").exists()
+
+
+def test_candidates_run_cli_can_report_json(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    output_dir = tmp_path / "candidates"
+    query.write_text("SELECT DISTINCT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "run",
+            str(query),
+            "--schema",
+            str(schema),
+            "--out",
+            str(output_dir),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "candidate_run"
+    assert payload["generation"]["generated_count"] == 1
+    assert payload["verification"]["result_count"] == 1
+    assert payload["verification"]["proven_count"] == 1
+
+
+def test_candidates_run_cli_can_fail_when_no_candidates_are_generated(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    output_dir = tmp_path / "candidates"
+    query.write_text("SELECT user_id FROM users")
+    schema.write_text("tables: {}\n")
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "run",
+            str(query),
+            "--schema",
+            str(schema),
+            "--out",
+            str(output_dir),
+            "--fail-on",
+            "unproven",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Candidates generated: 0" in result.output
+
+
 def test_candidates_check_cli_can_report_json(tmp_path) -> None:
     original = tmp_path / "original.sql"
     candidate = tmp_path / "candidate.sql"

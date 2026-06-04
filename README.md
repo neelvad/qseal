@@ -23,12 +23,14 @@ uv run snowprove suggest examples/distinct/original.sql --schema examples/distin
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml
 uv run snowprove candidates generate examples/distinct/original.sql --schema examples/distinct/schema.yml --out candidates/
 uv run snowprove candidates check examples/distinct/original.sql candidates/*.sql --schema examples/distinct/schema.yml
+uv run snowprove candidates run examples/distinct/original.sql --schema examples/distinct/schema.yml --out candidates/
 ```
 
 `suggest` proposes the first applicable verified rewrite. `check` verifies a
 specific original/rewritten query pair. `candidates generate` writes candidate
 SQL files from Snowprove's existing rewrite rules. `candidates check` verifies
-multiple generated candidate rewrites against one original query.
+multiple generated candidate rewrites against one original query. `candidates
+run` does both steps in one command.
 
 Useful options:
 
@@ -43,7 +45,10 @@ uv run snowprove check original.sql rewritten.sql --schema schema.yml --verifier
 uv run snowprove candidates generate original.sql --schema schema.yml --out candidates/
 uv run snowprove candidates generate original.sql --schema schema.yml --out candidates/ --rule remove_redundant_distinct
 uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml --format json
+uv run snowprove candidates check original.sql --candidates-dir candidates/ --schema schema.yml --format json
 uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml --fail-on unproven
+uv run snowprove candidates run original.sql --schema schema.yml --out candidates/ --format json
+uv run snowprove candidates run original.sql --schema schema.yml --out candidates/ --fail-on unproven
 uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
 uv run snowprove dbt scan examples/dbt_project
 ```
@@ -56,11 +61,14 @@ generators, including LLM-generated rewrites.
 rewrite rules and writes proven rewritten SQL files such as
 `001_remove_redundant_distinct.sql`. `candidates check` is the batch verification
 form: it loads the original query once, verifies each candidate SQL file
-independently, and reports only `PROVEN_EQUIVALENT` candidates as safe. The
-default verifier backend is `builtin`, which wraps Snowprove's internal
-rule-based verifier. `sqlsolver` can call an external SQLSolver command and maps
-`EQ`, `NEQ`, `UNKNOWN`, and `TIMEOUT` into Snowprove statuses. `external`
-remains a generic stub for future solver integrations.
+independently, and reports only `PROVEN_EQUIVALENT` candidates as safe. It
+accepts explicit candidate paths or `--candidates-dir candidates/`. `candidates
+run` combines generation and verification into one JSON-friendly command, which
+is the intended CI shape before LLM candidate generation exists. The default
+verifier backend is `builtin`, which wraps Snowprove's internal rule-based
+verifier. `sqlsolver` can call an external SQLSolver command and maps `EQ`,
+`NEQ`, `UNKNOWN`, and `TIMEOUT` into Snowprove statuses. `external` remains a
+generic stub for future solver integrations.
 
 Solver adapter compatibility cases live under
 `tests/fixtures/solver_compat/`. They define the small query-pair suite that new

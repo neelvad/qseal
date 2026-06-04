@@ -9,6 +9,7 @@ from snowprove.dbt.scan import scan_dbt_project
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.report.json import (
     render_candidate_generation_json,
+    render_candidate_run_json,
     render_candidate_verifications_json,
     render_dbt_scan_json,
     render_suggestion_json,
@@ -345,36 +346,12 @@ def candidates_generate(
     except (UnsupportedSqlError, ValueError) as error:
         raise click.ClickException(str(error)) from error
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    generated: list[dict[str, str]] = []
-    skipped: list[dict[str, str]] = []
-    visible = _candidate_suggestions(suggestions, include_all)
-
-    for index, suggestion in enumerate(visible, start=1):
-        if suggestion.rewritten_sql is None:
-            skipped.append(
-                {
-                    "rule_name": suggestion.rule_name,
-                    "status": suggestion.status.value,
-                    "reason": suggestion.reason or "No rewritten SQL was produced.",
-                }
-            )
-            continue
-
-        candidate_path = output_dir / f"{index:03d}_{_safe_filename(suggestion.rule_name)}.sql"
-        if candidate_path.exists() and not force:
-            raise click.ClickException(
-                f"Candidate file already exists: {candidate_path}. Use --force to overwrite."
-            )
-
-        candidate_path.write_text(f"{suggestion.rewritten_sql.strip()}\n")
-        generated.append(
-            {
-                "path": str(candidate_path),
-                "rule_name": suggestion.rule_name,
-                "status": suggestion.status.value,
-            }
-        )
+    generated, skipped = _write_candidate_suggestions(
+        suggestions,
+        output_dir,
+        include_all=include_all,
+        force=force,
+    )
 
     if output_format == "json":
         click.echo(
@@ -393,6 +370,146 @@ def candidates_generate(
         console.print(f"  {item['path']} ({item['rule_name']}, {item['status']})")
     for item in skipped:
         console.print(f"  skipped {item['rule_name']} ({item['status']}): {item['reason']}")
+
+
+@candidates_group.command(name="run")
+@click.argument("query_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--schema",
+    "schema_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="YAML file containing trusted schema constraints.",
+)
+@click.option(
+    "--schema-format",
+    type=SchemaFormat,
+    default="auto",
+    show_default=True,
+    help="Schema constraint format.",
+)
+@click.option(
+    "--out",
+    "output_dir",
+    required=True,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Directory where candidate SQL files will be written.",
+)
+@click.option(
+    "--all",
+    "include_all",
+    is_flag=True,
+    help="Write every rule result that contains rewritten SQL, not only proven rewrites.",
+)
+@click.option(
+    "--rule",
+    "selected_rules",
+    multiple=True,
+    type=RuleChoice,
+    help="Only run a specific rewrite rule. Can be passed more than once.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite existing candidate files.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+@click.option(
+    "--fail-on",
+    type=CheckFailOn,
+    default="none",
+    show_default=True,
+    help="Exit nonzero when candidate verification does not satisfy the selected policy.",
+)
+@click.option(
+    "--verifier",
+    type=VerifierChoice,
+    default="builtin",
+    show_default=True,
+    help="Verifier backend.",
+)
+@click.option(
+    "--solver-command",
+    help="External verifier command to use with --verifier external.",
+)
+@click.option(
+    "--timeout",
+    "timeout_seconds",
+    type=int,
+    help="External verifier timeout in seconds.",
+)
+def candidates_run(
+    query_path: Path,
+    schema_path: Path,
+    schema_format: str,
+    output_dir: Path,
+    include_all: bool,
+    selected_rules: tuple[str, ...],
+    force: bool,
+    output_format: str,
+    fail_on: str,
+    verifier: str,
+    solver_command: str | None,
+    timeout_seconds: int | None,
+) -> None:
+    """Generate candidate SQL files and verify them in one command."""
+    raw_sql = query_path.read_text()
+    try:
+        query = parse_select(raw_sql)
+        constraints = _load_constraints(schema_path, schema_format)
+        suggestions = suggest_rewrites(query, constraints, rules=select_rules(selected_rules))
+    except (UnsupportedSqlError, ValueError) as error:
+        raise click.ClickException(str(error)) from error
+
+    generated, skipped = _write_candidate_suggestions(
+        suggestions,
+        output_dir,
+        include_all=include_all,
+        force=force,
+    )
+    candidate_paths = [Path(item["path"]) for item in generated]
+    results = _verify_candidates(
+        query_path,
+        raw_sql,
+        candidate_paths,
+        schema_path,
+        schema_format,
+        constraints,
+        verifier=verifier,
+        solver_command=solver_command,
+        timeout_seconds=timeout_seconds,
+    )
+    generation = _candidate_generation_payload(
+        query_path,
+        output_dir,
+        generated,
+        skipped,
+    )
+
+    if output_format == "json":
+        click.echo(render_candidate_run_json(generation=generation, verifications=results))
+    else:
+        console.print(f"Candidates generated: {len(generated)}")
+        console.print(f"Skipped: {len(skipped)}")
+        for item in generated:
+            console.print(f"  {item['path']} ({item['rule_name']}, {item['status']})")
+        for item in skipped:
+            console.print(f"  skipped {item['rule_name']} ({item['status']}): {item['reason']}")
+        console.print("")
+        console.print(render_candidate_verifications_report(results))
+
+    if fail_on == "unproven" and (
+        not results
+        or any(result.status != VerificationStatus.PROVEN_EQUIVALENT for result in results)
+    ):
+        raise click.exceptions.Exit(1)
 
 
 @main.command()
@@ -491,7 +608,7 @@ def check(
 @click.argument(
     "candidate_paths",
     nargs=-1,
-    required=True,
+    required=False,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
 )
 @click.option(
@@ -515,6 +632,11 @@ def check(
     default="text",
     show_default=True,
     help="Output format.",
+)
+@click.option(
+    "--candidates-dir",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Directory containing candidate .sql files to verify.",
 )
 @click.option(
     "--fail-on",
@@ -546,6 +668,7 @@ def candidates_check(
     schema_path: Path,
     schema_format: str,
     output_format: str,
+    candidates_dir: Path | None,
     fail_on: str,
     verifier: str,
     solver_command: str | None,
@@ -553,30 +676,24 @@ def candidates_check(
 ) -> None:
     """Check generated candidate SQL files against one original query."""
     original_sql = original_path.read_text()
+    resolved_candidate_paths = _resolve_candidate_paths(candidate_paths, candidates_dir)
 
     try:
         constraints = _load_constraints(schema_path, schema_format)
     except ValueError as error:
         raise click.ClickException(str(error)) from error
 
-    backend = get_verifier_backend(
-        verifier,
+    results = _verify_candidates(
+        original_path,
+        original_sql,
+        resolved_candidate_paths,
+        schema_path,
+        schema_format,
+        constraints,
+        verifier=verifier,
         solver_command=solver_command,
         timeout_seconds=timeout_seconds,
     )
-    results = [
-        backend.verify(original_sql, candidate_path.read_text(), constraints).model_copy(
-            update={
-                "inputs": _verification_inputs(
-                    original_path,
-                    candidate_path,
-                    schema_path,
-                    schema_format,
-                )
-            }
-        )
-        for candidate_path in candidate_paths
-    ]
 
     if output_format == "json":
         click.echo(render_candidate_verifications_json(results))
@@ -615,6 +732,110 @@ def _verification_inputs(
 
 def _load_constraints(path: Path, schema_format: str):
     return load_constraint_catalog(path, schema_format)
+
+
+def _verify_candidates(
+    original_path: Path,
+    original_sql: str,
+    candidate_paths: list[Path],
+    schema_path: Path,
+    schema_format: str,
+    constraints,
+    *,
+    verifier: str,
+    solver_command: str | None,
+    timeout_seconds: int | None,
+) -> list[VerificationResult]:
+    backend = get_verifier_backend(
+        verifier,
+        solver_command=solver_command,
+        timeout_seconds=timeout_seconds,
+    )
+    return [
+        backend.verify(original_sql, candidate_path.read_text(), constraints).model_copy(
+            update={
+                "inputs": _verification_inputs(
+                    original_path,
+                    candidate_path,
+                    schema_path,
+                    schema_format,
+                )
+            }
+        )
+        for candidate_path in candidate_paths
+    ]
+
+
+def _resolve_candidate_paths(
+    candidate_paths: tuple[Path, ...],
+    candidates_dir: Path | None,
+) -> list[Path]:
+    if candidate_paths and candidates_dir is not None:
+        raise click.ClickException("Pass candidate paths or --candidates-dir, not both.")
+    if candidates_dir is not None:
+        paths = sorted(candidates_dir.glob("*.sql"))
+        if not paths:
+            raise click.ClickException(f"No .sql candidate files found in {candidates_dir}.")
+        return paths
+    if not candidate_paths:
+        raise click.ClickException("Pass at least one candidate path or --candidates-dir.")
+    return list(candidate_paths)
+
+
+def _write_candidate_suggestions(
+    suggestions: list[RewriteSuggestion],
+    output_dir: Path,
+    *,
+    include_all: bool,
+    force: bool,
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    generated: list[dict[str, str]] = []
+    skipped: list[dict[str, str]] = []
+
+    for index, suggestion in enumerate(_candidate_suggestions(suggestions, include_all), start=1):
+        if suggestion.rewritten_sql is None:
+            skipped.append(
+                {
+                    "rule_name": suggestion.rule_name,
+                    "status": suggestion.status.value,
+                    "reason": suggestion.reason or "No rewritten SQL was produced.",
+                }
+            )
+            continue
+
+        candidate_path = output_dir / f"{index:03d}_{_safe_filename(suggestion.rule_name)}.sql"
+        if candidate_path.exists() and not force:
+            raise click.ClickException(
+                f"Candidate file already exists: {candidate_path}. Use --force to overwrite."
+            )
+
+        candidate_path.write_text(f"{suggestion.rewritten_sql.strip()}\n")
+        generated.append(
+            {
+                "path": str(candidate_path),
+                "rule_name": suggestion.rule_name,
+                "status": suggestion.status.value,
+            }
+        )
+
+    return generated, skipped
+
+
+def _candidate_generation_payload(
+    query_path: Path,
+    output_dir: Path,
+    generated: list[dict[str, str]],
+    skipped: list[dict[str, str]],
+) -> dict[str, object]:
+    return {
+        "original_path": str(query_path),
+        "output_dir": str(output_dir),
+        "generated_count": len(generated),
+        "skipped_count": len(skipped),
+        "generated": generated,
+        "skipped": skipped,
+    }
 
 
 def _candidate_suggestions(

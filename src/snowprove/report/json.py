@@ -81,6 +81,34 @@ def render_candidate_generation_json(
     )
 
 
+def render_candidate_run_json(
+    *,
+    generation: dict[str, Any],
+    verifications: Sequence[VerificationResult],
+) -> str:
+    return _dumps(
+        {
+            "schema_version": 1,
+            "artifact_type": "candidate_run",
+            "generation": generation,
+            "verification": {
+                "result_count": len(verifications),
+                "proven_count": sum(
+                    result.status == VerificationStatus.PROVEN_EQUIVALENT
+                    for result in verifications
+                ),
+                "results": [
+                    {
+                        **result.model_dump(mode="json"),
+                        "proven": result.status == VerificationStatus.PROVEN_EQUIVALENT,
+                    }
+                    for result in verifications
+                ],
+            },
+        }
+    )
+
+
 def render_dbt_scan_json(
     scan_result,
     patch_results: Sequence[PatchWriteResult] = (),
