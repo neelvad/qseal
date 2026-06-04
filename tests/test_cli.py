@@ -386,6 +386,158 @@ tables:
     assert "UNKNOWN" in result.output
 
 
+def test_candidates_generate_cli_writes_proven_rewrite_candidates(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    output_dir = tmp_path / "candidates"
+    query.write_text("SELECT DISTINCT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "generate",
+            str(query),
+            "--schema",
+            str(schema),
+            "--out",
+            str(output_dir),
+        ],
+    )
+
+    candidate = output_dir / "001_remove_redundant_distinct.sql"
+    assert result.exit_code == 0
+    assert "Candidates generated: 1" in result.output
+    assert candidate.exists()
+    assert candidate.read_text() == "SELECT user_id\nFROM users;\n"
+
+
+def test_candidates_generate_cli_can_report_json(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    output_dir = tmp_path / "candidates"
+    query.write_text("SELECT DISTINCT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "generate",
+            str(query),
+            "--schema",
+            str(schema),
+            "--out",
+            str(output_dir),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "candidate_generation"
+    assert payload["generated_count"] == 1
+    assert payload["skipped_count"] == 0
+    assert payload["generated"][0]["rule_name"] == "remove_redundant_distinct"
+    assert payload["generated"][0]["status"] == "PROVEN_EQUIVALENT"
+
+
+def test_candidates_generate_cli_refuses_to_overwrite_without_force(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    output_dir = tmp_path / "candidates"
+    output_dir.mkdir()
+    candidate = output_dir / "001_remove_redundant_distinct.sql"
+    candidate.write_text("SELECT existing FROM users\n")
+    query.write_text("SELECT DISTINCT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "generate",
+            str(query),
+            "--schema",
+            str(schema),
+            "--out",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Candidate file already exists" in result.output
+    assert candidate.read_text() == "SELECT existing FROM users\n"
+
+
+def test_candidates_generate_then_check_cli(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    output_dir = tmp_path / "candidates"
+    query.write_text("SELECT DISTINCT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    generate = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "generate",
+            str(query),
+            "--schema",
+            str(schema),
+            "--out",
+            str(output_dir),
+        ],
+    )
+    check = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "check",
+            str(query),
+            str(output_dir / "001_remove_redundant_distinct.sql"),
+            "--schema",
+            str(schema),
+            "--fail-on",
+            "unproven",
+        ],
+    )
+
+    assert generate.exit_code == 0
+    assert check.exit_code == 0
+    assert "Proven: 1" in check.output
+
+
 def test_candidates_check_cli_can_report_json(tmp_path) -> None:
     original = tmp_path / "original.sql"
     candidate = tmp_path / "candidate.sql"

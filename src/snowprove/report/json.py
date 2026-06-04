@@ -60,6 +60,27 @@ def render_candidate_verifications_json(
     )
 
 
+def render_candidate_generation_json(
+    *,
+    original_path: str,
+    output_dir: str,
+    generated: Sequence[dict[str, str]],
+    skipped: Sequence[dict[str, str]],
+) -> str:
+    return _dumps(
+        {
+            "schema_version": 1,
+            "artifact_type": "candidate_generation",
+            "original_path": original_path,
+            "output_dir": output_dir,
+            "generated_count": len(generated),
+            "skipped_count": len(skipped),
+            "generated": list(generated),
+            "skipped": list(skipped),
+        }
+    )
+
+
 def render_dbt_scan_json(
     scan_result,
     patch_results: Sequence[PatchWriteResult] = (),

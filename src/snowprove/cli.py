@@ -8,6 +8,7 @@ from snowprove.dbt.project import DbtProjectDiscoveryError, discover_compiled_sq
 from snowprove.dbt.scan import scan_dbt_project
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.report.json import (
+    render_candidate_generation_json,
     render_candidate_verifications_json,
     render_dbt_scan_json,
     render_suggestion_json,
@@ -56,7 +57,7 @@ def dbt_group() -> None:
 
 @main.group(name="candidates")
 def candidates_group() -> None:
-    """Verify generated candidate rewrites."""
+    """Generate and verify candidate rewrites."""
 
 
 @dbt_group.command(name="scan")
@@ -274,6 +275,124 @@ def suggest(
         click.echo(render_suggestion_json(suggestion))
     else:
         console.print(render_suggestion_report(suggestion))
+
+
+@candidates_group.command(name="generate")
+@click.argument("query_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--schema",
+    "schema_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="YAML file containing trusted schema constraints.",
+)
+@click.option(
+    "--schema-format",
+    type=SchemaFormat,
+    default="auto",
+    show_default=True,
+    help="Schema constraint format.",
+)
+@click.option(
+    "--out",
+    "output_dir",
+    required=True,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Directory where candidate SQL files will be written.",
+)
+@click.option(
+    "--all",
+    "include_all",
+    is_flag=True,
+    help="Write every rule result that contains rewritten SQL, not only proven rewrites.",
+)
+@click.option(
+    "--rule",
+    "selected_rules",
+    multiple=True,
+    type=RuleChoice,
+    help="Only run a specific rewrite rule. Can be passed more than once.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite existing candidate files.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+def candidates_generate(
+    query_path: Path,
+    schema_path: Path,
+    schema_format: str,
+    output_dir: Path,
+    include_all: bool,
+    selected_rules: tuple[str, ...],
+    force: bool,
+    output_format: str,
+) -> None:
+    """Generate candidate SQL files from Snowprove's rewrite rules."""
+    raw_sql = query_path.read_text()
+    try:
+        query = parse_select(raw_sql)
+        constraints = _load_constraints(schema_path, schema_format)
+        suggestions = suggest_rewrites(query, constraints, rules=select_rules(selected_rules))
+    except (UnsupportedSqlError, ValueError) as error:
+        raise click.ClickException(str(error)) from error
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    generated: list[dict[str, str]] = []
+    skipped: list[dict[str, str]] = []
+    visible = _candidate_suggestions(suggestions, include_all)
+
+    for index, suggestion in enumerate(visible, start=1):
+        if suggestion.rewritten_sql is None:
+            skipped.append(
+                {
+                    "rule_name": suggestion.rule_name,
+                    "status": suggestion.status.value,
+                    "reason": suggestion.reason or "No rewritten SQL was produced.",
+                }
+            )
+            continue
+
+        candidate_path = output_dir / f"{index:03d}_{_safe_filename(suggestion.rule_name)}.sql"
+        if candidate_path.exists() and not force:
+            raise click.ClickException(
+                f"Candidate file already exists: {candidate_path}. Use --force to overwrite."
+            )
+
+        candidate_path.write_text(f"{suggestion.rewritten_sql.strip()}\n")
+        generated.append(
+            {
+                "path": str(candidate_path),
+                "rule_name": suggestion.rule_name,
+                "status": suggestion.status.value,
+            }
+        )
+
+    if output_format == "json":
+        click.echo(
+            render_candidate_generation_json(
+                original_path=str(query_path),
+                output_dir=str(output_dir),
+                generated=generated,
+                skipped=skipped,
+            )
+        )
+        return
+
+    console.print(f"Candidates generated: {len(generated)}")
+    console.print(f"Skipped: {len(skipped)}")
+    for item in generated:
+        console.print(f"  {item['path']} ({item['rule_name']}, {item['status']})")
+    for item in skipped:
+        console.print(f"  skipped {item['rule_name']} ({item['status']}): {item['reason']}")
 
 
 @main.command()
@@ -496,3 +615,27 @@ def _verification_inputs(
 
 def _load_constraints(path: Path, schema_format: str):
     return load_constraint_catalog(path, schema_format)
+
+
+def _candidate_suggestions(
+    suggestions: list[RewriteSuggestion],
+    include_all: bool,
+) -> list[RewriteSuggestion]:
+    if include_all:
+        return [
+            suggestion
+            for suggestion in suggestions
+            if suggestion.status != VerificationStatus.NOT_APPLICABLE
+        ]
+    return [
+        suggestion
+        for suggestion in suggestions
+        if suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    ]
+
+
+def _safe_filename(value: str) -> str:
+    return "".join(
+        character if character.isalnum() or character == "_" else "_"
+        for character in value
+    )
