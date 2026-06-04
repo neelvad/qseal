@@ -78,6 +78,18 @@ def test_rejects_unmodeled_clauses() -> None:
         parse_select("SELECT user_id FROM users ORDER BY user_id")
 
 
+def test_rejects_with_clause() -> None:
+    with pytest.raises(UnsupportedSqlError, match="WITH"):
+        parse_select(
+            """
+            WITH source AS (
+              SELECT user_id FROM users
+            )
+            SELECT user_id FROM source
+            """
+        )
+
+
 def test_parse_simple_left_join() -> None:
     query = parse_select(
         """

@@ -111,6 +111,11 @@ generated rewrites while matching dbt constraints by the unqualified model name.
 Default scan output reports only proven rewrite findings. `--all` includes
 unknown and unsupported results.
 
+Raw dbt scans statically resolve simple `{{ ref('model') }}` and
+`{{ source('name', 'table') }}` relation references. Snowprove does not evaluate
+arbitrary Jinja, macros, or dbt adapter helpers; those models are reported as
+unsupported with a macro-specific reason unless compiled SQL is supplied.
+
 Scan reports include summary counts for visible results:
 
 - number of scanned models
@@ -126,7 +131,8 @@ results.
 
 For proven findings, scan reports also show whether the finding is apply-ready for
 `--apply-patches`. Compiled SQL findings are not apply-ready because the verified
-SQL is not the source model text.
+SQL is not the source model text. Findings from statically preprocessed raw dbt
+SQL are also not apply-ready for the same reason.
 
 `--diff` prints unified diffs for proven rewrites with generated SQL. It is
 read-only and does not modify project files.
@@ -137,16 +143,15 @@ rewrite rule name.
 
 `--apply-patches` applies proven rewrites directly to model SQL files. It is
 explicitly opt-in. Snowprove refuses to apply a rewrite when the scan came from
-compiled SQL or when the current source file no longer exactly matches the
-verified original SQL.
+compiled SQL, when raw dbt SQL was statically preprocessed, or when the current
+source file no longer exactly matches the verified original SQL.
 
 `--fail-on findings` exits nonzero only when at least one proven rewrite finding
 exists. Unsupported SQL, unknown equivalence, missing constraints, and uncompiled
 dbt/Jinja are not treated as failures under this policy.
 
-Snowprove does not currently compile dbt projects or resolve `ref()` calls. A
-model containing dbt/Jinja syntax is reported as `UNSUPPORTED` when `--all` is
-used.
+Snowprove does not currently compile dbt projects. A model containing unsupported
+dbt/Jinja syntax is reported as `UNSUPPORTED` when `--all` is used.
 
 Use `--compiled-dir` to scan already-compiled dbt SQL. Schema constraints are
 still loaded from the source dbt project's `models/` YAML files.

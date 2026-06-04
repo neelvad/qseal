@@ -77,7 +77,9 @@ def test_scan_dbt_project_skips_jinja_by_default(tmp_path: Path) -> None:
 def test_scan_dbt_project_can_include_unsupported_jinja(tmp_path: Path) -> None:
     models = tmp_path / "models"
     models.mkdir()
-    (models / "orders.sql").write_text("SELECT order_id FROM {{ ref('orders') }}")
+    (models / "orders.sql").write_text(
+        "SELECT order_id, {{ cents_to_dollars('subtotal') }} AS subtotal FROM orders"
+    )
     (models / "schema.yml").write_text("models: []")
 
     result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES, include_all=True)
@@ -86,13 +88,69 @@ def test_scan_dbt_project_can_include_unsupported_jinja(tmp_path: Path) -> None:
     assert not result.has_proven_findings()
     assert result.status_counts() == {"UNSUPPORTED": 1}
     assert result.rule_counts() == {"dbt_scan": 1}
+    reason = (
+        "Model contains unsupported dbt/Jinja expression 'cents_to_dollars'; "
+        "compile before scanning."
+    )
     assert result.reason_counts() == {
-        "Model contains dbt/Jinja syntax and must be compiled before scanning.": 1
+        reason: 1
     }
     assert result.summary()["reason_counts"] == {
-        "Model contains dbt/Jinja syntax and must be compiled before scanning.": 1
+        reason: 1
     }
     assert result.results[0].suggestions[0].status == VerificationStatus.UNSUPPORTED
+
+
+def test_scan_dbt_project_preprocesses_static_ref_calls(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM {{ ref('dim_users') }}")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.has_proven_findings()
+    assert result.results[0].source_sql_preprocessed is True
+    assert result.results[0].apply_ready() is False
+    assert "statically preprocessed" in str(result.results[0].apply_blocker())
+    assert result.results[0].suggestions[0].rewritten_sql == "SELECT user_id\nFROM dim_users;"
+
+
+def test_scan_dbt_project_preprocesses_static_source_calls(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "raw_customers.sql").write_text(
+        "SELECT DISTINCT customer_id FROM {{ source('ecom', 'raw_customers') }}"
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: raw_customers
+    columns:
+      - name: customer_id
+        tests:
+          - unique
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.has_proven_findings()
+    assert result.results[0].source_sql_preprocessed is True
+    assert result.results[0].suggestions[0].rewritten_sql == (
+        "SELECT customer_id\nFROM ecom.raw_customers;"
+    )
 
 
 def test_scan_dbt_project_can_scan_compiled_sql(tmp_path: Path) -> None:

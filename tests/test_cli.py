@@ -607,7 +607,9 @@ models:
 def test_dbt_scan_cli_does_not_fail_on_unsupported_with_findings_policy(tmp_path) -> None:
     models = tmp_path / "models"
     models.mkdir()
-    (models / "orders.sql").write_text("SELECT order_id FROM {{ ref('orders') }}")
+    (models / "orders.sql").write_text(
+        "SELECT order_id, {{ cents_to_dollars('subtotal') }} AS subtotal FROM orders"
+    )
     (models / "schema.yml").write_text("models: []")
 
     result = CliRunner().invoke(

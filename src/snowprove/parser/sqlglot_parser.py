@@ -140,6 +140,7 @@ def _join_type(node: exp.Join) -> str | None:
 
 def _reject_unsupported_clauses(parsed: exp.Select) -> None:
     unsupported = {
+        "with_": "WITH",
         "group": "GROUP BY",
         "having": "HAVING",
         "qualify": "QUALIFY",

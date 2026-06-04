@@ -191,8 +191,9 @@ uv run snowprove dbt scan examples/dbt_project
 ```
 
 Default scan output only reports proven rewrite findings. Use `--all` to include
-unknown and unsupported results, including models that contain uncompiled
-dbt/Jinja syntax:
+unknown and unsupported results. Raw dbt scans statically resolve simple
+`{{ ref('model') }}` and `{{ source('name', 'table') }}` relation references,
+but other dbt/Jinja expressions still require compiled SQL:
 
 ```bash
 uv run snowprove dbt scan examples/dbt_project --all
@@ -216,7 +217,8 @@ example `patches/models/dim_users.sql.remove_redundant_distinct.patch`.
 
 `--apply-patches` applies proven rewrites directly to model SQL files. It is
 explicitly opt-in and refuses to apply when Snowprove scanned compiled SQL or
-when the source file no longer exactly matches the verified original SQL.
+statically preprocessed dbt/Jinja relation references, or when the source file no
+longer exactly matches the verified original SQL.
 Scan reports show `Apply ready: yes` or `Apply ready: no` for proven findings so
 the direct-apply path is visible before running a mutating command.
 

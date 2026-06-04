@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from snowprove.constraints.dbt_loader import load_dbt_constraints
 from snowprove.constraints.model import ConstraintCatalog, TableConstraints
+from snowprove.dbt.jinja import preprocess_dbt_sql
 from snowprove.dbt.project import discover_dbt_project
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
@@ -16,6 +17,7 @@ class DbtModelScanResult(BaseModel):
     path: Path
     scanned_path: Path
     source_path: Path | None = None
+    source_sql_preprocessed: bool = False
     suggestions: tuple[RewriteSuggestion, ...] = Field(default_factory=tuple)
 
     def has_proven_findings(self) -> bool:
@@ -31,13 +33,19 @@ class DbtModelScanResult(BaseModel):
         return self.source_path is not None and self.source_path != self.scanned_path
 
     def apply_ready(self) -> bool:
-        return self.has_proven_findings() and self.source_path == self.scanned_path
+        return (
+            self.has_proven_findings()
+            and self.source_path == self.scanned_path
+            and not self.source_sql_preprocessed
+        )
 
     def apply_blocker(self) -> str | None:
         if self.apply_ready():
             return None
         if not self.has_proven_findings():
             return "No proven rewrite finding."
+        if self.source_sql_preprocessed:
+            return "Source SQL was statically preprocessed; source file was not verified directly."
         if self.source_path is None:
             return "No matching source model file."
         if self.source_path != self.scanned_path:
@@ -109,11 +117,15 @@ def scan_dbt_project(
     for model_path in project.model_sql_files:
         suggestions = _scan_model(model_path, constraints, rules, include_all)
         if suggestions:
+            source_sql_preprocessed = preprocess_dbt_sql(model_path.read_text()).changed
             results.append(
                 DbtModelScanResult(
                     path=model_path,
                     scanned_path=model_path,
                     source_path=_source_path_for_model(project_path, compiled_path, model_path),
+                    source_sql_preprocessed=(
+                        source_sql_preprocessed and compiled_path is None
+                    ),
                     suggestions=tuple(suggestions),
                 )
             )
@@ -131,29 +143,30 @@ def _scan_model(
     rules: tuple[RewriteRule, ...],
     include_all: bool,
 ) -> list[RewriteSuggestion]:
-    sql = model_path.read_text()
-    if "{{" in sql or "{%" in sql:
+    source_sql = model_path.read_text()
+    preprocessed = preprocess_dbt_sql(source_sql)
+    if preprocessed.unsupported_reason is not None:
         return _visible_suggestions(
             [
                 RewriteSuggestion(
                     rule_name="dbt_scan",
                     status=VerificationStatus.UNSUPPORTED,
-                    original_sql=sql.strip(),
-                    reason="Model contains dbt/Jinja syntax and must be compiled before scanning.",
+                    original_sql=source_sql.strip(),
+                    reason=preprocessed.unsupported_reason,
                 )
             ],
             include_all,
         )
 
     try:
-        query = parse_select(sql)
+        query = parse_select(preprocessed.sql)
     except UnsupportedSqlError as error:
         return _visible_suggestions(
             [
                 RewriteSuggestion(
                     rule_name="dbt_scan",
                     status=VerificationStatus.UNSUPPORTED,
-                    original_sql=sql.strip(),
+                    original_sql=source_sql.strip(),
                     reason=str(error),
                 )
             ],
