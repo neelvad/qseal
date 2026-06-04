@@ -27,6 +27,9 @@ uv run snowprove suggest query.sql --schema schema.yml
 uv run snowprove suggest query.sql --schema schema.yml --all --format json
 uv run snowprove check original.sql rewritten.sql --schema schema.yml
 uv run snowprove check original.sql rewritten.sql --schema schema.yml --fail-on unproven --format json
+uv run snowprove check original.sql rewritten.sql --schema schema.yml --verifier sqlsolver --solver-command 'SQLSOLVER_COMMAND'
+uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml
+uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml --format json
 uv run snowprove dbt scan .
 uv run snowprove dbt scan . --all
 uv run snowprove dbt scan . --diff
@@ -53,6 +56,11 @@ Supported SQL subset includes:
 - simple subquery sources
 - direct column projections
 - column projection aliases, for example `user_id AS id`
+- star projections, for example `*` and `users.*`
+- simple aliased scalar projections such as boolean comparisons, `CASE`, and
+  `COALESCE`
+- narrow non-recursive CTE pass-through chains, especially dbt-style
+  `WITH source AS (...) SELECT * FROM source`
 - simple `WHERE` predicates joined by `AND`
 - simple `WHERE EXISTS (SELECT 1 FROM ... WHERE a.col = b.col)`
 - `INNER JOIN ... ON a.col = b.col`
@@ -76,40 +84,106 @@ Rewrite rules:
 dbt workflows:
 
 - scans `models/**/*.sql`
-- reports unsupported Jinja unless compiled SQL is used
+- statically resolves simple `{{ ref('model') }}` and
+  `{{ source('name', 'table') }}` relation references
+- reports unsupported Jinja macros unless compiled SQL is used
 - supports `--compiled-dir`
 - supports `--use-compiled`
 - maps compiled SQL back to source model paths when possible
-- refuses direct apply when scan came from compiled SQL
+- refuses direct apply when scan came from compiled SQL or normalized raw dbt SQL
 - emits text, JSON, diffs, patch files, and report files
 - records patch paths inside JSON reports when `--write-patches` is used
 - summarizes repeated unsupported/reason messages
+
+Verifier workflows:
+
+- `check` supports `--verifier builtin`, `--verifier external`, and
+  `--verifier sqlsolver`
+- `candidates check` verifies many generated candidate SQL files against one
+  original query
+- `candidate_verifications` JSON artifacts include `result_count`,
+  `proven_count`, and one verification result per candidate
+- SQLSolver backend writes temp one-line SQL pair files plus schema SQL, runs a
+  user-provided command, and maps `EQ -> PROVEN_EQUIVALENT`, `NEQ ->
+  NOT_EQUIVALENT`, and `UNKNOWN/TIMEOUT -> UNKNOWN`
+- Generic `external` backend remains a non-executing stub for future solver
+  integrations
 
 CI/reporting:
 
 - versioned JSON artifacts with `schema_version` and `artifact_type`
 - `verification` artifacts include `proven`, `rule_name`, and input paths
+- `candidate_verifications` artifacts summarize candidate checks
 - `dbt_scan` artifacts include summaries, apply readiness, blockers, and patch paths
 - `dbt scan --fail-on findings`
 - `check --fail-on unproven`
 - GitHub Actions examples in `docs/github-actions.md`
+
+Local fixture/eval coverage:
+
+- `tests/fixtures/dbt_projects/jaffle_like/` captures a small dbt-like project
+  with ref/source calls, CTEs, projection expressions, unsupported macro use,
+  and expected scan counts
+- `tests/fixtures/candidates/` captures a small candidate-check workflow
+- `tests/fixtures/solver_compat/` captures solver compatibility query pairs:
+  `normalized_identity`, `redundant_distinct`, `unsafe_distinct`,
+  `unused_left_join`, and `join_distinct_exists`
 
 ## Recent Commits
 
 Recent useful commits include:
 
 ```text
-e81e8d3 Summarize dbt scan reasons
-a4c9951 Allow left predicates in join distinct rewrites
-80706d3 Support column aliases in projections
-6555cf1 Document GitHub Actions workflow
-4bb384d Include patch paths in dbt scan reports
-90b9afa Harden candidate verification API
-39ed5e8 Write dbt scan JSON report files
-fdc32f9 Version JSON report artifacts
-7fb9173 Rewrite join distinct queries to exists
-aef0c7b Support inner joins in SQL parser
+1dddcdb Add SQLSolver verifier backend
+fc2d9aa Document SQLSolver fixture spike
+19d384a Add solver compatibility fixtures
+460d493 Define external solver adapter contract
+30b3164 Add project handoff summary
 ```
+
+## SQLSolver Spike Notes
+
+SQLSolver builds locally once Java 17 is installed, but its bundled Z3 native
+libraries are Linux x86-64 ELF files. Running the jar directly on Apple Silicon
+macOS fails at native Z3 loading. The working path is an x86_64 Ubuntu container
+via Colima.
+
+Useful setup:
+
+```bash
+brew install qemu lima-additional-guestagents
+colima start --profile sqlsolver-x86 --arch x86_64 --cpu 2 --memory 4
+docker context use colima-sqlsolver-x86
+docker run --rm -it \
+  -v ~/workspace/snowprove-eval/SQLSolver:/sqlsolver \
+  -v ~/workspace/snowprove:/snowprove \
+  -w /sqlsolver \
+  ubuntu:22.04 \
+  bash
+```
+
+Inside the container:
+
+```bash
+apt-get update
+apt-get install -y openjdk-17-jdk ca-certificates file
+./gradlew fatjar
+/snowprove/scripts/run_sqlsolver_fixture.sh
+CASE_NAME=all /snowprove/scripts/run_sqlsolver_fixture.sh
+```
+
+Observed successful SQLSolver fixture results:
+
+```text
+redundant_distinct: EQ
+unsafe_distinct: NEQ
+unused_left_join: EQ
+join_distinct_exists: EQ
+```
+
+The SQLSolver CLI expects one SQL statement per physical line in each input
+file. `scripts/run_sqlsolver_fixture.sh` flattens multiline fixtures before
+calling SQLSolver.
 
 ## Development Style
 
@@ -126,48 +200,26 @@ aef0c7b Support inner joins in SQL parser
 
 ## Recommended Next Step
 
-Try the tool on real public dbt projects in advisory mode:
+Next likely step is to make the SQLSolver backend easier to invoke from the
+Colima container, then test `snowprove check --verifier sqlsolver` against the
+checked-in solver compatibility fixtures end-to-end.
 
-```bash
-uv run snowprove dbt scan . \
-  --all \
-  --report-file snowprove-report.json \
-  --write-patches snowprove-patches
-```
+Practical options:
 
-Good first repos:
+- add a small container-side wrapper script that runs SQLSolver with
+  `/sqlsolver/build/libs/sqlsolver-v1.1.0.jar` and `/sqlsolver/lib`
+- run Snowprove from the mounted repo inside the x86_64 container with
+  `uv run snowprove check ... --verifier sqlsolver --solver-command ...`
+- or keep the backend unit-tested locally and use
+  `scripts/run_sqlsolver_fixture.sh` as the manual solver smoke test
 
-- `dbt-labs/jaffle-shop`
-- `Snowflake-Labs/getting-started-with-dbt-on-snowflake`
-
-For Jinja-heavy projects with working dbt setup:
-
-```bash
-dbt compile
-uv run snowprove dbt scan . \
-  --use-compiled \
-  --all \
-  --report-file snowprove-report.json \
-  --write-patches snowprove-patches
-```
-
-Evaluate:
-
-- whether dbt discovery works
-- unsupported reason counts
-- generated patches
-- report JSON shape
-- compiled-to-source mapping
-- generated SQL readability
-
-Use the unsupported reason distribution to pick the next item-1 hardening task.
+After that, consider a thin documented command for the x86_64 container workflow
+or a Dockerfile if repeated setup becomes annoying.
 
 ## Likely Future Work
 
 Core SQL hardening:
 
-- CTE support
-- `SELECT *` handling or clearer refusal
 - more alias forms
 - simple casts and scalar functions
 - better generated SQL formatting
@@ -178,7 +230,8 @@ Verifier/reporting:
 
 - structured parse-error codes
 - richer counterexamples
-- eventual external solver adapter, likely QED or SQLSolver
+- harden SQLSolver schema generation and command invocation
+- evaluate QED after SQLSolver path is stable
 
 CI/product:
 
