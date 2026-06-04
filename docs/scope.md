@@ -99,6 +99,23 @@ step.
 Snowprove also does not attempt full Snowflake SQL equivalence. The current
 subset is meant to be small enough to audit.
 
+## Supported SQL Shapes
+
+The current parser models direct table sources, one simple subquery source,
+direct column projections, simple `WHERE` predicates joined by `AND`, simple
+`EXISTS` predicates, `INNER JOIN`, and `LEFT JOIN`.
+
+It also resolves narrow non-recursive CTE shapes that commonly appear in dbt
+models:
+
+- `SELECT * FROM cte_name` can forward to the referenced CTE body.
+- `FROM cte_name` can forward through a CTE body only when that CTE is a
+  `SELECT *` pass-through over one direct table or another pass-through CTE.
+
+Complex CTEs remain unsupported when their alias is referenced as a source.
+That includes aggregating CTEs, filtering CTEs, joining CTEs, recursive CTEs,
+and CTEs that project expressions.
+
 ## dbt Project Scans
 
 `snowprove dbt scan` discovers SQL files under `models/**/*.sql` and dbt schema

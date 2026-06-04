@@ -122,7 +122,7 @@ models:
     assert result.has_proven_findings()
     assert result.results[0].source_sql_preprocessed is True
     assert result.results[0].apply_ready() is False
-    assert "statically preprocessed" in str(result.results[0].apply_blocker())
+    assert "normalized before verification" in str(result.results[0].apply_blocker())
     assert result.results[0].suggestions[0].rewritten_sql == "SELECT user_id\nFROM dim_users;"
 
 
@@ -151,6 +151,37 @@ models:
     assert result.results[0].suggestions[0].rewritten_sql == (
         "SELECT customer_id\nFROM ecom.raw_customers;"
     )
+
+
+def test_scan_dbt_project_parses_simple_cte_chain(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "dim_users.sql").write_text(
+        """
+        WITH source AS (
+          SELECT * FROM {{ source('ecom', 'raw_users') }}
+        )
+        SELECT DISTINCT user_id FROM source
+        """
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: raw_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.has_proven_findings()
+    assert result.results[0].source_sql_preprocessed is True
+    assert result.results[0].apply_ready() is False
+    assert "normalized before verification" in str(result.results[0].apply_blocker())
 
 
 def test_scan_dbt_project_can_scan_compiled_sql(tmp_path: Path) -> None:

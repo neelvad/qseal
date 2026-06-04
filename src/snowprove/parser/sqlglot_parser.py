@@ -26,13 +26,16 @@ def parse_select(sql: str) -> SelectQuery:
     if not isinstance(parsed, exp.Select):
         raise UnsupportedSqlError("Only SELECT statements are supported.")
 
+    ctes = _cte_map(parsed.args.get("with_"))
+    parsed = _resolve_top_level_cte_select(parsed, ctes)
+
     from_expr = parsed.args.get("from_")
     if from_expr is None or from_expr.this is None:
         raise UnsupportedSqlError("SELECT statements must include a FROM table.")
 
     _reject_unsupported_clauses(parsed)
 
-    source = _source(from_expr.this)
+    source = _source(from_expr.this, ctes)
     joins = [_join(join) for join in parsed.args.get("joins") or []]
     projections = [_projection_to_column(expr) for expr in parsed.expressions]
     predicates = _where_predicates(parsed.args.get("where"))
@@ -47,8 +50,11 @@ def parse_select(sql: str) -> SelectQuery:
     )
 
 
-def _source(node: exp.Expression) -> dict[str, object]:
+def _source(node: exp.Expression, ctes: dict[str, exp.Select] | None = None) -> dict[str, object]:
+    ctes = ctes or {}
     if isinstance(node, exp.Table):
+        if node.name in ctes:
+            return _cte_source(node, ctes)
         return {
             "table": node.name,
             "table_sql": _relation_sql_without_alias(node),
@@ -58,20 +64,28 @@ def _source(node: exp.Expression) -> dict[str, object]:
         if not isinstance(node.this, exp.Select):
             raise UnsupportedSqlError("Only SELECT subqueries are supported.")
         return {
-            "subquery": _parse_select_expression(node.this),
+            "subquery": _parse_select_expression(node.this, ctes),
             "alias": node.alias or None,
         }
     raise UnsupportedSqlError("Only direct tables and simple subqueries are supported.")
 
 
-def _parse_select_expression(parsed: exp.Select) -> SelectQuery:
+def _parse_select_expression(
+    parsed: exp.Select,
+    ctes: dict[str, exp.Select] | None = None,
+) -> SelectQuery:
+    ctes = ctes or {}
+    if parsed.args.get("with_") is not None:
+        raise UnsupportedSqlError("Nested WITH clauses are not supported yet.")
+
+    parsed = _resolve_top_level_cte_select(parsed, ctes)
     from_expr = parsed.args.get("from_")
     if from_expr is None or from_expr.this is None:
         raise UnsupportedSqlError("SELECT statements must include a FROM table.")
 
     _reject_unsupported_clauses(parsed)
 
-    source = _source(from_expr.this)
+    source = _source(from_expr.this, ctes)
     joins = [_join(join) for join in parsed.args.get("joins") or []]
     projections = [_projection_to_column(expr) for expr in parsed.expressions]
     predicates = _where_predicates(parsed.args.get("where"))
@@ -84,6 +98,95 @@ def _parse_select_expression(parsed: exp.Select) -> SelectQuery:
         distinct=parsed.args.get("distinct") is not None,
         raw_sql=parsed.sql(dialect="snowflake"),
     )
+
+
+def _cte_map(with_expr: exp.With | None) -> dict[str, exp.Select]:
+    if with_expr is None:
+        return {}
+    if with_expr.args.get("recursive"):
+        raise UnsupportedSqlError("Recursive CTEs are not supported yet.")
+
+    ctes = {}
+    for cte in with_expr.expressions:
+        if not isinstance(cte, exp.CTE) or not isinstance(cte.this, exp.Select):
+            raise UnsupportedSqlError("Only SELECT CTEs are supported yet.")
+        if cte.alias in ctes:
+            raise UnsupportedSqlError(f"Duplicate CTE name is not supported: {cte.alias}.")
+        ctes[cte.alias] = cte.this
+    return ctes
+
+
+def _resolve_top_level_cte_select(
+    parsed: exp.Select,
+    ctes: dict[str, exp.Select],
+    seen: frozenset[str] = frozenset(),
+) -> exp.Select:
+    from_expr = parsed.args.get("from_")
+    if (
+        not _select_is_star_passthrough(parsed, allow_with=True)
+        or from_expr is None
+        or not isinstance(from_expr.this, exp.Table)
+        or from_expr.this.name not in ctes
+    ):
+        return parsed
+
+    cte_name = from_expr.this.name
+    if cte_name in seen:
+        raise UnsupportedSqlError(f"Recursive CTE reference is not supported: {cte_name}.")
+    return _resolve_top_level_cte_select(ctes[cte_name], ctes, seen | {cte_name})
+
+
+def _cte_source(node: exp.Table, ctes: dict[str, exp.Select]) -> dict[str, object]:
+    cte_name = node.name
+    source = _passthrough_cte_source(cte_name, ctes)
+    alias = node.alias or None
+    if alias is not None:
+        source = {**source, "table_alias": alias}
+    return source
+
+
+def _passthrough_cte_source(
+    cte_name: str,
+    ctes: dict[str, exp.Select],
+    seen: frozenset[str] = frozenset(),
+) -> dict[str, object]:
+    if cte_name in seen:
+        raise UnsupportedSqlError(f"Recursive CTE reference is not supported: {cte_name}.")
+
+    cte = ctes[cte_name]
+    if not _select_is_star_passthrough(cte):
+        raise UnsupportedSqlError(
+            "CTE references in FROM are only supported for SELECT * pass-through CTEs."
+        )
+
+    from_expr = cte.args.get("from_")
+    if from_expr is None or not isinstance(from_expr.this, exp.Table):
+        raise UnsupportedSqlError("CTE pass-through sources must read from one direct table.")
+
+    table = from_expr.this
+    if table.name in ctes:
+        return _passthrough_cte_source(table.name, ctes, seen | {cte_name})
+
+    return {
+        "table": table.name,
+        "table_sql": _relation_sql_without_alias(table),
+        "table_alias": table.alias or None,
+    }
+
+
+def _select_is_star_passthrough(parsed: exp.Select, allow_with: bool = False) -> bool:
+    if parsed.args.get("with_") is not None and not allow_with:
+        return False
+    if parsed.args.get("joins"):
+        return False
+    if parsed.args.get("where") is not None:
+        return False
+    if parsed.args.get("distinct") is not None:
+        return False
+    for arg_name in ("group", "having", "qualify", "order", "limit"):
+        if parsed.args.get(arg_name) is not None:
+            return False
+    return len(parsed.expressions) == 1 and isinstance(parsed.expressions[0], exp.Star)
 
 
 def _projection_to_column(node: exp.Expression) -> ColumnRef:
@@ -140,7 +243,6 @@ def _join_type(node: exp.Join) -> str | None:
 
 def _reject_unsupported_clauses(parsed: exp.Select) -> None:
     unsupported = {
-        "with_": "WITH",
         "group": "GROUP BY",
         "having": "HAVING",
         "qualify": "QUALIFY",

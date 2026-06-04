@@ -78,12 +78,37 @@ def test_rejects_unmodeled_clauses() -> None:
         parse_select("SELECT user_id FROM users ORDER BY user_id")
 
 
-def test_rejects_with_clause() -> None:
-    with pytest.raises(UnsupportedSqlError, match="WITH"):
+def test_parses_simple_cte_chain() -> None:
+    query = parse_select(
+        """
+        WITH
+        source AS (
+          SELECT * FROM ecom.raw_customers
+        ),
+        renamed AS (
+          SELECT
+            id AS customer_id,
+            name AS customer_name
+          FROM source
+        )
+        SELECT * FROM renamed
+        """
+    )
+
+    assert query.table == "raw_customers"
+    assert query.table_sql == "ecom.raw_customers"
+    assert [column.to_sql() for column in query.projections] == [
+        "id AS customer_id",
+        "name AS customer_name",
+    ]
+
+
+def test_rejects_complex_cte_source_reference() -> None:
+    with pytest.raises(UnsupportedSqlError, match="pass-through CTEs"):
         parse_select(
             """
             WITH source AS (
-              SELECT user_id FROM users
+              SELECT id AS user_id FROM users
             )
             SELECT user_id FROM source
             """

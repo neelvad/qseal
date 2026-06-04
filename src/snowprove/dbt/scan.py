@@ -45,7 +45,10 @@ class DbtModelScanResult(BaseModel):
         if not self.has_proven_findings():
             return "No proven rewrite finding."
         if self.source_sql_preprocessed:
-            return "Source SQL was statically preprocessed; source file was not verified directly."
+            return (
+                "Source SQL was normalized before verification; "
+                "source file was not verified directly."
+            )
         if self.source_path is None:
             return "No matching source model file."
         if self.source_path != self.scanned_path:
@@ -117,7 +120,9 @@ def scan_dbt_project(
     for model_path in project.model_sql_files:
         suggestions = _scan_model(model_path, constraints, rules, include_all)
         if suggestions:
-            source_sql_preprocessed = preprocess_dbt_sql(model_path.read_text()).changed
+            source_sql = model_path.read_text()
+            preprocessed = preprocess_dbt_sql(source_sql)
+            source_sql_preprocessed = preprocessed.changed or _has_with_clause(preprocessed.sql)
             results.append(
                 DbtModelScanResult(
                     path=model_path,
@@ -234,6 +239,10 @@ def _compiled_model_relative_path(compiled_path: Path, model_path: Path) -> Path
         return Path(*relative.parts[models_index + 1 :])
 
     return relative
+
+
+def _has_with_clause(sql: str) -> bool:
+    return sql.lstrip().lower().startswith("with")
 
 
 def _load_project_constraints(schema_paths: tuple[Path, ...]) -> ConstraintCatalog:

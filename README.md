@@ -256,6 +256,7 @@ Currently modeled:
 - direct column projections
 - simple direct table sources
 - one simple subquery source
+- simple non-recursive CTE pass-through chains, such as `WITH x AS (...) SELECT * FROM x`
 - simple `WHERE` predicates with `AND`
 - `INNER JOIN ... ON a.col = b.col`
 - `LEFT JOIN ... ON a.col = b.col`
@@ -277,11 +278,12 @@ Explicitly out of scope for now:
 - `OR`, `IN`, and general subquery predicates
 - join reordering
 - general `INNER JOIN` rewrites beyond the narrow `EXISTS` pattern
+- recursive CTEs and complex CTE references
 - UDFs
 - semi-structured `VARIANT` / `FLATTEN`
 - external verifier backends
 - Snowflake connections
-- dbt manifest parsing and automatic `ref()` resolution
+- dbt manifest parsing and general macro evaluation
 
 ## Project Docs
 
