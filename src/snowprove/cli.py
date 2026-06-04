@@ -8,6 +8,7 @@ from snowprove.dbt.project import DbtProjectDiscoveryError, discover_compiled_sq
 from snowprove.dbt.scan import scan_dbt_project
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.report.json import (
+    render_candidate_verifications_json,
     render_dbt_scan_json,
     render_suggestion_json,
     render_suggestions_json,
@@ -15,6 +16,7 @@ from snowprove.report.json import (
 )
 from snowprove.report.patch import apply_dbt_scan_patches, write_dbt_scan_patch_results
 from snowprove.report.text import (
+    render_candidate_verifications_report,
     render_dbt_scan_diff_report,
     render_dbt_scan_report,
     render_suggestion_report,
@@ -29,7 +31,7 @@ from snowprove.rewrites.registry import (
     select_rules,
     suggest_rewrites,
 )
-from snowprove.verifier.check import check_equivalence
+from snowprove.verifier.backends import get_verifier_backend
 from snowprove.verifier.model import VerificationResult
 
 console = Console()
@@ -39,6 +41,7 @@ SchemaFormat = click.Choice(["auto", "snowprove", "dbt"], case_sensitive=False)
 RuleChoice = click.Choice(rule_names(), case_sensitive=False)
 FailOn = click.Choice(["none", "findings"], case_sensitive=False)
 CheckFailOn = click.Choice(["none", "unproven"], case_sensitive=False)
+VerifierChoice = click.Choice(["builtin"], case_sensitive=False)
 
 
 @click.group()
@@ -49,6 +52,11 @@ def main() -> None:
 @main.group(name="dbt")
 def dbt_group() -> None:
     """dbt project workflows."""
+
+
+@main.group(name="candidates")
+def candidates_group() -> None:
+    """Verify generated candidate rewrites."""
 
 
 @dbt_group.command(name="scan")
@@ -300,6 +308,13 @@ def suggest(
     show_default=True,
     help="Exit nonzero when the verification does not satisfy the selected policy.",
 )
+@click.option(
+    "--verifier",
+    type=VerifierChoice,
+    default="builtin",
+    show_default=True,
+    help="Verifier backend.",
+)
 def check(
     original_path: Path,
     rewritten_path: Path,
@@ -307,53 +322,18 @@ def check(
     schema_format: str,
     output_format: str,
     fail_on: str,
+    verifier: str,
 ) -> None:
     """Check whether two supported SQL queries are equivalent."""
     original_sql = original_path.read_text()
     rewritten_sql = rewritten_path.read_text()
 
     try:
-        original = parse_select(original_sql)
-    except UnsupportedSqlError as error:
-        result = VerificationResult(
-            status=VerificationStatus.UNSUPPORTED,
-            original_sql=original_sql.strip(),
-            rewritten_sql=rewritten_sql.strip(),
-            reason=f"Original query unsupported: {error}",
-            inputs=_verification_inputs(
-                original_path,
-                rewritten_path,
-                schema_path,
-                schema_format,
-            ),
-        )
-        _print_verification(result, output_format, fail_on)
-        return
-
-    try:
-        rewritten = parse_select(rewritten_sql)
-    except UnsupportedSqlError as error:
-        result = VerificationResult(
-            status=VerificationStatus.UNSUPPORTED,
-            original_sql=original_sql.strip(),
-            rewritten_sql=rewritten_sql.strip(),
-            reason=f"Rewritten query unsupported: {error}",
-            inputs=_verification_inputs(
-                original_path,
-                rewritten_path,
-                schema_path,
-                schema_format,
-            ),
-        )
-        _print_verification(result, output_format, fail_on)
-        return
-
-    try:
         constraints = _load_constraints(schema_path, schema_format)
     except ValueError as error:
         raise click.ClickException(str(error)) from error
 
-    result = check_equivalence(original, rewritten, constraints)
+    result = get_verifier_backend(verifier).verify(original_sql, rewritten_sql, constraints)
     result = result.model_copy(
         update={
             "inputs": _verification_inputs(
@@ -365,6 +345,93 @@ def check(
         }
     )
     _print_verification(result, output_format, fail_on)
+
+
+@candidates_group.command(name="check")
+@click.argument("original_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument(
+    "candidate_paths",
+    nargs=-1,
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--schema",
+    "schema_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="YAML file containing trusted schema constraints.",
+)
+@click.option(
+    "--schema-format",
+    type=SchemaFormat,
+    default="auto",
+    show_default=True,
+    help="Schema constraint format.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+@click.option(
+    "--fail-on",
+    type=CheckFailOn,
+    default="none",
+    show_default=True,
+    help="Exit nonzero when any candidate verification does not satisfy the selected policy.",
+)
+@click.option(
+    "--verifier",
+    type=VerifierChoice,
+    default="builtin",
+    show_default=True,
+    help="Verifier backend.",
+)
+def candidates_check(
+    original_path: Path,
+    candidate_paths: tuple[Path, ...],
+    schema_path: Path,
+    schema_format: str,
+    output_format: str,
+    fail_on: str,
+    verifier: str,
+) -> None:
+    """Check generated candidate SQL files against one original query."""
+    original_sql = original_path.read_text()
+
+    try:
+        constraints = _load_constraints(schema_path, schema_format)
+    except ValueError as error:
+        raise click.ClickException(str(error)) from error
+
+    backend = get_verifier_backend(verifier)
+    results = [
+        backend.verify(original_sql, candidate_path.read_text(), constraints).model_copy(
+            update={
+                "inputs": _verification_inputs(
+                    original_path,
+                    candidate_path,
+                    schema_path,
+                    schema_format,
+                )
+            }
+        )
+        for candidate_path in candidate_paths
+    ]
+
+    if output_format == "json":
+        click.echo(render_candidate_verifications_json(results))
+    else:
+        console.print(render_candidate_verifications_report(results))
+
+    if fail_on == "unproven" and any(
+        result.status != VerificationStatus.PROVEN_EQUIVALENT for result in results
+    ):
+        raise click.exceptions.Exit(1)
 
 
 def _print_verification(result: VerificationResult, output_format: str, fail_on: str) -> None:

@@ -280,6 +280,38 @@ def test_check_cli_can_fail_on_unproven(tmp_path) -> None:
     assert "NOT_EQUIVALENT" in result.output
 
 
+def test_check_cli_accepts_builtin_verifier_backend(tmp_path) -> None:
+    original = tmp_path / "original.sql"
+    rewritten = tmp_path / "rewritten.sql"
+    schema = tmp_path / "schema.yml"
+    original.write_text("SELECT DISTINCT user_id FROM users")
+    rewritten.write_text("SELECT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "check",
+            str(original),
+            str(rewritten),
+            "--schema",
+            str(schema),
+            "--verifier",
+            "builtin",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "PROVEN_EQUIVALENT" in result.output
+
+
 def test_check_cli_does_not_fail_on_proven_with_unproven_policy(tmp_path) -> None:
     original = tmp_path / "original.sql"
     rewritten = tmp_path / "rewritten.sql"
@@ -310,6 +342,109 @@ tables:
 
     assert result.exit_code == 0
     assert "PROVEN_EQUIVALENT" in result.output
+
+
+def test_candidates_check_cli_reports_multiple_candidates(tmp_path) -> None:
+    original = tmp_path / "original.sql"
+    candidate_a = tmp_path / "candidate_a.sql"
+    candidate_b = tmp_path / "candidate_b.sql"
+    schema = tmp_path / "schema.yml"
+    original.write_text("SELECT DISTINCT user_id FROM users")
+    candidate_a.write_text("SELECT user_id FROM users")
+    candidate_b.write_text("SELECT user_id FROM users WHERE status = 'active'")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "check",
+            str(original),
+            str(candidate_a),
+            str(candidate_b),
+            "--schema",
+            str(schema),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Candidates checked: 2" in result.output
+    assert "Proven: 1" in result.output
+    assert candidate_a.name in result.output
+    assert "PROVEN_EQUIVALENT" in result.output
+    assert candidate_b.name in result.output
+    assert "UNKNOWN" in result.output
+
+
+def test_candidates_check_cli_can_report_json(tmp_path) -> None:
+    original = tmp_path / "original.sql"
+    candidate = tmp_path / "candidate.sql"
+    schema = tmp_path / "schema.yml"
+    original.write_text("SELECT DISTINCT user_id FROM users")
+    candidate.write_text("SELECT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "check",
+            str(original),
+            str(candidate),
+            "--schema",
+            str(schema),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "candidate_verifications"
+    assert payload["result_count"] == 1
+    assert payload["proven_count"] == 1
+    assert payload["results"][0]["proven"] is True
+    assert payload["results"][0]["inputs"]["rewritten_path"] == str(candidate)
+
+
+def test_candidates_check_cli_can_fail_on_unproven(tmp_path) -> None:
+    original = tmp_path / "original.sql"
+    candidate = tmp_path / "candidate.sql"
+    schema = tmp_path / "schema.yml"
+    original.write_text("SELECT DISTINCT user_id FROM users")
+    candidate.write_text("SELECT user_id FROM users")
+    schema.write_text("tables: {}\n")
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "check",
+            str(original),
+            str(candidate),
+            "--schema",
+            str(schema),
+            "--fail-on",
+            "unproven",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "NOT_EQUIVALENT" in result.output
 
 
 def test_suggest_cli_can_load_dbt_schema_format(tmp_path) -> None:

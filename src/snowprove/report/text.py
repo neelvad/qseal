@@ -80,6 +80,32 @@ def render_verification_report(result: VerificationResult) -> Text:
     return output
 
 
+def render_candidate_verifications_report(results: list[VerificationResult]) -> Text:
+    output = Text()
+    output.append("Candidates checked: ", style="bold")
+    output.append(f"{len(results)}\n")
+    output.append("Proven: ", style="bold")
+    output.append(
+        f"{sum(result.status == VerificationStatus.PROVEN_EQUIVALENT for result in results)}\n"
+    )
+
+    for result in results:
+        candidate_path = result.inputs.get("rewritten_path", "<candidate>")
+        output.append("\n")
+        output.append(f"{candidate_path}\n", style="bold")
+        output.append("  Result: ")
+        output.append(f"{result.status.value}\n", style=_status_style(result.status))
+        if result.rule_name:
+            output.append(f"  Verifier rule: {result.rule_name}\n")
+        if result.reason:
+            output.append(f"  Reason: {result.reason}\n")
+        if result.counterexample:
+            output.append("  Counterexample:\n")
+            output.append(f"    {result.counterexample}\n")
+
+    return output
+
+
 def render_dbt_scan_report(scan_result) -> Text:
     output = Text()
     output.append("Scanned models: ", style="bold")

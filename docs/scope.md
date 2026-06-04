@@ -21,6 +21,7 @@ artifact types are:
 - `suggestion`
 - `suggestions`
 - `verification`
+- `candidate_verifications`
 - `dbt_scan`
 
 The `verification` artifact also includes:
@@ -31,6 +32,17 @@ The `verification` artifact also includes:
 
 Use `snowprove check ... --fail-on unproven` to exit nonzero unless the query
 pair is proven equivalent.
+
+`candidate_verifications` is the batch artifact emitted by
+`snowprove candidates check`. It contains one verification result per candidate
+SQL file and a `proven_count` summary.
+
+## Verifier Backends
+
+`snowprove check` and `snowprove candidates check` route verification through a
+backend interface. The only implemented backend is currently `builtin`, which
+uses Snowprove's internal parser and rule-specific equivalence checks. External
+solver backends such as QED or SQLSolver are not wired in yet.
 
 ## Trusted Assumptions
 

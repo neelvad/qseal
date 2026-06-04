@@ -21,10 +21,12 @@ uv sync
 ```bash
 uv run snowprove suggest examples/distinct/original.sql --schema examples/distinct/schema.yml
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml
+uv run snowprove candidates check examples/distinct/original.sql candidates/*.sql --schema examples/distinct/schema.yml
 ```
 
 `suggest` proposes the first applicable verified rewrite. `check` verifies a
-specific original/rewritten query pair.
+specific original/rewritten query pair. `candidates check` verifies multiple
+generated candidate rewrites against one original query.
 
 Useful options:
 
@@ -33,6 +35,9 @@ uv run snowprove suggest examples/distinct/original.sql --schema examples/distin
 uv run snowprove suggest examples/predicate_pushdown/original.sql --schema examples/distinct/schema.yml --rule predicate_pushdown
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --format json
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --fail-on unproven
+uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --verifier builtin
+uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml --format json
+uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml --fail-on unproven
 uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
 uv run snowprove dbt scan examples/dbt_project
 ```
@@ -40,6 +45,12 @@ uv run snowprove dbt scan examples/dbt_project
 `check --fail-on unproven` exits nonzero unless Snowprove proves the query pair
 equivalent. This is the intended contract for future untrusted candidate
 generators, including LLM-generated rewrites.
+
+`candidates check` is the batch form of the same contract: it loads the original
+query once, verifies each candidate SQL file independently, and reports only
+`PROVEN_EQUIVALENT` candidates as safe. The current verifier backend is
+`builtin`, which wraps Snowprove's internal rule-based verifier. External solver
+backends are planned but not implemented.
 
 For CI examples, see [docs/github-actions.md](docs/github-actions.md).
 
@@ -282,7 +293,7 @@ Explicitly out of scope for now:
 - recursive CTEs and complex CTE references
 - UDFs
 - semi-structured `VARIANT` / `FLATTEN`
-- external verifier backends
+- external verifier backend implementations
 - Snowflake connections
 - dbt manifest parsing and general macro evaluation
 

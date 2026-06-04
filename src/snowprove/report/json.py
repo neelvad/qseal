@@ -37,6 +37,29 @@ def render_verification_json(result: VerificationResult) -> str:
     return _dumps(payload)
 
 
+def render_candidate_verifications_json(
+    results: Sequence[VerificationResult],
+) -> str:
+    return _dumps(
+        {
+            "schema_version": 1,
+            "artifact_type": "candidate_verifications",
+            "result_count": len(results),
+            "proven_count": sum(
+                result.status == VerificationStatus.PROVEN_EQUIVALENT
+                for result in results
+            ),
+            "results": [
+                {
+                    **result.model_dump(mode="json"),
+                    "proven": result.status == VerificationStatus.PROVEN_EQUIVALENT,
+                }
+                for result in results
+            ],
+        }
+    )
+
+
 def render_dbt_scan_json(
     scan_result,
     patch_results: Sequence[PatchWriteResult] = (),
