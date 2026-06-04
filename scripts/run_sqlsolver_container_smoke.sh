@@ -56,6 +56,8 @@ fi
 echo "Running Snowprove SQLSolver smoke test in $SMOKE_IMAGE..."
 docker --context "colima-$COLIMA_PROFILE" run --rm "${docker_tty_args[@]}" \
   -e CASE_NAME="$CASE_NAME" \
+  -e RUN_CANDIDATE_SMOKE="$RUN_CANDIDATE_SMOKE" \
+  -e CANDIDATE_CASE_NAME="$CANDIDATE_CASE_NAME" \
   -e UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-/tmp/snowprove-venv}" \
   -e UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/snowprove-uv-cache}" \
   -e UV_LINK_MODE="${UV_LINK_MODE:-copy}" \
