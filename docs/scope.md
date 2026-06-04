@@ -41,9 +41,10 @@ SQL file and a `proven_count` summary.
 
 `snowprove check` and `snowprove candidates check` route verification through a
 backend interface. `builtin` uses Snowprove's internal parser and rule-specific
-equivalence checks. `external` is a stub for future QED/SQLSolver integration;
-it accepts `--solver-command` metadata but returns `UNSUPPORTED` instead of
-executing a solver.
+equivalence checks. `sqlsolver` writes one-line SQL pair files plus a schema file,
+executes a user-provided SQLSolver command, and maps `EQ` to
+`PROVEN_EQUIVALENT`, `NEQ` to `NOT_EQUIVALENT`, and `UNKNOWN`/`TIMEOUT` to
+`UNKNOWN`. `external` is a generic stub for future solver integrations.
 
 The external adapter contract is represented by `ExternalSolverRequest`, which
 contains original SQL, rewritten SQL, trusted constraints, solver command

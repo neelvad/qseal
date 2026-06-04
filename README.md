@@ -37,6 +37,7 @@ uv run snowprove check examples/distinct/original.sql examples/distinct/rewritte
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --fail-on unproven
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --verifier builtin
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --verifier external --solver-command qed
+uv run snowprove check original.sql rewritten.sql --schema schema.yml --verifier sqlsolver --solver-command '/path/to/sqlsolver-wrapper'
 uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml --format json
 uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml --fail-on unproven
 uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
@@ -49,10 +50,11 @@ generators, including LLM-generated rewrites.
 
 `candidates check` is the batch form of the same contract: it loads the original
 query once, verifies each candidate SQL file independently, and reports only
-`PROVEN_EQUIVALENT` candidates as safe. The current verifier backend is
-`builtin`, which wraps Snowprove's internal rule-based verifier. `external` is a
-stubbed backend for future QED/SQLSolver integration and currently reports
-`UNSUPPORTED` instead of executing a solver.
+`PROVEN_EQUIVALENT` candidates as safe. The default verifier backend is
+`builtin`, which wraps Snowprove's internal rule-based verifier. `sqlsolver` can
+call an external SQLSolver command and maps `EQ`, `NEQ`, `UNKNOWN`, and
+`TIMEOUT` into Snowprove statuses. `external` remains a generic stub for future
+solver integrations.
 
 Solver adapter compatibility cases live under
 `tests/fixtures/solver_compat/`. They define the small query-pair suite that new

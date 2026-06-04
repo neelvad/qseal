@@ -7,6 +7,7 @@ from snowprove.rewrites.base import VerificationStatus
 from snowprove.verifier.backends.builtin import BuiltinVerifierBackend
 from snowprove.verifier.backends.external import ExternalVerifierBackend
 from snowprove.verifier.backends.external_contract import ExternalSolverRequest
+from snowprove.verifier.backends.sqlsolver import SqlSolverBackend
 
 FIXTURE = Path(__file__).parent / "fixtures" / "solver_compat"
 
@@ -61,3 +62,100 @@ def test_external_backend_stub_preserves_request_metadata() -> None:
     assert result.original_sql == "SELECT DISTINCT user_id FROM users"
     assert result.rewritten_sql == "SELECT user_id FROM users"
     assert "sqlsolver integration is not implemented yet" in str(result.reason)
+
+
+def test_sqlsolver_backend_maps_eq_result(tmp_path: Path) -> None:
+    command = _fake_sqlsolver(tmp_path, "[EQ]")
+    constraints = load_constraint_catalog(FIXTURE / "schema.yml", "auto")
+    backend = SqlSolverBackend(solver_command=str(command), timeout_seconds=5)
+
+    result = backend.verify(
+        (FIXTURE / "redundant_distinct" / "original.sql").read_text(),
+        (FIXTURE / "redundant_distinct" / "rewritten.sql").read_text(),
+        constraints,
+    )
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "sqlsolver"
+    assert result.reason == "SQLSolver returned EQ."
+
+
+def test_sqlsolver_backend_maps_neq_result(tmp_path: Path) -> None:
+    command = _fake_sqlsolver(tmp_path, "[NEQ]")
+    constraints = load_constraint_catalog(FIXTURE / "schema.yml", "auto")
+    backend = SqlSolverBackend(solver_command=str(command))
+
+    result = backend.verify(
+        (FIXTURE / "unsafe_distinct" / "original.sql").read_text(),
+        (FIXTURE / "unsafe_distinct" / "rewritten.sql").read_text(),
+        constraints,
+    )
+
+    assert result.status == VerificationStatus.NOT_EQUIVALENT
+    assert result.reason == "SQLSolver returned NEQ."
+
+
+def test_sqlsolver_backend_requires_solver_command() -> None:
+    constraints = load_constraint_catalog(FIXTURE / "schema.yml", "auto")
+    backend = SqlSolverBackend()
+
+    result = backend.verify("SELECT user_id FROM users", "SELECT user_id FROM users", constraints)
+
+    assert result.status == VerificationStatus.UNSUPPORTED
+    assert result.reason == "SQLSolver requires --solver-command."
+
+
+def test_sqlsolver_backend_writes_one_line_sql_and_schema(tmp_path: Path) -> None:
+    capture = tmp_path / "capture"
+    command = _fake_sqlsolver(tmp_path, "[EQ]", capture_path=capture)
+    constraints = load_constraint_catalog(FIXTURE / "schema.yml", "auto")
+    backend = SqlSolverBackend(
+        solver_command=f"{command} -sql1={{sql1}} -sql2={{sql2}} -schema={{schema}}"
+    )
+
+    result = backend.verify(
+        "SELECT DISTINCT user_id\nFROM users\n",
+        "SELECT user_id\nFROM users\n",
+        constraints,
+    )
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    captured = capture.read_text()
+    assert "SQL1=SELECT DISTINCT user_id FROM users" in captured
+    assert "SQL2=SELECT user_id FROM users" in captured
+    assert "CREATE TABLE users" in captured
+    assert "user_id INT PRIMARY KEY" in captured
+
+
+def _fake_sqlsolver(
+    tmp_path: Path,
+    output: str,
+    capture_path: Path | None = None,
+) -> Path:
+    script = tmp_path / "fake_sqlsolver.sh"
+    capture = capture_path or tmp_path / "capture"
+    script.write_text(
+        f"""#!/usr/bin/env bash
+set -euo pipefail
+sql1=""
+sql2=""
+schema=""
+for arg in "$@"; do
+  case "$arg" in
+    -sql1=*) sql1="${{arg#-sql1=}}" ;;
+    -sql2=*) sql2="${{arg#-sql2=}}" ;;
+    -schema=*) schema="${{arg#-schema=}}" ;;
+  esac
+done
+{{
+  echo "SQL1=$(cat "$sql1")"
+  echo "SQL2=$(cat "$sql2")"
+  echo "SCHEMA=$(cat "$schema")"
+}} > "{capture}"
+echo "Verifying pair 1"
+echo "1 {output.strip("[]")}"
+echo "{output}"
+"""
+    )
+    script.chmod(0o755)
+    return script

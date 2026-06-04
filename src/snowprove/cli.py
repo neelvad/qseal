@@ -41,7 +41,7 @@ SchemaFormat = click.Choice(["auto", "snowprove", "dbt"], case_sensitive=False)
 RuleChoice = click.Choice(rule_names(), case_sensitive=False)
 FailOn = click.Choice(["none", "findings"], case_sensitive=False)
 CheckFailOn = click.Choice(["none", "unproven"], case_sensitive=False)
-VerifierChoice = click.Choice(["builtin", "external"], case_sensitive=False)
+VerifierChoice = click.Choice(["builtin", "external", "sqlsolver"], case_sensitive=False)
 
 
 @click.group()
