@@ -319,6 +319,12 @@ def suggest(
     "--solver-command",
     help="External verifier command to use with --verifier external.",
 )
+@click.option(
+    "--timeout",
+    "timeout_seconds",
+    type=int,
+    help="External verifier timeout in seconds.",
+)
 def check(
     original_path: Path,
     rewritten_path: Path,
@@ -328,6 +334,7 @@ def check(
     fail_on: str,
     verifier: str,
     solver_command: str | None,
+    timeout_seconds: int | None,
 ) -> None:
     """Check whether two supported SQL queries are equivalent."""
     original_sql = original_path.read_text()
@@ -338,7 +345,11 @@ def check(
     except ValueError as error:
         raise click.ClickException(str(error)) from error
 
-    result = get_verifier_backend(verifier, solver_command=solver_command).verify(
+    result = get_verifier_backend(
+        verifier,
+        solver_command=solver_command,
+        timeout_seconds=timeout_seconds,
+    ).verify(
         original_sql,
         rewritten_sql,
         constraints,
@@ -404,6 +415,12 @@ def check(
     "--solver-command",
     help="External verifier command to use with --verifier external.",
 )
+@click.option(
+    "--timeout",
+    "timeout_seconds",
+    type=int,
+    help="External verifier timeout in seconds.",
+)
 def candidates_check(
     original_path: Path,
     candidate_paths: tuple[Path, ...],
@@ -413,6 +430,7 @@ def candidates_check(
     fail_on: str,
     verifier: str,
     solver_command: str | None,
+    timeout_seconds: int | None,
 ) -> None:
     """Check generated candidate SQL files against one original query."""
     original_sql = original_path.read_text()
@@ -422,7 +440,11 @@ def candidates_check(
     except ValueError as error:
         raise click.ClickException(str(error)) from error
 
-    backend = get_verifier_backend(verifier, solver_command=solver_command)
+    backend = get_verifier_backend(
+        verifier,
+        solver_command=solver_command,
+        timeout_seconds=timeout_seconds,
+    )
     results = [
         backend.verify(original_sql, candidate_path.read_text(), constraints).model_copy(
             update={
