@@ -188,6 +188,7 @@ calling SQLSolver.
 ## Development Style
 
 - Prefer small stacked commits with descriptive messages.
+- Go ahead and run git commit with a summary message, but don't push the commit to github.
 - Keep rewrites conservative.
 - Default to `UNKNOWN` or `UNSUPPORTED` instead of guessing.
 - Do not trust Snowflake unenforced constraints unless explicitly supplied as

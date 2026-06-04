@@ -1,7 +1,19 @@
 tables:
   users:
+    columns:
+      user_id: {}
+      status: {}
     unique:
       - [user_id]
   dim_users:
+    columns:
+      user_id: {}
     unique:
       - [user_id]
+  fact_orders:
+    columns:
+      user_id: {}
+      revenue: {}
+  orders:
+    columns:
+      user_id: {}

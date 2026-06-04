@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -125,6 +126,40 @@ def test_sqlsolver_backend_writes_one_line_sql_and_schema(tmp_path: Path) -> Non
     assert "SQL2=SELECT user_id FROM users" in captured
     assert "CREATE TABLE users" in captured
     assert "user_id INT PRIMARY KEY" in captured
+
+
+def test_sqlsolver_backend_schema_includes_unconstrained_fixture_tables(tmp_path: Path) -> None:
+    capture = tmp_path / "capture"
+    command = _fake_sqlsolver(tmp_path, "[EQ]", capture_path=capture)
+    constraints = load_constraint_catalog(FIXTURE / "schema.yml", "auto")
+    backend = SqlSolverBackend(solver_command=str(command))
+
+    result = backend.verify(
+        (FIXTURE / "unused_left_join" / "original.sql").read_text(),
+        (FIXTURE / "unused_left_join" / "rewritten.sql").read_text(),
+        constraints,
+    )
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    captured = capture.read_text()
+    assert "CREATE TABLE fact_orders" in captured
+    assert "revenue INT" in captured
+    assert "CREATE TABLE dim_users" in captured
+
+
+def test_sqlsolver_command_wrapper_reports_missing_jar() -> None:
+    wrapper = Path("scripts/sqlsolver_command.sh").resolve()
+
+    completed = subprocess.run(
+        [str(wrapper), "-print"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={"SQLSOLVER_DIR": "/tmp/snowprove-missing-sqlsolver"},
+    )
+
+    assert completed.returncode == 2
+    assert "SQLSolver jar not found" in completed.stderr
 
 
 def _fake_sqlsolver(
