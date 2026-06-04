@@ -44,7 +44,12 @@ echo "Candidate pipeline smoke: $CASE_NAME"
     > "$report_path"
 )
 
-python3 - "$report_path" <<'PY'
+(
+  cd "$SNOWPROVE_DIR"
+  UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/snowprove-uv-cache}" \
+    UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-/tmp/snowprove-venv}" \
+    UV_LINK_MODE="${UV_LINK_MODE:-copy}" \
+    uv run python - "$report_path" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -59,3 +64,4 @@ assert payload["verification"]["proven_count"] >= 1, payload
 
 print(report_path.read_text())
 PY
+)
