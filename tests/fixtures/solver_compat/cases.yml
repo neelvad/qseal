@@ -1,0 +1,21 @@
+cases:
+  - name: normalized_identity
+    original: normalized_identity/original.sql
+    rewritten: normalized_identity/rewritten.sql
+    expected_builtin_status: PROVEN_EQUIVALENT
+  - name: redundant_distinct
+    original: redundant_distinct/original.sql
+    rewritten: redundant_distinct/rewritten.sql
+    expected_builtin_status: PROVEN_EQUIVALENT
+  - name: unsafe_distinct
+    original: unsafe_distinct/original.sql
+    rewritten: unsafe_distinct/rewritten.sql
+    expected_builtin_status: NOT_EQUIVALENT
+  - name: unused_left_join
+    original: unused_left_join/original.sql
+    rewritten: unused_left_join/rewritten.sql
+    expected_builtin_status: PROVEN_EQUIVALENT
+  - name: join_distinct_exists
+    original: join_distinct_exists/original.sql
+    rewritten: join_distinct_exists/rewritten.sql
+    expected_builtin_status: PROVEN_EQUIVALENT

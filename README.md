@@ -54,6 +54,10 @@ query once, verifies each candidate SQL file independently, and reports only
 stubbed backend for future QED/SQLSolver integration and currently reports
 `UNSUPPORTED` instead of executing a solver.
 
+Solver adapter compatibility cases live under
+`tests/fixtures/solver_compat/`. They define the small query-pair suite that new
+QED/SQLSolver adapters should pass before being exposed as trusted backends.
+
 For CI examples, see [docs/github-actions.md](docs/github-actions.md).
 
 ## Examples

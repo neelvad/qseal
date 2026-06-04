@@ -1,0 +1,2 @@
+SELECT status
+FROM users

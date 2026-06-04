@@ -45,6 +45,12 @@ equivalence checks. `external` is a stub for future QED/SQLSolver integration;
 it accepts `--solver-command` metadata but returns `UNSUPPORTED` instead of
 executing a solver.
 
+The external adapter contract is represented by `ExternalSolverRequest`, which
+contains original SQL, rewritten SQL, trusted constraints, solver command
+metadata, and an optional timeout. Compatibility fixtures under
+`tests/fixtures/solver_compat/` define the initial query pairs that future solver
+adapters should handle.
+
 ## Trusted Assumptions
 
 Constraints are explicit inputs. For example:
