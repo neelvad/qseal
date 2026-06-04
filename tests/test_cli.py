@@ -1,8 +1,11 @@
 import json
+from pathlib import Path
 
 from click.testing import CliRunner
 
 from snowprove.cli import main
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_suggest_cli(tmp_path) -> None:
@@ -445,6 +448,116 @@ def test_candidates_check_cli_can_fail_on_unproven(tmp_path) -> None:
 
     assert result.exit_code == 1
     assert "NOT_EQUIVALENT" in result.output
+
+
+def test_dbt_scan_cli_runs_jaffle_like_fixture_json() -> None:
+    project = FIXTURES / "dbt_projects" / "jaffle_like"
+
+    result = CliRunner().invoke(
+        main,
+        ["dbt", "scan", str(project), "--all", "--format", "json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "dbt_scan"
+    assert payload["model_count"] == 5
+    assert payload["summary"]["proven_finding_count"] == 1
+    assert payload["summary"]["status_counts"] == {
+        "PROVEN_EQUIVALENT": 1,
+        "UNSUPPORTED": 2,
+    }
+
+
+def test_candidates_check_cli_runs_checked_in_fixture_json() -> None:
+    fixture = FIXTURES / "candidates"
+    original = fixture / "original.sql"
+    candidates = [
+        fixture / "candidate_distinct_removed.sql",
+        fixture / "candidate_filtered.sql",
+    ]
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "check",
+            str(original),
+            *(str(candidate) for candidate in candidates),
+            "--schema",
+            str(fixture / "schema.yml"),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "candidate_verifications"
+    assert payload["result_count"] == 2
+    assert payload["proven_count"] == 1
+    assert [item["status"] for item in payload["results"]] == [
+        "PROVEN_EQUIVALENT",
+        "UNKNOWN",
+    ]
+
+
+def test_candidates_check_cli_fixture_can_fail_on_unproven() -> None:
+    fixture = FIXTURES / "candidates"
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "check",
+            str(fixture / "original.sql"),
+            str(fixture / "candidate_distinct_removed.sql"),
+            str(fixture / "candidate_filtered.sql"),
+            "--schema",
+            str(fixture / "schema.yml"),
+            "--fail-on",
+            "unproven",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Candidates checked: 2" in result.output
+    assert "UNKNOWN" in result.output
+
+
+def test_check_cli_external_verifier_stub_reports_unsupported(tmp_path) -> None:
+    original = tmp_path / "original.sql"
+    rewritten = tmp_path / "rewritten.sql"
+    schema = tmp_path / "schema.yml"
+    original.write_text("SELECT DISTINCT user_id FROM users")
+    rewritten.write_text("SELECT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "check",
+            str(original),
+            str(rewritten),
+            "--schema",
+            str(schema),
+            "--verifier",
+            "external",
+            "--solver-command",
+            "qed",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "UNSUPPORTED" in result.output
+    assert "qed integration is not implemented yet" in result.output
 
 
 def test_suggest_cli_can_load_dbt_schema_format(tmp_path) -> None:

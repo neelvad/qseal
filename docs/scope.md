@@ -40,9 +40,10 @@ SQL file and a `proven_count` summary.
 ## Verifier Backends
 
 `snowprove check` and `snowprove candidates check` route verification through a
-backend interface. The only implemented backend is currently `builtin`, which
-uses Snowprove's internal parser and rule-specific equivalence checks. External
-solver backends such as QED or SQLSolver are not wired in yet.
+backend interface. `builtin` uses Snowprove's internal parser and rule-specific
+equivalence checks. `external` is a stub for future QED/SQLSolver integration;
+it accepts `--solver-command` metadata but returns `UNSUPPORTED` instead of
+executing a solver.
 
 ## Trusted Assumptions
 

@@ -36,6 +36,7 @@ uv run snowprove suggest examples/predicate_pushdown/original.sql --schema examp
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --format json
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --fail-on unproven
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --verifier builtin
+uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml --verifier external --solver-command qed
 uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml --format json
 uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml --fail-on unproven
 uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
@@ -49,8 +50,9 @@ generators, including LLM-generated rewrites.
 `candidates check` is the batch form of the same contract: it loads the original
 query once, verifies each candidate SQL file independently, and reports only
 `PROVEN_EQUIVALENT` candidates as safe. The current verifier backend is
-`builtin`, which wraps Snowprove's internal rule-based verifier. External solver
-backends are planned but not implemented.
+`builtin`, which wraps Snowprove's internal rule-based verifier. `external` is a
+stubbed backend for future QED/SQLSolver integration and currently reports
+`UNSUPPORTED` instead of executing a solver.
 
 For CI examples, see [docs/github-actions.md](docs/github-actions.md).
 

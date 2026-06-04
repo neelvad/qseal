@@ -41,7 +41,7 @@ SchemaFormat = click.Choice(["auto", "snowprove", "dbt"], case_sensitive=False)
 RuleChoice = click.Choice(rule_names(), case_sensitive=False)
 FailOn = click.Choice(["none", "findings"], case_sensitive=False)
 CheckFailOn = click.Choice(["none", "unproven"], case_sensitive=False)
-VerifierChoice = click.Choice(["builtin"], case_sensitive=False)
+VerifierChoice = click.Choice(["builtin", "external"], case_sensitive=False)
 
 
 @click.group()
@@ -315,6 +315,10 @@ def suggest(
     show_default=True,
     help="Verifier backend.",
 )
+@click.option(
+    "--solver-command",
+    help="External verifier command to use with --verifier external.",
+)
 def check(
     original_path: Path,
     rewritten_path: Path,
@@ -323,6 +327,7 @@ def check(
     output_format: str,
     fail_on: str,
     verifier: str,
+    solver_command: str | None,
 ) -> None:
     """Check whether two supported SQL queries are equivalent."""
     original_sql = original_path.read_text()
@@ -333,7 +338,11 @@ def check(
     except ValueError as error:
         raise click.ClickException(str(error)) from error
 
-    result = get_verifier_backend(verifier).verify(original_sql, rewritten_sql, constraints)
+    result = get_verifier_backend(verifier, solver_command=solver_command).verify(
+        original_sql,
+        rewritten_sql,
+        constraints,
+    )
     result = result.model_copy(
         update={
             "inputs": _verification_inputs(
@@ -391,6 +400,10 @@ def check(
     show_default=True,
     help="Verifier backend.",
 )
+@click.option(
+    "--solver-command",
+    help="External verifier command to use with --verifier external.",
+)
 def candidates_check(
     original_path: Path,
     candidate_paths: tuple[Path, ...],
@@ -399,6 +412,7 @@ def candidates_check(
     output_format: str,
     fail_on: str,
     verifier: str,
+    solver_command: str | None,
 ) -> None:
     """Check generated candidate SQL files against one original query."""
     original_sql = original_path.read_text()
@@ -408,7 +422,7 @@ def candidates_check(
     except ValueError as error:
         raise click.ClickException(str(error)) from error
 
-    backend = get_verifier_backend(verifier)
+    backend = get_verifier_backend(verifier, solver_command=solver_command)
     results = [
         backend.verify(original_sql, candidate_path.read_text(), constraints).model_copy(
             update={
