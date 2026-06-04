@@ -190,7 +190,11 @@ def _select_is_star_passthrough(parsed: exp.Select, allow_with: bool = False) ->
 
 
 def _projection_to_column(node: exp.Expression) -> ColumnRef:
+    if isinstance(node, exp.Star):
+        return ColumnRef(name="*", is_star=True)
     if isinstance(node, exp.Column):
+        if isinstance(node.this, exp.Star):
+            return ColumnRef(table=node.table or None, name="*", is_star=True)
         return ColumnRef(table=node.table or None, name=node.name)
     if isinstance(node, exp.Alias) and isinstance(node.this, exp.Column):
         return ColumnRef(
@@ -198,7 +202,28 @@ def _projection_to_column(node: exp.Expression) -> ColumnRef:
             name=node.this.name,
             alias=node.alias,
         )
-    raise UnsupportedSqlError("Only direct column projections are supported.")
+    if isinstance(node, exp.Alias) and _is_supported_opaque_projection(node.this):
+        return ColumnRef(
+            name=node.alias,
+            alias=node.alias,
+            expression_sql=node.this.sql(dialect="snowflake"),
+        )
+    raise UnsupportedSqlError(
+        "Only direct columns, stars, and simple aliased scalar projections are supported."
+    )
+
+
+def _is_supported_opaque_projection(node: exp.Expression) -> bool:
+    if _contains_aggregate(node):
+        return False
+    return isinstance(
+        node,
+        exp.EQ | exp.NEQ | exp.GT | exp.GTE | exp.LT | exp.LTE | exp.Case | exp.Coalesce,
+    )
+
+
+def _contains_aggregate(node: exp.Expression) -> bool:
+    return any(isinstance(child, exp.AggFunc) for child in node.walk())
 
 
 def _join(node: exp.Join) -> Join:

@@ -34,6 +34,38 @@ def test_parse_select_with_column_alias() -> None:
     assert query.to_sql() == "SELECT user_id AS id\nFROM users;"
 
 
+def test_parse_select_with_star_projections() -> None:
+    query = parse_select("SELECT users.*, status FROM users")
+
+    assert query.projections[0].is_star is True
+    assert query.projections[0].table == "users"
+    assert query.projections[0].to_sql() == "users.*"
+    assert query.to_sql() == "SELECT users.*, status\nFROM users;"
+
+
+def test_parse_select_with_opaque_projection_expressions() -> None:
+    query = parse_select(
+        """
+        SELECT
+          count_orders > 0 AS is_repeat_buyer,
+          CASE WHEN is_repeat_buyer THEN 'returning' ELSE 'new' END AS customer_type,
+          COALESCE(type = 'jaffle', FALSE) AS is_food_item
+        FROM customers
+        """
+    )
+
+    assert [projection.to_sql() for projection in query.projections] == [
+        "count_orders > 0 AS is_repeat_buyer",
+        "CASE WHEN is_repeat_buyer THEN 'returning' ELSE 'new' END AS customer_type",
+        "COALESCE(type = 'jaffle', FALSE) AS is_food_item",
+    ]
+
+
+def test_rejects_aggregate_projection_expression() -> None:
+    with pytest.raises(UnsupportedSqlError, match="simple aliased scalar"):
+        parse_select("SELECT SUM(price) AS total FROM orders")
+
+
 def test_parse_select_with_null_predicates() -> None:
     query = parse_select(
         "SELECT user_id FROM users WHERE deleted_at IS NULL AND email IS NOT NULL"

@@ -53,7 +53,10 @@ class RewriteJoinDistinctToExists:
                 ),
             )
 
-        if any(column.table != left_relation for column in query.projections):
+        if any(
+            not column.is_direct_column() or column.table != left_relation
+            for column in query.projections
+        ):
             return RewriteSuggestion(
                 rule_name=self.rule_name,
                 status=VerificationStatus.UNKNOWN,

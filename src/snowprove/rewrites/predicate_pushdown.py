@@ -101,6 +101,8 @@ def _same_projection_names(
     outer: tuple[ColumnRef, ...],
     inner: tuple[ColumnRef, ...],
 ) -> bool:
+    if any(not column.is_direct_column() for column in (*outer, *inner)):
+        return False
     return tuple(column.name for column in outer) == tuple(column.name for column in inner)
 
 

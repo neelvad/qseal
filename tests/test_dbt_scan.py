@@ -4,6 +4,8 @@ from snowprove.dbt.scan import scan_dbt_project
 from snowprove.rewrites.base import VerificationStatus
 from snowprove.rewrites.registry import DEFAULT_RULES
 
+FIXTURES = Path(__file__).parent / "fixtures"
+
 
 def test_scan_dbt_project_returns_proven_findings(tmp_path: Path) -> None:
     models = tmp_path / "models"
@@ -263,3 +265,23 @@ models:
     assert result.results[0].source_path is None
     assert result.results[0].apply_ready() is False
     assert result.results[0].apply_blocker() == "No matching source model file."
+
+
+def test_scan_jaffle_like_fixture_reports_stable_counts() -> None:
+    project = FIXTURES / "dbt_projects" / "jaffle_like"
+
+    result = scan_dbt_project(project, rules=DEFAULT_RULES, include_all=True)
+
+    assert result.model_count == 5
+    assert result.proven_finding_count() == 1
+    assert result.status_counts() == {
+        "PROVEN_EQUIVALENT": 1,
+        "UNSUPPORTED": 2,
+    }
+    assert result.reason_counts() == {
+        "CTE references in FROM are only supported for SELECT * pass-through CTEs.": 1,
+        (
+            "Model contains unsupported dbt/Jinja expression 'cents_to_dollars'; "
+            "compile before scanning."
+        ): 1,
+    }

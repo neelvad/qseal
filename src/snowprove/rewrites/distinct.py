@@ -41,6 +41,14 @@ class RemoveRedundantDistinct:
                 reason=f"No trusted constraints found for table {table_name}.",
             )
 
+        if any(not column.is_direct_column() for column in query.projections):
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.UNKNOWN,
+                original_sql=query.raw_sql,
+                reason="DISTINCT removal only supports direct column projections.",
+            )
+
         projected_columns = tuple(column.name for column in query.projections)
         if not table.has_unique_key(projected_columns):
             return RewriteSuggestion(

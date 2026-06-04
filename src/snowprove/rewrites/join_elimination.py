@@ -63,7 +63,10 @@ class RemoveUnusedLeftJoin:
 
 def _uses_joined_relation(query: SelectQuery, join: Join) -> bool:
     joined_name = join.relation_name()
-    projected = any(column.table == joined_name for column in query.projections)
+    projected = any(
+        (column.is_star and column.table is None) or column.table == joined_name
+        for column in query.projections
+    )
     filtered = any(
         _predicate_uses_joined_relation(predicate, joined_name)
         for predicate in query.predicates

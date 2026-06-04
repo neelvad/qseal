@@ -9,18 +9,29 @@ class ColumnRef(BaseModel):
     name: str
     table: str | None = None
     alias: str | None = None
+    expression_sql: str | None = None
+    is_star: bool = False
 
     def to_sql(self) -> str:
+        if self.expression_sql is not None:
+            if self.alias:
+                return f"{self.expression_sql} AS {self.alias}"
+            return self.expression_sql
+        if self.is_star:
+            return f"{self.table}.*" if self.table else "*"
         column = f"{self.table}.{self.name}" if self.table else self.name
         if self.alias:
             return f"{column} AS {self.alias}"
         return column
 
+    def is_direct_column(self) -> bool:
+        return self.expression_sql is None and not self.is_star
+
     def unqualified(self) -> ColumnRef:
-        return ColumnRef(name=self.name, alias=self.alias)
+        return self.model_copy(update={"table": None})
 
     def without_alias(self) -> ColumnRef:
-        return ColumnRef(name=self.name, table=self.table)
+        return self.model_copy(update={"alias": None})
 
 
 class LiteralValue(BaseModel):

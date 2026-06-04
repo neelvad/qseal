@@ -102,8 +102,9 @@ subset is meant to be small enough to audit.
 ## Supported SQL Shapes
 
 The current parser models direct table sources, one simple subquery source,
-direct column projections, simple `WHERE` predicates joined by `AND`, simple
-`EXISTS` predicates, `INNER JOIN`, and `LEFT JOIN`.
+direct column projections, star projections, simple aliased scalar projections,
+simple `WHERE` predicates joined by `AND`, simple `EXISTS` predicates,
+`INNER JOIN`, and `LEFT JOIN`.
 
 It also resolves narrow non-recursive CTE shapes that commonly appear in dbt
 models:
