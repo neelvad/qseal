@@ -74,6 +74,48 @@ Solver adapter compatibility cases live under
 `tests/fixtures/solver_compat/`. They define the small query-pair suite that new
 QED/SQLSolver adapters should pass before being exposed as trusted backends.
 
+### SQLSolver Verifier
+
+SQLSolver currently needs an x86_64 Linux environment because its bundled Z3
+native libraries are Linux x86-64 binaries. The local smoke-test wrapper starts
+the x86 Colima profile and runs both fixed query-pair checks and a
+`candidates run --verifier sqlsolver` pipeline check:
+
+```bash
+scripts/run_sqlsolver_container_smoke.sh
+```
+
+Inside the container, Snowprove calls SQLSolver through:
+
+```bash
+/snowprove/scripts/sqlsolver_command.sh
+```
+
+The same backend can verify a single pair:
+
+```bash
+uv run snowprove check original.sql rewritten.sql \
+  --schema schema.yml \
+  --verifier sqlsolver \
+  --solver-command scripts/sqlsolver_command.sh \
+  --fail-on unproven
+```
+
+Or the generated-candidate pipeline:
+
+```bash
+uv run snowprove candidates run original.sql \
+  --schema schema.yml \
+  --out candidates/ \
+  --verifier sqlsolver \
+  --solver-command scripts/sqlsolver_command.sh \
+  --format json \
+  --fail-on unproven
+```
+
+For the full Colima setup notes, see
+[docs/sqlsolver-spike.md](docs/sqlsolver-spike.md).
+
 For CI examples, see [docs/github-actions.md](docs/github-actions.md).
 
 ## Examples

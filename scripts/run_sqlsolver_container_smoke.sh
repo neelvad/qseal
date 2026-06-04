@@ -8,6 +8,8 @@ COLIMA_PROFILE="${COLIMA_PROFILE:-sqlsolver-x86}"
 COLIMA_CPUS="${COLIMA_CPUS:-2}"
 COLIMA_MEMORY="${COLIMA_MEMORY:-4}"
 CASE_NAME="${CASE_NAME:-all}"
+RUN_CANDIDATE_SMOKE="${RUN_CANDIDATE_SMOKE:-1}"
+CANDIDATE_CASE_NAME="${CANDIDATE_CASE_NAME:-redundant_distinct}"
 SMOKE_IMAGE="${SMOKE_IMAGE:-snowprove-sqlsolver-smoke:latest}"
 REBUILD_IMAGE="${REBUILD_IMAGE:-0}"
 
@@ -69,4 +71,9 @@ docker --context "colima-$COLIMA_PROFILE" run --rm "${docker_tty_args[@]}" \
     fi
 
     CASE_NAME="$CASE_NAME" /snowprove/scripts/run_snowprove_sqlsolver_fixture.sh
+
+    if [[ "$RUN_CANDIDATE_SMOKE" == "1" ]]; then
+      CASE_NAME="$CANDIDATE_CASE_NAME" \
+        /snowprove/scripts/run_snowprove_sqlsolver_candidate_smoke.sh
+    fi
   '
