@@ -85,6 +85,9 @@ the x86 Colima profile and runs both fixed query-pair checks and a
 scripts/run_sqlsolver_container_smoke.sh
 ```
 
+The smoke wrapper writes JSON reports under
+`snowprove-runs/sqlsolver-smoke/<timestamp>/`, which is ignored by git.
+
 Inside the container, Snowprove calls SQLSolver through:
 
 ```bash

@@ -7,10 +7,16 @@ CASE_NAME="${CASE_NAME:-redundant_distinct}"
 RUN_DIR="${RUN_DIR:-/tmp/snowprove-sqlsolver-candidates}"
 SOLVER_COMMAND="${SOLVER_COMMAND:-$SNOWPROVE_DIR/scripts/sqlsolver_command.sh}"
 TIMEOUT="${TIMEOUT:-30}"
+REPORT_DIR="${REPORT_DIR:-}"
 
 case_dir="$FIXTURE_DIR/$CASE_NAME"
 out_dir="$RUN_DIR/$CASE_NAME"
-report_path="$RUN_DIR/$CASE_NAME.candidate_run.json"
+if [[ -n "$REPORT_DIR" ]]; then
+  mkdir -p "$REPORT_DIR/candidates"
+  report_path="$REPORT_DIR/candidates/$CASE_NAME.candidate_run.json"
+else
+  report_path="$RUN_DIR/$CASE_NAME.candidate_run.json"
+fi
 
 if ! command -v uv >/dev/null 2>&1; then
   echo "uv is required to run Snowprove inside this container." >&2

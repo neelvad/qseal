@@ -12,6 +12,7 @@ RUN_CANDIDATE_SMOKE="${RUN_CANDIDATE_SMOKE:-1}"
 CANDIDATE_CASE_NAME="${CANDIDATE_CASE_NAME:-redundant_distinct}"
 SMOKE_IMAGE="${SMOKE_IMAGE:-snowprove-sqlsolver-smoke:latest}"
 REBUILD_IMAGE="${REBUILD_IMAGE:-0}"
+REPORT_DIR="${REPORT_DIR:-$SNOWPROVE_DIR/snowprove-runs/sqlsolver-smoke/$(date -u +%Y%m%dT%H%M%SZ)}"
 
 if ! command -v colima >/dev/null 2>&1; then
   echo "colima is required. Install it with: brew install colima" >&2
@@ -28,6 +29,14 @@ if [[ ! -d "$SQLSOLVER_DIR" ]]; then
   echo "Set SQLSOLVER_DIR=/path/to/SQLSolver and rerun this script." >&2
   exit 2
 fi
+
+case "$REPORT_DIR" in
+  "$SNOWPROVE_DIR"/*) CONTAINER_REPORT_DIR="/snowprove/${REPORT_DIR#"$SNOWPROVE_DIR"/}" ;;
+  *)
+    echo "REPORT_DIR must be inside the Snowprove repo: $SNOWPROVE_DIR" >&2
+    exit 2
+    ;;
+esac
 
 docker_tty_args=(-i)
 if [[ -t 0 && -t 1 ]]; then
@@ -54,10 +63,13 @@ if [[ "$REBUILD_IMAGE" == "1" ]] || ! image_exists; then
 fi
 
 echo "Running Snowprove SQLSolver smoke test in $SMOKE_IMAGE..."
+mkdir -p "$REPORT_DIR"
+echo "Reports will be written to: $REPORT_DIR"
 docker --context "colima-$COLIMA_PROFILE" run --rm "${docker_tty_args[@]}" \
   -e CASE_NAME="$CASE_NAME" \
   -e RUN_CANDIDATE_SMOKE="$RUN_CANDIDATE_SMOKE" \
   -e CANDIDATE_CASE_NAME="$CANDIDATE_CASE_NAME" \
+  -e REPORT_DIR="$CONTAINER_REPORT_DIR" \
   -e UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-/tmp/snowprove-venv}" \
   -e UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/snowprove-uv-cache}" \
   -e UV_LINK_MODE="${UV_LINK_MODE:-copy}" \
