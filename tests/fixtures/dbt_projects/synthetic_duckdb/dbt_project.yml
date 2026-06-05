@@ -1,0 +1,5 @@
+name: synthetic_duckdb
+profile: synthetic_duckdb
+config-version: 2
+
+model-paths: ["models"]

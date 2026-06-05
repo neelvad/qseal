@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from snowprove.dbt.project import discover_compiled_sql_path
 from snowprove.dbt.scan import scan_dbt_project
 from snowprove.rewrites.base import VerificationStatus
 from snowprove.rewrites.registry import DEFAULT_RULES
@@ -316,3 +317,63 @@ def test_scan_jaffle_like_fixture_reports_stable_counts() -> None:
             "compile before scanning."
         ): 1,
     }
+
+
+def test_scan_synthetic_duckdb_fixture_reports_raw_blockers() -> None:
+    project = FIXTURES / "dbt_projects" / "synthetic_duckdb"
+
+    result = scan_dbt_project(project, rules=DEFAULT_RULES, include_all=True)
+
+    assert result.model_count == 5
+    assert result.proven_finding_count() == 1
+    assert result.status_counts() == {
+        "PROVEN_EQUIVALENT": 1,
+        "UNSUPPORTED": 4,
+    }
+    assert result.rule_counts() == {
+        "dbt_scan": 4,
+        "remove_redundant_distinct": 1,
+    }
+    assert result.reason_counts() == {
+        "CTE references in FROM are only supported for SELECT * pass-through CTEs.": 1,
+        "GROUP BY is not supported yet.": 1,
+        "Model contains unsupported dbt/Jinja block syntax; compile before scanning.": 1,
+        "Only direct columns, stars, and simple aliased scalar projections are supported.": 1,
+    }
+
+
+def test_scan_synthetic_duckdb_fixture_reports_compiled_blockers() -> None:
+    project = FIXTURES / "dbt_projects" / "synthetic_duckdb"
+    compiled_path = discover_compiled_sql_path(project)
+
+    result = scan_dbt_project(
+        project,
+        rules=DEFAULT_RULES,
+        include_all=True,
+        compiled_path=compiled_path,
+    )
+
+    assert result.model_count == 5
+    assert result.proven_finding_count() == 1
+    assert result.status_counts() == {
+        "PROVEN_EQUIVALENT": 1,
+        "UNSUPPORTED": 4,
+    }
+    assert result.reason_counts() == {
+        "CTE references in FROM are only supported for SELECT * pass-through CTEs.": 1,
+        "GROUP BY is not supported yet.": 2,
+        "Only direct columns, stars, and simple aliased scalar projections are supported.": 1,
+    }
+
+    dim_users = next(
+        scan_result
+        for scan_result in result.results
+        if scan_result.source_path == project / "models" / "dim_users.sql"
+    )
+    assert dim_users.scanned_path == compiled_path / "dim_users.sql"
+    assert dim_users.source_sql_preprocessed is False
+    assert dim_users.apply_ready() is False
+    assert (
+        dim_users.apply_blocker()
+        == "Scanned compiled SQL; source file was not verified directly."
+    )
