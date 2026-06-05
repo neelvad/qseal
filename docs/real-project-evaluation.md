@@ -26,6 +26,7 @@ Useful overrides:
 REFRESH=1 scripts/evaluate_real_projects.sh
 REPORT_ROOT="$PWD/snowprove-runs/real-projects/manual" scripts/evaluate_real_projects.sh
 RUN_COMPILED=1 scripts/evaluate_real_projects.sh
+DBT_PROFILES_DIR="$HOME/.dbt" RUN_COMPILED=1 scripts/evaluate_real_projects.sh
 ```
 
 `RUN_COMPILED=1` requires a working `dbt` command and project profiles. If dbt

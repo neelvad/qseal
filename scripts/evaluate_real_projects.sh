@@ -6,6 +6,7 @@ SNOWPROVE_DIR="${SNOWPROVE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 CLONE_DIR="${CLONE_DIR:-/tmp/snowprove-real-projects}"
 REPORT_ROOT="${REPORT_ROOT:-$SNOWPROVE_DIR/snowprove-runs/real-projects/$(date -u +%Y%m%dT%H%M%SZ)}"
 RUN_COMPILED="${RUN_COMPILED:-0}"
+DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-$HOME/.dbt}"
 REFRESH="${REFRESH:-0}"
 
 PROJECT_SPECS=(
@@ -26,6 +27,7 @@ Environment overrides:
   REPORT_ROOT=$PWD/snowprove-runs/real-projects/manual
   REFRESH=1                 Re-clone each project under CLONE_DIR.
   RUN_COMPILED=1            Try dbt deps/compile and scan compiled SQL.
+  DBT_PROFILES_DIR=$HOME/.dbt
 
 Outputs:
   REPORT_ROOT/<project>/raw-report.json
@@ -104,11 +106,17 @@ run_compiled_scan() {
     return
   fi
 
+  if [[ ! -d "$DBT_PROFILES_DIR" ]]; then
+    echo "Skipping compiled scan for $name: DBT_PROFILES_DIR not found: $DBT_PROFILES_DIR" \
+      | tee "$report_dir/compiled-skipped.txt"
+    return
+  fi
+
   echo "Compiled scan: $scan_dir"
   (
     cd "$scan_dir"
-    dbt deps
-    dbt compile
+    dbt deps --profiles-dir "$DBT_PROFILES_DIR"
+    dbt compile --profiles-dir "$DBT_PROFILES_DIR"
   ) > "$report_dir/dbt-compile-output.txt" 2>&1 || {
     echo "Skipping compiled scan for $name: dbt compile failed." \
       | tee "$report_dir/compiled-skipped.txt"
