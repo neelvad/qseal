@@ -16,6 +16,7 @@ _SOURCE_PATTERN = re.compile(
     r"\{\{\s*source\(\s*(['\"])(?P<source>[A-Za-z_][A-Za-z0-9_]*)\1\s*,\s*"
     r"(['\"])(?P<table>[A-Za-z_][A-Za-z0-9_]*)\3\s*\)\s*\}\}"
 )
+_CONFIG_PATTERN = re.compile(r"\{\{\s*config\((?P<body>.*?)\)\s*\}\}", re.DOTALL)
 _JINJA_EXPRESSION_PATTERN = re.compile(r"\{\{\s*(?P<body>.*?)\s*\}\}", re.DOTALL)
 
 
@@ -26,6 +27,7 @@ def preprocess_dbt_sql(sql: str) -> DbtSqlPreprocessResult:
         lambda match: f"{match.group('source')}.{match.group('table')}",
         preprocessed,
     )
+    preprocessed = _CONFIG_PATTERN.sub("", preprocessed)
 
     if "{%" in preprocessed or "{#" in preprocessed:
         return DbtSqlPreprocessResult(

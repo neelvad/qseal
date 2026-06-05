@@ -155,6 +155,37 @@ models:
     )
 
 
+def test_scan_dbt_project_ignores_dbt_config_calls(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "dim_users.sql").write_text(
+        """
+        {{ config(materialized='view') }}
+
+        SELECT DISTINCT user_id
+        FROM {{ ref('dim_users') }}
+        """
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.has_proven_findings()
+    assert result.results[0].source_sql_preprocessed is True
+    assert result.results[0].apply_ready() is False
+    assert result.results[0].suggestions[0].rewritten_sql == "SELECT user_id\nFROM dim_users;"
+
+
 def test_scan_dbt_project_parses_simple_cte_chain(tmp_path: Path) -> None:
     models = tmp_path / "models"
     models.mkdir()
