@@ -4,6 +4,22 @@ version = "0.1.0"
 description = "Verified-safe SQL rewrites for a constrained Snowflake SQL subset."
 readme = "README.md"
 requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "snowprove contributors" },
+]
+keywords = ["sql", "snowflake", "dbt", "formal-verification", "query-optimization"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = [
     "click>=8.1.8",
     "pydantic>=2.10.6",
@@ -14,6 +30,11 @@ dependencies = [
 
 [project.scripts]
 snowprove = "snowprove.cli:main"
+
+[project.urls]
+Repository = "https://github.com/neelvad/snowprove"
+Issues = "https://github.com/neelvad/snowprove/issues"
+Documentation = "https://github.com/neelvad/snowprove#readme"
 
 [dependency-groups]
 dev = [

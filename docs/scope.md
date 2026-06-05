@@ -21,7 +21,9 @@ artifact types are:
 - `suggestion`
 - `suggestions`
 - `verification`
+- `candidate_generation`
 - `candidate_verifications`
+- `candidate_run`
 - `dbt_scan`
 
 The `verification` artifact also includes:
@@ -36,6 +38,8 @@ pair is proven equivalent.
 `candidate_verifications` is the batch artifact emitted by
 `snowprove candidates check`. It contains one verification result per candidate
 SQL file and a `proven_count` summary.
+
+For full artifact notes, see `docs/artifacts.md`.
 
 ## Verifier Backends
 
