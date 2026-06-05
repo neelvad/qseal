@@ -7,6 +7,7 @@ that reports are understandable.
 ## Suggested Projects
 
 - `dbt-labs/jaffle-shop`
+- `dbt-labs/jaffle_shop_duckdb`
 - `Snowflake-Labs/getting-started-with-dbt-on-snowflake`
 - `fivetran/dbt_shopify`
 - one Jinja-heavy dbt project with macros, refs, sources, and compiled SQL
@@ -27,11 +28,17 @@ REFRESH=1 scripts/evaluate_real_projects.sh
 REPORT_ROOT="$PWD/snowprove-runs/real-projects/manual" scripts/evaluate_real_projects.sh
 RUN_COMPILED=1 scripts/evaluate_real_projects.sh
 DBT_PROFILES_DIR="$HOME/.dbt" RUN_COMPILED=1 scripts/evaluate_real_projects.sh
+DUCKDB_DBT_COMMAND="uvx --from dbt-duckdb dbt" RUN_COMPILED=1 scripts/evaluate_real_projects.sh
+PROJECT_FILTER=duckdb RUN_COMPILED=1 scripts/evaluate_real_projects.sh
 ```
 
 `RUN_COMPILED=1` requires a working `dbt` command and project profiles. If dbt
 dependencies or compilation fail, the script records a skip file and keeps the
 raw scan report.
+
+DuckDB projects use a generated temporary `profiles.yml` under the report
+directory and default to `uvx --from dbt-duckdb dbt`, so they can compile
+without cloud credentials or a global dbt-duckdb installation.
 
 If an individual repository has an unexpected layout or Snowprove rejects it
 before producing a report, the script records `raw-skipped.txt` and continues to

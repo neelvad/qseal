@@ -7,14 +7,17 @@ CLONE_DIR="${CLONE_DIR:-/tmp/snowprove-real-projects}"
 REPORT_ROOT="${REPORT_ROOT:-$SNOWPROVE_DIR/snowprove-runs/real-projects/$(date -u +%Y%m%dT%H%M%SZ)}"
 RUN_COMPILED="${RUN_COMPILED:-0}"
 DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-$HOME/.dbt}"
+DUCKDB_DBT_COMMAND="${DUCKDB_DBT_COMMAND:-uvx --from dbt-duckdb dbt}"
+PROJECT_FILTER="${PROJECT_FILTER:-}"
 REFRESH="${REFRESH:-0}"
 
 PROJECT_SPECS=(
-  "dbt-labs-jaffle-shop|https://github.com/dbt-labs/jaffle-shop.git|."
-  "lightdash-jaffle-shop|https://github.com/lightdash/jaffle_shop.git|."
-  "snowflake-dbt-demo-project|https://github.com/dpguthrie/snowflake-dbt-demo-project.git|."
-  "fivetran-dbt-shopify|https://github.com/fivetran/dbt_shopify.git|."
-  "calogica-dbt-expectations-integration|https://github.com/calogica/dbt-expectations.git|integration_tests"
+  "dbt-labs-jaffle-shop|https://github.com/dbt-labs/jaffle-shop.git|.|default"
+  "dbt-labs-jaffle-shop-duckdb|https://github.com/dbt-labs/jaffle_shop_duckdb.git|.|duckdb"
+  "lightdash-jaffle-shop|https://github.com/lightdash/jaffle_shop.git|.|default"
+  "snowflake-dbt-demo-project|https://github.com/dpguthrie/snowflake-dbt-demo-project.git|.|default"
+  "fivetran-dbt-shopify|https://github.com/fivetran/dbt_shopify.git|.|default"
+  "calogica-dbt-expectations-integration|https://github.com/calogica/dbt-expectations.git|integration_tests|default"
 )
 
 usage() {
@@ -28,6 +31,8 @@ Environment overrides:
   REFRESH=1                 Re-clone each project under CLONE_DIR.
   RUN_COMPILED=1            Try dbt deps/compile and scan compiled SQL.
   DBT_PROFILES_DIR=$HOME/.dbt
+  DUCKDB_DBT_COMMAND="uvx --from dbt-duckdb dbt"
+  PROJECT_FILTER=duckdb       Only run projects whose name contains this value.
 
 Outputs:
   REPORT_ROOT/<project>/raw-report.json
@@ -94,20 +99,28 @@ run_raw_scan() {
 run_compiled_scan() {
   local name="$1"
   local scan_dir="$2"
+  local profile_kind="$3"
   local report_dir="$REPORT_ROOT/$name"
+  local profiles_dir="$DBT_PROFILES_DIR"
+  local dbt_command=(dbt)
 
   if [[ "$RUN_COMPILED" != "1" ]]; then
     return
   fi
 
-  if ! command -v dbt >/dev/null 2>&1; then
+  if [[ "$profile_kind" == "duckdb" ]]; then
+    profiles_dir="$report_dir/dbt-profiles"
+    write_duckdb_profile "$scan_dir" "$profiles_dir" "$report_dir/$name.duckdb"
+    # shellcheck disable=SC2206
+    dbt_command=($DUCKDB_DBT_COMMAND)
+  elif ! command -v dbt >/dev/null 2>&1; then
     echo "Skipping compiled scan for $name: dbt command not found." \
       | tee "$report_dir/compiled-skipped.txt"
     return
   fi
 
-  if [[ ! -d "$DBT_PROFILES_DIR" ]]; then
-    echo "Skipping compiled scan for $name: DBT_PROFILES_DIR not found: $DBT_PROFILES_DIR" \
+  if [[ ! -d "$profiles_dir" ]]; then
+    echo "Skipping compiled scan for $name: profiles dir not found: $profiles_dir" \
       | tee "$report_dir/compiled-skipped.txt"
     return
   fi
@@ -115,8 +128,8 @@ run_compiled_scan() {
   echo "Compiled scan: $scan_dir"
   (
     cd "$scan_dir"
-    dbt deps --profiles-dir "$DBT_PROFILES_DIR"
-    dbt compile --profiles-dir "$DBT_PROFILES_DIR"
+    "${dbt_command[@]}" deps --profiles-dir "$profiles_dir"
+    "${dbt_command[@]}" compile --profiles-dir "$profiles_dir"
   ) > "$report_dir/dbt-compile-output.txt" 2>&1 || {
     echo "Skipping compiled scan for $name: dbt compile failed." \
       | tee "$report_dir/compiled-skipped.txt"
@@ -135,10 +148,53 @@ run_compiled_scan() {
     }
 }
 
+write_duckdb_profile() {
+  local project_dir="$1"
+  local profiles_dir="$2"
+  local duckdb_path="$3"
+  local profile_name
+
+  profile_name="$(project_profile_name "$project_dir")"
+  mkdir -p "$profiles_dir"
+  cat > "$profiles_dir/profiles.yml" <<YAML
+$profile_name:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "$duckdb_path"
+YAML
+}
+
+project_profile_name() {
+  local project_dir="$1"
+  local project_file="$project_dir/dbt_project.yml"
+  local profile
+  local name
+
+  profile="$(awk -F: '/^[[:space:]]*profile:/ { gsub(/[ "'\''"]/, "", $2); print $2; exit }' "$project_file" 2>/dev/null || true)"
+  if [[ -n "$profile" ]]; then
+    echo "$profile"
+    return
+  fi
+
+  name="$(awk -F: '/^[[:space:]]*name:/ { gsub(/[ "'\''"]/, "", $2); print $2; exit }' "$project_file" 2>/dev/null || true)"
+  if [[ -n "$name" ]]; then
+    echo "$name"
+    return
+  fi
+
+  echo "snowprove_duckdb"
+}
+
 for spec in "${PROJECT_SPECS[@]}"; do
-  IFS="|" read -r name url subdir <<< "$spec"
+  IFS="|" read -r name url subdir profile_kind <<< "$spec"
   repo_dir="$CLONE_DIR/$name"
   scan_dir="$repo_dir/$subdir"
+
+  if [[ -n "$PROJECT_FILTER" && "$name" != *"$PROJECT_FILTER"* ]]; then
+    continue
+  fi
 
   echo
   echo "== $name =="
@@ -150,7 +206,7 @@ for spec in "${PROJECT_SPECS[@]}"; do
   fi
 
   run_raw_scan "$name" "$scan_dir"
-  run_compiled_scan "$name" "$scan_dir"
+  run_compiled_scan "$name" "$scan_dir" "$profile_kind"
 done
 
 echo
