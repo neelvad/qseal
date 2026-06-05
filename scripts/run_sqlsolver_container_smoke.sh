@@ -7,12 +7,23 @@ SQLSOLVER_DIR="${SQLSOLVER_DIR:-$HOME/workspace/snowprove-eval/SQLSolver}"
 COLIMA_PROFILE="${COLIMA_PROFILE:-sqlsolver-x86}"
 COLIMA_CPUS="${COLIMA_CPUS:-2}"
 COLIMA_MEMORY="${COLIMA_MEMORY:-4}"
+STOP_COLIMA="${STOP_COLIMA:-1}"
 CASE_NAME="${CASE_NAME:-all}"
 RUN_CANDIDATE_SMOKE="${RUN_CANDIDATE_SMOKE:-1}"
 CANDIDATE_CASE_NAME="${CANDIDATE_CASE_NAME:-redundant_distinct}"
 SMOKE_IMAGE="${SMOKE_IMAGE:-snowprove-sqlsolver-smoke:latest}"
 REBUILD_IMAGE="${REBUILD_IMAGE:-0}"
 REPORT_DIR="${REPORT_DIR:-$SNOWPROVE_DIR/snowprove-runs/sqlsolver-smoke/$(date -u +%Y%m%dT%H%M%SZ)}"
+colima_started=0
+
+cleanup() {
+  if [[ "$STOP_COLIMA" == "1" && "$colima_started" == "1" ]]; then
+    echo "Stopping Colima profile '$COLIMA_PROFILE'..."
+    colima stop --profile "$COLIMA_PROFILE"
+  fi
+}
+
+trap cleanup EXIT
 
 if ! command -v colima >/dev/null 2>&1; then
   echo "colima is required. Install it with: brew install colima" >&2
@@ -49,6 +60,7 @@ colima start \
   --arch x86_64 \
   --cpu "$COLIMA_CPUS" \
   --memory "$COLIMA_MEMORY"
+colima_started=1
 
 image_exists() {
   docker --context "colima-$COLIMA_PROFILE" image inspect "$SMOKE_IMAGE" >/dev/null 2>&1

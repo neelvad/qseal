@@ -14,6 +14,8 @@ the `sqlsolver-x86` Colima profile, builds a cached smoke-test image if needed,
 builds the SQLSolver jar if needed, and runs all Snowprove SQLSolver
 compatibility cases plus a product-like `candidates run --verifier sqlsolver`
 smoke test.
+It also stops the Colima profile when the run exits. Set `STOP_COLIMA=0` if you
+want to keep the profile running between smoke-test runs.
 The container uses a throwaway uv environment and cache under `/tmp`, with
 `UV_LINK_MODE=copy`, so it does not mutate the repo's macOS `.venv`.
 Each run writes JSON artifacts under
@@ -27,6 +29,7 @@ CASE_NAME=redundant_distinct scripts/run_sqlsolver_container_smoke.sh
 RUN_CANDIDATE_SMOKE=0 scripts/run_sqlsolver_container_smoke.sh
 CANDIDATE_CASE_NAME=redundant_distinct scripts/run_sqlsolver_container_smoke.sh
 COLIMA_CPUS=2 COLIMA_MEMORY=4 scripts/run_sqlsolver_container_smoke.sh
+STOP_COLIMA=0 scripts/run_sqlsolver_container_smoke.sh
 REBUILD_IMAGE=1 scripts/run_sqlsolver_container_smoke.sh
 REPORT_DIR="$PWD/snowprove-runs/manual" scripts/run_sqlsolver_container_smoke.sh
 ```
