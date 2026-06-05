@@ -49,6 +49,7 @@ uv run snowprove candidates check original.sql --candidates-dir candidates/ --sc
 uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml --fail-on unproven
 uv run snowprove candidates run original.sql --schema schema.yml --out candidates/ --format json
 uv run snowprove candidates run original.sql --schema schema.yml --out candidates/ --fail-on unproven
+uv run snowprove candidates run examples/candidates/original.sql --schema examples/candidates/schema.yml --out /tmp/snowprove-candidates --report-file /tmp/snowprove-candidate-run.json
 uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
 uv run snowprove dbt scan examples/dbt_project
 ```
@@ -64,11 +65,12 @@ form: it loads the original query once, verifies each candidate SQL file
 independently, and reports only `PROVEN_EQUIVALENT` candidates as safe. It
 accepts explicit candidate paths or `--candidates-dir candidates/`. `candidates
 run` combines generation and verification into one JSON-friendly command, which
-is the intended CI shape before LLM candidate generation exists. The default
-verifier backend is `builtin`, which wraps Snowprove's internal rule-based
-verifier. `sqlsolver` can call an external SQLSolver command and maps `EQ`,
-`NEQ`, `UNKNOWN`, and `TIMEOUT` into Snowprove statuses. `external` remains a
-generic stub for future solver integrations.
+is the intended CI shape before LLM candidate generation exists. Use
+`--report-file` to write the `candidate_run` JSON artifact while keeping normal
+text output on stdout. The default verifier backend is `builtin`, which wraps
+Snowprove's internal rule-based verifier. `sqlsolver` can call an external
+SQLSolver command and maps `EQ`, `NEQ`, `UNKNOWN`, and `TIMEOUT` into Snowprove
+statuses. `external` remains a generic stub for future solver integrations.
 
 Solver adapter compatibility cases live under
 `tests/fixtures/solver_compat/`. They define the small query-pair suite that new

@@ -422,6 +422,11 @@ def candidates_generate(
     help="Output format.",
 )
 @click.option(
+    "--report-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write a versioned JSON candidate-run artifact to this file.",
+)
+@click.option(
     "--fail-on",
     type=CheckFailOn,
     default="none",
@@ -454,6 +459,7 @@ def candidates_run(
     selected_rules: tuple[str, ...],
     force: bool,
     output_format: str,
+    report_file: Path | None,
     fail_on: str,
     verifier: str,
     solver_command: str | None,
@@ -492,9 +498,10 @@ def candidates_run(
         generated,
         skipped,
     )
+    json_report = render_candidate_run_json(generation=generation, verifications=results)
 
     if output_format == "json":
-        click.echo(render_candidate_run_json(generation=generation, verifications=results))
+        click.echo(json_report)
     else:
         console.print(f"Candidates generated: {len(generated)}")
         console.print(f"Skipped: {len(skipped)}")
@@ -504,6 +511,11 @@ def candidates_run(
             console.print(f"  skipped {item['rule_name']} ({item['status']}): {item['reason']}")
         console.print("")
         console.print(render_candidate_verifications_report(results))
+
+    if report_file is not None:
+        report_file.parent.mkdir(parents=True, exist_ok=True)
+        report_file.write_text(f"{json_report}\n")
+        click.echo(f"Report file written: {report_file}", err=True)
 
     if fail_on == "unproven" and (
         not results

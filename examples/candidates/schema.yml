@@ -1,0 +1,4 @@
+tables:
+  users:
+    unique:
+      - [user_id]

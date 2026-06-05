@@ -647,6 +647,45 @@ tables:
     assert payload["verification"]["proven_count"] == 1
 
 
+def test_candidates_run_cli_can_write_report_file(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    output_dir = tmp_path / "candidates"
+    report_file = tmp_path / "reports" / "candidate-run.json"
+    query.write_text("SELECT DISTINCT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "run",
+            str(query),
+            "--schema",
+            str(schema),
+            "--out",
+            str(output_dir),
+            "--report-file",
+            str(report_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Candidates generated: 1" in result.output
+    assert f"Report file written: {report_file}" in result.stderr
+    payload = json.loads(report_file.read_text())
+    assert payload["artifact_type"] == "candidate_run"
+    assert payload["generation"]["generated_count"] == 1
+    assert payload["verification"]["proven_count"] == 1
+
+
 def test_candidates_run_cli_can_fail_when_no_candidates_are_generated(tmp_path) -> None:
     query = tmp_path / "query.sql"
     schema = tmp_path / "schema.yml"
