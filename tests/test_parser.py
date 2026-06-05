@@ -202,6 +202,34 @@ def test_parses_cte_projection_passthrough_with_outer_alias() -> None:
     ]
 
 
+def test_parses_simple_cte_relations_in_from_and_join() -> None:
+    query = parse_select(
+        """
+        WITH child AS (
+          SELECT customer_id AS from_field
+          FROM orders
+          WHERE customer_id IS NOT NULL
+        ),
+        parent AS (
+          SELECT customer_id AS to_field
+          FROM customers
+        )
+        SELECT from_field
+        FROM child
+        LEFT JOIN parent
+          ON child.from_field = parent.to_field
+        WHERE parent.to_field IS NULL
+        """
+    )
+
+    assert query.table == "child"
+    assert query.joins[0].table == "parent"
+    assert query.joins[0].condition.to_sql() == "child.from_field = parent.to_field"
+    assert [predicate.to_sql() for predicate in query.predicates] == [
+        "parent.to_field IS NULL",
+    ]
+
+
 def test_parse_simple_left_join() -> None:
     query = parse_select(
         """

@@ -326,15 +326,17 @@ def test_scan_synthetic_duckdb_fixture_reports_raw_blockers() -> None:
     assert result.model_count == 5
     assert result.proven_finding_count() == 1
     assert result.status_counts() == {
+        "UNKNOWN": 1,
         "PROVEN_EQUIVALENT": 1,
-        "UNSUPPORTED": 2,
+        "UNSUPPORTED": 1,
     }
     assert result.rule_counts() == {
-        "dbt_scan": 2,
+        "dbt_scan": 1,
+        "remove_unused_left_join": 1,
         "remove_redundant_distinct": 1,
     }
     assert result.reason_counts() == {
-        "CTE references in FROM are only supported for SELECT * pass-through CTEs.": 1,
+        "orders.customer_id is not known to be unique.": 1,
         "Model contains unsupported dbt/Jinja block syntax; compile before scanning.": 1,
     }
 
@@ -353,11 +355,11 @@ def test_scan_synthetic_duckdb_fixture_reports_compiled_blockers() -> None:
     assert result.model_count == 5
     assert result.proven_finding_count() == 1
     assert result.status_counts() == {
+        "UNKNOWN": 1,
         "PROVEN_EQUIVALENT": 1,
-        "UNSUPPORTED": 1,
     }
     assert result.reason_counts() == {
-        "CTE references in FROM are only supported for SELECT * pass-through CTEs.": 1,
+        "orders.customer_id is not known to be unique.": 1,
     }
 
     dim_users = next(

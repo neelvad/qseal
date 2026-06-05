@@ -36,7 +36,7 @@ def parse_select(sql: str) -> SelectQuery:
     _reject_unsupported_clauses(parsed)
 
     source = _source(from_expr.this, ctes)
-    joins = [_join(join) for join in parsed.args.get("joins") or []]
+    joins = [_join(join, ctes) for join in parsed.args.get("joins") or []]
     group_by = _group_by_columns(parsed.args.get("group"))
     projections = [
         _projection_to_column(expr, allow_aggregate=bool(group_by))
@@ -91,7 +91,7 @@ def _parse_select_expression(
     _reject_unsupported_clauses(parsed)
 
     source = _source(from_expr.this, ctes)
-    joins = [_join(join) for join in parsed.args.get("joins") or []]
+    joins = [_join(join, ctes) for join in parsed.args.get("joins") or []]
     group_by = _group_by_columns(parsed.args.get("group"))
     projections = [
         _projection_to_column(expr, allow_aggregate=bool(group_by))
@@ -187,11 +187,57 @@ def _inline_cte_projection(
 
 def _cte_source(node: exp.Table, ctes: dict[str, exp.Select]) -> dict[str, object]:
     cte_name = node.name
-    source = _passthrough_cte_source(cte_name, ctes)
+    try:
+        source = _passthrough_cte_source(cte_name, ctes)
+    except UnsupportedSqlError:
+        _validate_opaque_cte_relation(cte_name, ctes)
+        source = {
+            "table": cte_name,
+            "table_sql": cte_name,
+            "table_alias": node.alias or None,
+        }
     alias = node.alias or None
     if alias is not None:
         source = {**source, "table_alias": alias}
     return source
+
+
+def _validate_opaque_cte_relation(
+    cte_name: str,
+    ctes: dict[str, exp.Select],
+    seen: frozenset[str] = frozenset(),
+) -> None:
+    if cte_name in seen:
+        raise UnsupportedSqlError(f"Recursive CTE reference is not supported: {cte_name}.")
+
+    cte = ctes[cte_name]
+    if cte.args.get("with_") is not None:
+        raise UnsupportedSqlError("Nested WITH clauses are not supported yet.")
+    if cte.args.get("joins"):
+        raise UnsupportedSqlError("CTE relation references with JOINs are not supported yet.")
+    if cte.args.get("distinct") is not None:
+        raise UnsupportedSqlError("CTE relation references with DISTINCT are not supported yet.")
+    for arg_name, clause_name in (
+        ("group", "GROUP BY"),
+        ("having", "HAVING"),
+        ("qualify", "QUALIFY"),
+        ("order", "ORDER BY"),
+        ("limit", "LIMIT"),
+    ):
+        if cte.args.get(arg_name) is not None:
+            raise UnsupportedSqlError(
+                f"CTE relation references with {clause_name} are not supported yet."
+            )
+
+    from_expr = cte.args.get("from_")
+    if from_expr is None or not isinstance(from_expr.this, exp.Table):
+        raise UnsupportedSqlError("CTE relation references must read from one direct table.")
+    if from_expr.this.name in ctes:
+        _validate_opaque_cte_relation(from_expr.this.name, ctes, seen | {cte_name})
+
+    for projection in cte.expressions:
+        _projection_to_column(projection)
+    _where_predicates(cte.args.get("where"))
 
 
 def _passthrough_cte_source(
@@ -373,12 +419,15 @@ def _group_by_columns(group: exp.Group | None) -> list[ColumnRef]:
     return columns
 
 
-def _join(node: exp.Join) -> Join:
+def _join(node: exp.Join, ctes: dict[str, exp.Select] | None = None) -> Join:
+    ctes = ctes or {}
     join_type = _join_type(node)
     if join_type is None:
         raise UnsupportedSqlError("Only INNER JOIN and LEFT JOIN are supported yet.")
     if not isinstance(node.this, exp.Table):
         raise UnsupportedSqlError("Only direct table JOIN targets are supported.")
+    if node.this.name in ctes:
+        _validate_opaque_cte_relation(node.this.name, ctes)
 
     condition = node.args.get("on")
     if not isinstance(condition, exp.EQ):
