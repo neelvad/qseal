@@ -49,7 +49,9 @@ def test_parse_select_with_opaque_projection_expressions() -> None:
         SELECT
           count_orders > 0 AS is_repeat_buyer,
           CASE WHEN is_repeat_buyer THEN 'returning' ELSE 'new' END AS customer_type,
-          COALESCE(type = 'jaffle', FALSE) AS is_food_item
+          COALESCE(type = 'jaffle', FALSE) AS is_food_item,
+          amount / 100 AS amount,
+          subtotal + tax AS total
         FROM customers
         """
     )
@@ -58,6 +60,8 @@ def test_parse_select_with_opaque_projection_expressions() -> None:
         "count_orders > 0 AS is_repeat_buyer",
         "CASE WHEN is_repeat_buyer THEN 'returning' ELSE 'new' END AS customer_type",
         "COALESCE(type = 'jaffle', FALSE) AS is_food_item",
+        "amount / 100 AS amount",
+        "subtotal + tax AS total",
     ]
 
 

@@ -218,7 +218,18 @@ def _is_supported_opaque_projection(node: exp.Expression) -> bool:
         return False
     return isinstance(
         node,
-        exp.EQ | exp.NEQ | exp.GT | exp.GTE | exp.LT | exp.LTE | exp.Case | exp.Coalesce,
+        exp.EQ
+        | exp.NEQ
+        | exp.GT
+        | exp.GTE
+        | exp.LT
+        | exp.LTE
+        | exp.Case
+        | exp.Coalesce
+        | exp.Add
+        | exp.Sub
+        | exp.Mul
+        | exp.Div,
     )
 
 

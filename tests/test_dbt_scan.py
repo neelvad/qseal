@@ -328,17 +328,16 @@ def test_scan_synthetic_duckdb_fixture_reports_raw_blockers() -> None:
     assert result.proven_finding_count() == 1
     assert result.status_counts() == {
         "PROVEN_EQUIVALENT": 1,
-        "UNSUPPORTED": 4,
+        "UNSUPPORTED": 3,
     }
     assert result.rule_counts() == {
-        "dbt_scan": 4,
+        "dbt_scan": 3,
         "remove_redundant_distinct": 1,
     }
     assert result.reason_counts() == {
         "CTE references in FROM are only supported for SELECT * pass-through CTEs.": 1,
         "GROUP BY is not supported yet.": 1,
         "Model contains unsupported dbt/Jinja block syntax; compile before scanning.": 1,
-        "Only direct columns, stars, and simple aliased scalar projections are supported.": 1,
     }
 
 
@@ -357,12 +356,11 @@ def test_scan_synthetic_duckdb_fixture_reports_compiled_blockers() -> None:
     assert result.proven_finding_count() == 1
     assert result.status_counts() == {
         "PROVEN_EQUIVALENT": 1,
-        "UNSUPPORTED": 4,
+        "UNSUPPORTED": 3,
     }
     assert result.reason_counts() == {
         "CTE references in FROM are only supported for SELECT * pass-through CTEs.": 1,
         "GROUP BY is not supported yet.": 2,
-        "Only direct columns, stars, and simple aliased scalar projections are supported.": 1,
     }
 
     dim_users = next(
