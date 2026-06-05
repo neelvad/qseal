@@ -162,3 +162,14 @@ def test_check_disproves_distinct_removal_without_unique_key() -> None:
     assert result.status == VerificationStatus.NOT_EQUIVALENT
     assert result.rule_name == "remove_redundant_distinct"
     assert result.counterexample is not None
+
+
+def test_check_does_not_prove_distinct_removal_with_group_by() -> None:
+    original = parse_select("SELECT DISTINCT status, COUNT(*) AS n FROM users GROUP BY status")
+    rewritten = parse_select("SELECT status, COUNT(*) AS n FROM users GROUP BY status")
+    constraints = ConstraintCatalog(tables={"users": TableConstraints(unique=[("status",)])})
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.UNKNOWN
+    assert result.rule_name == "remove_redundant_distinct"

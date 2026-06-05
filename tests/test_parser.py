@@ -70,6 +70,37 @@ def test_rejects_aggregate_projection_expression() -> None:
         parse_select("SELECT SUM(price) AS total FROM orders")
 
 
+def test_parse_group_by_with_aggregate_projection() -> None:
+    query = parse_select(
+        """
+        SELECT
+          customer_id,
+          COUNT(*) AS order_count,
+          SUM(CASE WHEN status = 'returned' THEN amount ELSE 0 END) AS returned_amount
+        FROM orders
+        GROUP BY customer_id
+        """
+    )
+
+    assert [projection.to_sql() for projection in query.projections] == [
+        "customer_id",
+        "COUNT(*) AS order_count",
+        "SUM(CASE WHEN status = 'returned' THEN amount ELSE 0 END) AS returned_amount",
+    ]
+    assert [column.to_sql() for column in query.group_by] == ["customer_id"]
+    assert query.to_sql() == (
+        "SELECT customer_id, COUNT(*) AS order_count, "
+        "SUM(CASE WHEN status = 'returned' THEN amount ELSE 0 END) AS returned_amount\n"
+        "FROM orders\n"
+        "GROUP BY customer_id;"
+    )
+
+
+def test_rejects_group_by_all() -> None:
+    with pytest.raises(UnsupportedSqlError, match="GROUP BY ALL"):
+        parse_select("SELECT customer_id, COUNT(*) AS order_count FROM orders GROUP BY ALL")
+
+
 def test_parse_select_with_null_predicates() -> None:
     query = parse_select(
         "SELECT user_id FROM users WHERE deleted_at IS NULL AND email IS NOT NULL"

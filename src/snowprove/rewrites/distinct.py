@@ -15,6 +15,14 @@ class RemoveRedundantDistinct:
                 reason="Query does not use DISTINCT.",
             )
 
+        if query.group_by:
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.NOT_APPLICABLE,
+                original_sql=query.raw_sql,
+                reason="DISTINCT removal with GROUP BY is not supported yet.",
+            )
+
         if query.joins:
             return RewriteSuggestion(
                 rule_name=self.rule_name,

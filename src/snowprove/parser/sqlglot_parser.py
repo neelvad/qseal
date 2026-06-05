@@ -37,7 +37,11 @@ def parse_select(sql: str) -> SelectQuery:
 
     source = _source(from_expr.this, ctes)
     joins = [_join(join) for join in parsed.args.get("joins") or []]
-    projections = [_projection_to_column(expr) for expr in parsed.expressions]
+    group_by = _group_by_columns(parsed.args.get("group"))
+    projections = [
+        _projection_to_column(expr, allow_aggregate=bool(group_by))
+        for expr in parsed.expressions
+    ]
     predicates = _where_predicates(parsed.args.get("where"))
 
     return SelectQuery(
@@ -45,6 +49,7 @@ def parse_select(sql: str) -> SelectQuery:
         joins=tuple(joins),
         projections=tuple(projections),
         predicates=tuple(predicates),
+        group_by=tuple(group_by),
         distinct=parsed.args.get("distinct") is not None,
         raw_sql=sql.strip(),
     )
@@ -87,7 +92,11 @@ def _parse_select_expression(
 
     source = _source(from_expr.this, ctes)
     joins = [_join(join) for join in parsed.args.get("joins") or []]
-    projections = [_projection_to_column(expr) for expr in parsed.expressions]
+    group_by = _group_by_columns(parsed.args.get("group"))
+    projections = [
+        _projection_to_column(expr, allow_aggregate=bool(group_by))
+        for expr in parsed.expressions
+    ]
     predicates = _where_predicates(parsed.args.get("where"))
 
     return SelectQuery(
@@ -95,6 +104,7 @@ def _parse_select_expression(
         joins=tuple(joins),
         projections=tuple(projections),
         predicates=tuple(predicates),
+        group_by=tuple(group_by),
         distinct=parsed.args.get("distinct") is not None,
         raw_sql=parsed.sql(dialect="snowflake"),
     )
@@ -290,7 +300,10 @@ def _project_with_alias(projection: exp.Expression, alias: str | None) -> exp.Ex
     return exp.alias_(expression.copy(), alias, copy=False)
 
 
-def _projection_to_column(node: exp.Expression) -> ColumnRef:
+def _projection_to_column(
+    node: exp.Expression,
+    allow_aggregate: bool = False,
+) -> ColumnRef:
     if isinstance(node, exp.Star):
         return ColumnRef(name="*", is_star=True)
     if isinstance(node, exp.Column):
@@ -303,7 +316,10 @@ def _projection_to_column(node: exp.Expression) -> ColumnRef:
             name=node.this.name,
             alias=node.alias,
         )
-    if isinstance(node, exp.Alias) and _is_supported_opaque_projection(node.this):
+    if isinstance(
+        node,
+        exp.Alias,
+    ) and _is_supported_opaque_projection(node.this, allow_aggregate=allow_aggregate):
         return ColumnRef(
             name=node.alias,
             alias=node.alias,
@@ -314,9 +330,14 @@ def _projection_to_column(node: exp.Expression) -> ColumnRef:
     )
 
 
-def _is_supported_opaque_projection(node: exp.Expression) -> bool:
-    if _contains_aggregate(node):
+def _is_supported_opaque_projection(
+    node: exp.Expression,
+    allow_aggregate: bool = False,
+) -> bool:
+    if _contains_aggregate(node) and not allow_aggregate:
         return False
+    if isinstance(node, exp.AggFunc):
+        return allow_aggregate
     return isinstance(
         node,
         exp.EQ
@@ -336,6 +357,20 @@ def _is_supported_opaque_projection(node: exp.Expression) -> bool:
 
 def _contains_aggregate(node: exp.Expression) -> bool:
     return any(isinstance(child, exp.AggFunc) for child in node.walk())
+
+
+def _group_by_columns(group: exp.Group | None) -> list[ColumnRef]:
+    if group is None:
+        return []
+    if group.args.get("all"):
+        raise UnsupportedSqlError("GROUP BY ALL is not supported yet.")
+
+    columns = []
+    for expression in group.expressions:
+        if not isinstance(expression, exp.Column):
+            raise UnsupportedSqlError("GROUP BY only supports direct column references.")
+        columns.append(ColumnRef(table=expression.table or None, name=expression.name))
+    return columns
 
 
 def _join(node: exp.Join) -> Join:
@@ -380,7 +415,6 @@ def _join_type(node: exp.Join) -> str | None:
 
 def _reject_unsupported_clauses(parsed: exp.Select) -> None:
     unsupported = {
-        "group": "GROUP BY",
         "having": "HAVING",
         "qualify": "QUALIFY",
         "order": "ORDER BY",

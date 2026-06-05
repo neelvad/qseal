@@ -125,6 +125,7 @@ class SelectQuery(BaseModel):
     joins: tuple[Join, ...] = ()
     projections: tuple[ColumnRef, ...]
     predicates: tuple[Predicate | ExistsPredicate, ...] = ()
+    group_by: tuple[ColumnRef, ...] = ()
     distinct: bool
     raw_sql: str
 
@@ -155,6 +156,9 @@ class SelectQuery(BaseModel):
         if self.predicates:
             predicates = " AND ".join(predicate.to_sql() for predicate in self.predicates)
             sql = f"{sql}\nWHERE {predicates}"
+        if self.group_by:
+            grouped = ", ".join(column.to_sql() for column in self.group_by)
+            sql = f"{sql}\nGROUP BY {grouped}"
         return f"{sql};"
 
     def without_distinct_sql(self) -> str:

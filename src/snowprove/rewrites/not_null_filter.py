@@ -20,6 +20,14 @@ class RemoveRedundantNotNullFilter:
                 reason="Query has no IS NOT NULL predicates.",
             )
 
+        if query.group_by:
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.NOT_APPLICABLE,
+                original_sql=query.raw_sql,
+                reason="NOT NULL filter removal with GROUP BY is not supported yet.",
+            )
+
         if not query.is_direct_table() or query.joins:
             return RewriteSuggestion(
                 rule_name=self.rule_name,

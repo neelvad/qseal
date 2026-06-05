@@ -18,6 +18,14 @@ class PredicatePushdown:
             )
 
         inner = query.subquery
+        if query.group_by or inner.group_by:
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.NOT_APPLICABLE,
+                original_sql=query.raw_sql,
+                reason="Predicate pushdown with GROUP BY is not supported yet.",
+            )
+
         if query.joins or inner.joins:
             return RewriteSuggestion(
                 rule_name=self.rule_name,

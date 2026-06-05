@@ -851,7 +851,7 @@ def test_dbt_scan_cli_runs_jaffle_like_fixture_json() -> None:
     assert payload["summary"]["proven_finding_count"] == 1
     assert payload["summary"]["status_counts"] == {
         "PROVEN_EQUIVALENT": 1,
-        "UNSUPPORTED": 2,
+        "UNSUPPORTED": 1,
     }
 
 

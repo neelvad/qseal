@@ -17,6 +17,14 @@ class RewriteJoinDistinctToExists:
                 reason="Query is not a SELECT DISTINCT with exactly one JOIN.",
             )
 
+        if query.group_by:
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.NOT_APPLICABLE,
+                original_sql=query.raw_sql,
+                reason="JOIN to EXISTS rewrite with GROUP BY is not supported yet.",
+            )
+
         join = query.joins[0]
         if join.join_type != "INNER":
             return RewriteSuggestion(
