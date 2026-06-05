@@ -12,7 +12,7 @@ PROJECT_SPECS=(
   "dbt-labs-jaffle-shop|https://github.com/dbt-labs/jaffle-shop.git|."
   "lightdash-jaffle-shop|https://github.com/lightdash/jaffle_shop.git|."
   "snowflake-dbt-demo-project|https://github.com/dpguthrie/snowflake-dbt-demo-project.git|."
-  "fivetran-snowflake-vhol|https://github.com/fivetran/snowflake_fivetran_vhol.git|."
+  "fivetran-dbt-shopify|https://github.com/fivetran/dbt_shopify.git|."
   "calogica-dbt-expectations-integration|https://github.com/calogica/dbt-expectations.git|integration_tests"
 )
 
@@ -82,7 +82,11 @@ run_raw_scan() {
     --all \
     --report-file "$report_dir/raw-report.json" \
     --write-patches "$report_dir/raw-patches" \
-    > "$report_dir/raw-output.txt"
+    > "$report_dir/raw-output.txt" 2>&1 || {
+      echo "Skipping remaining raw scan work for $name: snowprove raw scan failed." \
+        | tee "$report_dir/raw-skipped.txt"
+      return
+    }
 }
 
 run_compiled_scan() {
@@ -116,7 +120,11 @@ run_compiled_scan() {
     --all \
     --report-file "$report_dir/compiled-report.json" \
     --write-patches "$report_dir/compiled-patches" \
-    > "$report_dir/compiled-output.txt"
+    > "$report_dir/compiled-output.txt" 2>&1 || {
+      echo "Skipping compiled scan for $name: snowprove compiled scan failed." \
+        | tee "$report_dir/compiled-skipped.txt"
+      return
+    }
 }
 
 for spec in "${PROJECT_SPECS[@]}"; do

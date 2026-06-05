@@ -8,6 +8,7 @@ that reports are understandable.
 
 - `dbt-labs/jaffle-shop`
 - `Snowflake-Labs/getting-started-with-dbt-on-snowflake`
+- `fivetran/dbt_shopify`
 - one Jinja-heavy dbt project with macros, refs, sources, and compiled SQL
 
 ## Batch Evaluation Script
@@ -30,6 +31,10 @@ RUN_COMPILED=1 scripts/evaluate_real_projects.sh
 `RUN_COMPILED=1` requires a working `dbt` command and project profiles. If dbt
 dependencies or compilation fail, the script records a skip file and keeps the
 raw scan report.
+
+If an individual repository has an unexpected layout or Snowprove rejects it
+before producing a report, the script records `raw-skipped.txt` and continues to
+the next project.
 
 ## Static Raw SQL Scan
 
