@@ -122,18 +122,57 @@ def _resolve_top_level_cte_select(
     seen: frozenset[str] = frozenset(),
 ) -> exp.Select:
     from_expr = parsed.args.get("from_")
-    if (
-        not _select_is_star_passthrough(parsed, allow_with=True)
-        or from_expr is None
-        or not isinstance(from_expr.this, exp.Table)
-        or from_expr.this.name not in ctes
-    ):
+    if from_expr is None or not isinstance(from_expr.this, exp.Table):
+        return parsed
+    if from_expr.this.name not in ctes:
         return parsed
 
     cte_name = from_expr.this.name
     if cte_name in seen:
         raise UnsupportedSqlError(f"Recursive CTE reference is not supported: {cte_name}.")
-    return _resolve_top_level_cte_select(ctes[cte_name], ctes, seen | {cte_name})
+
+    if _select_is_star_passthrough(parsed, allow_with=True):
+        resolved = _resolve_top_level_cte_select(ctes[cte_name], ctes, seen | {cte_name})
+        if parsed.args.get("distinct") is not None:
+            resolved = resolved.copy()
+            resolved.set("distinct", parsed.args.get("distinct"))
+        return resolved
+
+    if _select_is_projection_passthrough(parsed):
+        return _inline_cte_projection(parsed, ctes[cte_name], ctes, seen | {cte_name})
+
+    return parsed
+
+
+def _inline_cte_projection(
+    outer: exp.Select,
+    cte: exp.Select,
+    ctes: dict[str, exp.Select],
+    seen: frozenset[str],
+) -> exp.Select:
+    resolved = _resolve_top_level_cte_select(cte, ctes, seen)
+    if not _select_is_simple_projection(resolved):
+        return outer
+
+    projection_map = _projection_map(resolved.expressions)
+    expressions = []
+    for projection in outer.expressions:
+        if isinstance(projection, exp.Star):
+            expressions.extend(expression.copy() for expression in resolved.expressions)
+            continue
+
+        projection_name = _projection_reference_name(projection)
+        if projection_name is None or projection_name not in projection_map:
+            return outer
+
+        inner_projection = projection_map[projection_name]
+        outer_alias = projection.alias if isinstance(projection, exp.Alias) else None
+        expressions.append(_project_with_alias(inner_projection, outer_alias))
+
+    inlined = resolved.copy()
+    inlined.set("expressions", expressions)
+    inlined.set("distinct", outer.args.get("distinct"))
+    return inlined
 
 
 def _cte_source(node: exp.Table, ctes: dict[str, exp.Select]) -> dict[str, object]:
@@ -187,6 +226,68 @@ def _select_is_star_passthrough(parsed: exp.Select, allow_with: bool = False) ->
         if parsed.args.get(arg_name) is not None:
             return False
     return len(parsed.expressions) == 1 and isinstance(parsed.expressions[0], exp.Star)
+
+
+def _select_is_projection_passthrough(parsed: exp.Select) -> bool:
+    if parsed.args.get("joins"):
+        return False
+    if parsed.args.get("where") is not None:
+        return False
+    for arg_name in ("group", "having", "qualify", "order", "limit"):
+        if parsed.args.get(arg_name) is not None:
+            return False
+    return all(
+        _projection_reference_name(projection) is not None
+        for projection in parsed.expressions
+    )
+
+
+def _select_is_simple_projection(parsed: exp.Select) -> bool:
+    if parsed.args.get("with_") is not None:
+        return False
+    if parsed.args.get("joins"):
+        return False
+    if parsed.args.get("where") is not None:
+        return False
+    if parsed.args.get("distinct") is not None:
+        return False
+    for arg_name in ("group", "having", "qualify", "order", "limit"):
+        if parsed.args.get(arg_name) is not None:
+            return False
+    return all(_projection_output_name(projection) is not None for projection in parsed.expressions)
+
+
+def _projection_map(projections: list[exp.Expression]) -> dict[str, exp.Expression]:
+    return {
+        name: projection
+        for projection in projections
+        if (name := _projection_output_name(projection)) is not None
+    }
+
+
+def _projection_output_name(projection: exp.Expression) -> str | None:
+    if isinstance(projection, exp.Alias):
+        return projection.alias
+    if isinstance(projection, exp.Column):
+        return projection.name
+    return None
+
+
+def _projection_reference_name(projection: exp.Expression) -> str | None:
+    if isinstance(projection, exp.Star):
+        return "*"
+    if isinstance(projection, exp.Column):
+        return projection.name
+    if isinstance(projection, exp.Alias) and isinstance(projection.this, exp.Column):
+        return projection.this.name
+    return None
+
+
+def _project_with_alias(projection: exp.Expression, alias: str | None) -> exp.Expression:
+    if alias is None:
+        return projection.copy()
+    expression = projection.this if isinstance(projection, exp.Alias) else projection
+    return exp.alias_(expression.copy(), alias, copy=False)
 
 
 def _projection_to_column(node: exp.Expression) -> ColumnRef:

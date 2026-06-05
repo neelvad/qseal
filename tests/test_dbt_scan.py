@@ -308,10 +308,9 @@ def test_scan_jaffle_like_fixture_reports_stable_counts() -> None:
     assert result.proven_finding_count() == 1
     assert result.status_counts() == {
         "PROVEN_EQUIVALENT": 1,
-        "UNSUPPORTED": 2,
+        "UNSUPPORTED": 1,
     }
     assert result.reason_counts() == {
-        "CTE references in FROM are only supported for SELECT * pass-through CTEs.": 1,
         (
             "Model contains unsupported dbt/Jinja expression 'cents_to_dollars'; "
             "compile before scanning."

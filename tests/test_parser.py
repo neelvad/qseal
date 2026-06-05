@@ -139,16 +139,36 @@ def test_parses_simple_cte_chain() -> None:
     ]
 
 
-def test_rejects_complex_cte_source_reference() -> None:
-    with pytest.raises(UnsupportedSqlError, match="pass-through CTEs"):
-        parse_select(
-            """
-            WITH source AS (
-              SELECT id AS user_id FROM users
-            )
-            SELECT user_id FROM source
-            """
+def test_parses_cte_projection_passthrough() -> None:
+    query = parse_select(
+        """
+        WITH source AS (
+          SELECT id AS user_id, status FROM users
         )
+        SELECT user_id FROM source
+        """
+    )
+
+    assert query.table == "users"
+    assert [projection.to_sql() for projection in query.projections] == [
+        "id AS user_id",
+    ]
+
+
+def test_parses_cte_projection_passthrough_with_outer_alias() -> None:
+    query = parse_select(
+        """
+        WITH source AS (
+          SELECT id AS user_id FROM users
+        )
+        SELECT user_id AS id FROM source
+        """
+    )
+
+    assert query.table == "users"
+    assert [projection.to_sql() for projection in query.projections] == [
+        "id AS id",
+    ]
 
 
 def test_parse_simple_left_join() -> None:
