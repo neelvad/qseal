@@ -10,6 +10,27 @@ that reports are understandable.
 - `Snowflake-Labs/getting-started-with-dbt-on-snowflake`
 - one Jinja-heavy dbt project with macros, refs, sources, and compiled SQL
 
+## Batch Evaluation Script
+
+Snowprove includes a helper that clones a curated set of public dbt projects
+into `/tmp` and writes reports under `snowprove-runs/`:
+
+```bash
+scripts/evaluate_real_projects.sh
+```
+
+Useful overrides:
+
+```bash
+REFRESH=1 scripts/evaluate_real_projects.sh
+REPORT_ROOT="$PWD/snowprove-runs/real-projects/manual" scripts/evaluate_real_projects.sh
+RUN_COMPILED=1 scripts/evaluate_real_projects.sh
+```
+
+`RUN_COMPILED=1` requires a working `dbt` command and project profiles. If dbt
+dependencies or compilation fail, the script records a skip file and keeps the
+raw scan report.
+
 ## Static Raw SQL Scan
 
 ```bash
