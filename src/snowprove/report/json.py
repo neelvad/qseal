@@ -39,7 +39,9 @@ def render_verification_json(result: VerificationResult) -> str:
 
 def render_candidate_verifications_json(
     results: Sequence[VerificationResult],
+    metadata_by_path: dict[str, dict[str, Any]] | None = None,
 ) -> str:
+    metadata_by_path = metadata_by_path or {}
     return _dumps(
         {
             "schema_version": 1,
@@ -53,6 +55,9 @@ def render_candidate_verifications_json(
                 {
                     **result.model_dump(mode="json"),
                     "proven": result.status == VerificationStatus.PROVEN_EQUIVALENT,
+                    "candidate_metadata": metadata_by_path.get(
+                        result.inputs.get("rewritten_path", "")
+                    ),
                 }
                 for result in results
             ],

@@ -748,6 +748,66 @@ tables:
     assert payload["proven_count"] == 1
     assert payload["results"][0]["proven"] is True
     assert payload["results"][0]["inputs"]["rewritten_path"] == str(candidate)
+    assert payload["results"][0]["candidate_metadata"] is None
+
+
+def test_candidates_check_cli_can_report_candidate_bundle_metadata(tmp_path) -> None:
+    original = tmp_path / "original.sql"
+    candidates_dir = tmp_path / "candidates"
+    candidate = candidates_dir / "001_manual.sql"
+    metadata = candidates_dir / "metadata.json"
+    schema = tmp_path / "schema.yml"
+    candidates_dir.mkdir()
+    original.write_text("SELECT DISTINCT user_id FROM users")
+    candidate.write_text("SELECT user_id FROM users")
+    metadata.write_text(
+        """
+{
+  "schema_version": 1,
+  "artifact_type": "candidate_bundle",
+  "source": "manual",
+  "candidates": [
+    {
+      "path": "001_manual.sql",
+      "source": "manual",
+      "description": "Remove DISTINCT manually."
+    }
+  ]
+}
+"""
+    )
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "check",
+            str(original),
+            "--candidates-dir",
+            str(candidates_dir),
+            "--schema",
+            str(schema),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "candidate_verifications"
+    assert payload["results"][0]["proven"] is True
+    assert payload["results"][0]["candidate_metadata"] == {
+        "source": "manual",
+        "description": "Remove DISTINCT manually.",
+    }
 
 
 def test_candidates_check_cli_can_fail_on_unproven(tmp_path) -> None:

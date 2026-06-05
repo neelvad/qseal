@@ -50,6 +50,7 @@ uv run snowprove candidates check original.sql candidates/*.sql --schema schema.
 uv run snowprove candidates run original.sql --schema schema.yml --out candidates/ --format json
 uv run snowprove candidates run original.sql --schema schema.yml --out candidates/ --fail-on unproven
 uv run snowprove candidates run examples/candidates/original.sql --schema examples/candidates/schema.yml --out /tmp/snowprove-candidates --report-file /tmp/snowprove-candidate-run.json
+uv run snowprove candidates check examples/candidates/original.sql --schema examples/candidates/schema.yml --candidates-dir examples/candidates/manual --format json
 uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
 uv run snowprove dbt scan examples/dbt_project
 ```
@@ -71,6 +72,31 @@ text output on stdout. The default verifier backend is `builtin`, which wraps
 Snowprove's internal rule-based verifier. `sqlsolver` can call an external
 SQLSolver command and maps `EQ`, `NEQ`, `UNKNOWN`, and `TIMEOUT` into Snowprove
 statuses. `external` remains a generic stub for future solver integrations.
+
+External generators can write candidate SQL files into a directory and
+optionally include `metadata.json`. Metadata is only report context; every SQL
+file is still verified as untrusted input:
+
+```text
+candidates/
+  001_manual_distinct_removed.sql
+  metadata.json
+```
+
+```json
+{
+  "schema_version": 1,
+  "artifact_type": "candidate_bundle",
+  "source": "manual",
+  "candidates": [
+    {
+      "path": "001_manual_distinct_removed.sql",
+      "source": "manual",
+      "description": "Remove DISTINCT from a projection with a trusted unique key."
+    }
+  ]
+}
+```
 
 Solver adapter compatibility cases live under
 `tests/fixtures/solver_compat/`. They define the small query-pair suite that new

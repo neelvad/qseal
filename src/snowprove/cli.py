@@ -3,6 +3,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
+from snowprove.candidates.bundle import load_candidate_metadata
 from snowprove.constraints.loader import load_constraint_catalog
 from snowprove.dbt.project import DbtProjectDiscoveryError, discover_compiled_sql_path
 from snowprove.dbt.scan import scan_dbt_project
@@ -706,9 +707,15 @@ def candidates_check(
         solver_command=solver_command,
         timeout_seconds=timeout_seconds,
     )
+    metadata_by_path = load_candidate_metadata(candidates_dir)
 
     if output_format == "json":
-        click.echo(render_candidate_verifications_json(results))
+        click.echo(
+            render_candidate_verifications_json(
+                results,
+                metadata_by_path=metadata_by_path,
+            )
+        )
     else:
         console.print(render_candidate_verifications_report(results))
 

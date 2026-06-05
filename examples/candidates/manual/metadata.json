@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "artifact_type": "candidate_bundle",
+  "source": "manual",
+  "original_path": "../original.sql",
+  "candidates": [
+    {
+      "path": "001_manual_distinct_removed.sql",
+      "source": "manual",
+      "description": "Remove DISTINCT from a projection with a trusted unique key."
+    }
+  ]
+}
