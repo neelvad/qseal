@@ -104,6 +104,15 @@ Rewrite rules:
 - `predicate_pushdown`
 - `rewrite_join_distinct_to_exists`
 
+Structured rewrite actions:
+
+- every rule exposes `matches()` and `apply_match()`
+- `RewriteMatch` records stable rule-local IDs, target kinds/indexes,
+  descriptions, and metadata
+- registry helpers enumerate and dispatch the finite action space
+- redundant non-null filters expose one action per predicate
+- legacy `apply()` behavior remains available to current CLI workflows
+
 dbt workflows:
 
 - scans `models/**/*.sql`
@@ -254,14 +263,14 @@ Completed:
    plans, timeouts, fixed threads, full materialization, and version metadata.
 3. Seeded DuckDB fixtures cover table size, selectivity, join cardinality,
    uniqueness, nullability, skew, and duplicates.
+4. Rewrite rules expose structured matches and applications as a finite action
+   space while preserving legacy CLI behavior.
 
 Next:
 
-1. Refactor rules to expose structured matches and applications so they form a
-   finite action space.
-2. Add a framework-neutral `reset()` / `step()` environment contract.
-3. Cache solver and benchmark results and emit trajectory artifacts.
-4. Establish fixed-order, random, greedy, beam-search, and short exhaustive
+1. Add a framework-neutral `reset()` / `step()` environment contract.
+2. Cache solver and benchmark results and emit trajectory artifacts.
+3. Establish fixed-order, random, greedy, beam-search, and short exhaustive
    baselines before training a learned policy.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least

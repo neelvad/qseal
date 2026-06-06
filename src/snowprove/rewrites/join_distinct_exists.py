@@ -1,12 +1,48 @@
 from snowprove.constraints.model import ConstraintCatalog
 from snowprove.ir.model import ExistsPredicate, InPredicate, Join, Predicate, SelectQuery
-from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
+from snowprove.rewrites.base import RewriteMatch, RewriteSuggestion, VerificationStatus
 
 
 class RewriteJoinDistinctToExists:
     rule_name = "rewrite_join_distinct_to_exists"
 
+    def matches(
+        self,
+        query: SelectQuery,
+        constraints: ConstraintCatalog,
+    ) -> tuple[RewriteMatch, ...]:
+        suggestion = self._suggest(query, constraints)
+        if suggestion.status != VerificationStatus.PROVEN_EQUIVALENT:
+            return ()
+        join = query.joins[0]
+        return (
+            RewriteMatch(
+                rule_name=self.rule_name,
+                match_id="join:0",
+                target_kind="join",
+                target_index=0,
+                description=f"Replace INNER JOIN to {join.relation_name()} with EXISTS.",
+                metadata={"relation": join.relation_name()},
+            ),
+        )
+
+    def apply_match(
+        self,
+        query: SelectQuery,
+        constraints: ConstraintCatalog,
+        match: RewriteMatch,
+    ) -> RewriteSuggestion:
+        if match.rule_name != self.rule_name or match.match_id != "join:0":
+            raise ValueError(f"Invalid match for {self.rule_name}: {match.match_id}.")
+        suggestion = self._suggest(query, constraints)
+        if suggestion.status != VerificationStatus.PROVEN_EQUIVALENT:
+            raise ValueError(f"Match is no longer applicable: {match.match_id}.")
+        return suggestion
+
     def apply(self, query: SelectQuery, constraints: ConstraintCatalog) -> RewriteSuggestion:
+        return self._suggest(query, constraints)
+
+    def _suggest(self, query: SelectQuery, constraints: ConstraintCatalog) -> RewriteSuggestion:
         del constraints
 
         if not query.distinct or len(query.joins) != 1:

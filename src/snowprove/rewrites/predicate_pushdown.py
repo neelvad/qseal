@@ -1,12 +1,47 @@
 from snowprove.constraints.model import ConstraintCatalog
 from snowprove.ir.model import ColumnRef, Predicate, SelectQuery
-from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
+from snowprove.rewrites.base import RewriteMatch, RewriteSuggestion, VerificationStatus
 
 
 class PredicatePushdown:
     rule_name = "predicate_pushdown"
 
+    def matches(
+        self,
+        query: SelectQuery,
+        constraints: ConstraintCatalog,
+    ) -> tuple[RewriteMatch, ...]:
+        suggestion = self._suggest(query, constraints)
+        if suggestion.status != VerificationStatus.PROVEN_EQUIVALENT:
+            return ()
+        return (
+            RewriteMatch(
+                rule_name=self.rule_name,
+                match_id="subquery:0",
+                target_kind="subquery",
+                target_index=0,
+                description="Push outer predicates through the projection subquery.",
+                metadata={"predicate_count": len(query.predicates)},
+            ),
+        )
+
+    def apply_match(
+        self,
+        query: SelectQuery,
+        constraints: ConstraintCatalog,
+        match: RewriteMatch,
+    ) -> RewriteSuggestion:
+        if match.rule_name != self.rule_name or match.match_id != "subquery:0":
+            raise ValueError(f"Invalid match for {self.rule_name}: {match.match_id}.")
+        suggestion = self._suggest(query, constraints)
+        if suggestion.status != VerificationStatus.PROVEN_EQUIVALENT:
+            raise ValueError(f"Match is no longer applicable: {match.match_id}.")
+        return suggestion
+
     def apply(self, query: SelectQuery, constraints: ConstraintCatalog) -> RewriteSuggestion:
+        return self._suggest(query, constraints)
+
+    def _suggest(self, query: SelectQuery, constraints: ConstraintCatalog) -> RewriteSuggestion:
         del constraints
 
         if query.subquery is None or not query.predicates:
@@ -81,6 +116,8 @@ class PredicatePushdown:
 
         pushed = SelectQuery(
             table=inner.table,
+            table_sql=inner.table_sql,
+            table_alias=inner.table_alias,
             projections=tuple(column.unqualified() for column in query.projections),
             predicates=(
                 *inner.predicates,
@@ -88,6 +125,7 @@ class PredicatePushdown:
             ),
             distinct=False,
             raw_sql=query.raw_sql,
+            dialect=query.dialect,
         )
 
         return RewriteSuggestion(

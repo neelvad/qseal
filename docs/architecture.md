@@ -31,6 +31,19 @@ SQL text
 `rewrites/registry.py` owns the default rule order used by `snowprove suggest`.
 Rules can be added without changing CLI control flow.
 
+Every rule exposes two structured-action methods:
+
+```python
+matches = rule.matches(query, constraints)
+suggestion = rule.apply_match(query, constraints, matches[0])
+```
+
+`RewriteMatch` contains a stable rule-local match ID, target kind and index,
+description, and structured metadata. `available_rewrite_matches()` enumerates
+the finite action space in registry order, and `apply_rewrite_match()` dispatches
+one selected action. The older `apply()` method remains the CLI compatibility
+surface and retains each rule's existing aggregate behavior.
+
 ## Dialect Contract
 
 Snowflake is the compatibility default. CLI entry points accept an explicit
