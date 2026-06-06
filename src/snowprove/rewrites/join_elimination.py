@@ -15,12 +15,12 @@ class RemoveUnusedLeftJoin:
                 reason="Query does not have exactly one JOIN.",
             )
 
-        if query.group_by:
+        if query.group_by or query.having:
             return RewriteSuggestion(
                 rule_name=self.rule_name,
                 status=VerificationStatus.NOT_APPLICABLE,
                 original_sql=query.raw_sql,
-                reason="LEFT JOIN elimination with GROUP BY is not supported yet.",
+                reason="LEFT JOIN elimination with GROUP BY or HAVING is not supported yet.",
             )
 
         join = query.joins[0]

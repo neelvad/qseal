@@ -109,6 +109,7 @@ def _same_normalized_query(left: SelectQuery, right: SelectQuery) -> bool:
         and left.projections == right.projections
         and left.predicates == right.predicates
         and left.group_by == right.group_by
+        and left.having == right.having
         and left.distinct == right.distinct
     )
 
@@ -134,6 +135,7 @@ def _is_distinct_removal(original: SelectQuery, rewritten: SelectQuery) -> bool:
         and original.projections == rewritten.projections
         and original.predicates == rewritten.predicates
         and original.group_by == rewritten.group_by
+        and original.having == rewritten.having
     )
 
 
@@ -144,13 +146,13 @@ def _check_distinct_removal(
 ) -> VerificationResult:
     projected_columns = tuple(column.name for column in original.projections)
     table_name = original.table_name()
-    if original.group_by:
+    if original.group_by or original.having:
         return VerificationResult(
             status=VerificationStatus.UNKNOWN,
             original_sql=original.raw_sql,
             rewritten_sql=rewritten.raw_sql,
             rule_name="remove_redundant_distinct",
-            reason="DISTINCT removal with GROUP BY is not supported yet.",
+            reason="DISTINCT removal with GROUP BY or HAVING is not supported yet.",
         )
 
     if table_name is None:

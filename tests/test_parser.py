@@ -96,6 +96,33 @@ def test_parse_group_by_with_aggregate_projection() -> None:
     )
 
 
+def test_parse_group_by_with_having() -> None:
+    query = parse_select(
+        """
+        SELECT customer_id, COUNT(*) AS order_count
+        FROM orders
+        GROUP BY customer_id
+        HAVING COUNT(*) > 1 AND order_count >= 2
+        """
+    )
+
+    assert [predicate.to_sql() for predicate in query.having] == [
+        "COUNT(*) > 1",
+        "order_count >= 2",
+    ]
+    assert query.to_sql() == (
+        "SELECT customer_id, COUNT(*) AS order_count\n"
+        "FROM orders\n"
+        "GROUP BY customer_id\n"
+        "HAVING COUNT(*) > 1 AND order_count >= 2;"
+    )
+
+
+def test_rejects_having_without_group_by() -> None:
+    with pytest.raises(UnsupportedSqlError, match="HAVING without GROUP BY"):
+        parse_select("SELECT COUNT(*) AS order_count FROM orders HAVING COUNT(*) > 1")
+
+
 def test_rejects_group_by_all() -> None:
     with pytest.raises(UnsupportedSqlError, match="GROUP BY ALL"):
         parse_select("SELECT customer_id, COUNT(*) AS order_count FROM orders GROUP BY ALL")

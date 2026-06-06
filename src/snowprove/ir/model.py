@@ -63,6 +63,15 @@ class Predicate(BaseModel):
         return Predicate(left=self.left.unqualified(), operator=self.operator, right=self.right)
 
 
+class HavingPredicate(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    expression_sql: str
+
+    def to_sql(self) -> str:
+        return self.expression_sql
+
+
 class JoinCondition(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -126,6 +135,7 @@ class SelectQuery(BaseModel):
     projections: tuple[ColumnRef, ...]
     predicates: tuple[Predicate | ExistsPredicate, ...] = ()
     group_by: tuple[ColumnRef, ...] = ()
+    having: tuple[HavingPredicate, ...] = ()
     distinct: bool
     raw_sql: str
 
@@ -159,6 +169,9 @@ class SelectQuery(BaseModel):
         if self.group_by:
             grouped = ", ".join(column.to_sql() for column in self.group_by)
             sql = f"{sql}\nGROUP BY {grouped}"
+        if self.having:
+            having = " AND ".join(predicate.to_sql() for predicate in self.having)
+            sql = f"{sql}\nHAVING {having}"
         return f"{sql};"
 
     def without_distinct_sql(self) -> str:

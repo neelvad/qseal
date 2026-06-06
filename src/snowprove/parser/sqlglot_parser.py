@@ -5,6 +5,7 @@ from sqlglot.errors import ParseError
 from snowprove.ir.model import (
     ColumnRef,
     ExistsPredicate,
+    HavingPredicate,
     Join,
     JoinCondition,
     LiteralValue,
@@ -38,6 +39,7 @@ def parse_select(sql: str) -> SelectQuery:
     source = _source(from_expr.this, ctes)
     joins = [_join(join, ctes) for join in parsed.args.get("joins") or []]
     group_by = _group_by_columns(parsed.args.get("group"))
+    having = _having_predicates(parsed.args.get("having"), has_group_by=bool(group_by))
     projections = [
         _projection_to_column(expr, allow_aggregate=bool(group_by))
         for expr in parsed.expressions
@@ -50,6 +52,7 @@ def parse_select(sql: str) -> SelectQuery:
         projections=tuple(projections),
         predicates=tuple(predicates),
         group_by=tuple(group_by),
+        having=tuple(having),
         distinct=parsed.args.get("distinct") is not None,
         raw_sql=sql.strip(),
     )
@@ -93,6 +96,7 @@ def _parse_select_expression(
     source = _source(from_expr.this, ctes)
     joins = [_join(join, ctes) for join in parsed.args.get("joins") or []]
     group_by = _group_by_columns(parsed.args.get("group"))
+    having = _having_predicates(parsed.args.get("having"), has_group_by=bool(group_by))
     projections = [
         _projection_to_column(expr, allow_aggregate=bool(group_by))
         for expr in parsed.expressions
@@ -105,6 +109,7 @@ def _parse_select_expression(
         projections=tuple(projections),
         predicates=tuple(predicates),
         group_by=tuple(group_by),
+        having=tuple(having),
         distinct=parsed.args.get("distinct") is not None,
         raw_sql=parsed.sql(dialect="snowflake"),
     )
@@ -219,7 +224,6 @@ def _validate_opaque_cte_relation(
         raise UnsupportedSqlError("CTE relation references with DISTINCT are not supported yet.")
     for arg_name, clause_name in (
         ("group", "GROUP BY"),
-        ("having", "HAVING"),
         ("qualify", "QUALIFY"),
         ("order", "ORDER BY"),
         ("limit", "LIMIT"),
@@ -419,6 +423,49 @@ def _group_by_columns(group: exp.Group | None) -> list[ColumnRef]:
     return columns
 
 
+def _having_predicates(
+    having: exp.Having | None,
+    has_group_by: bool,
+) -> list[HavingPredicate]:
+    if having is None:
+        return []
+    if not has_group_by:
+        raise UnsupportedSqlError("HAVING without GROUP BY is not supported yet.")
+    return [
+        HavingPredicate(expression_sql=expression.sql(dialect="snowflake"))
+        for expression in _having_expression(having.this)
+    ]
+
+
+def _having_expression(node: exp.Expression) -> list[exp.Expression]:
+    if isinstance(node, exp.And):
+        return [
+            *_having_expression(node.this),
+            *_having_expression(node.expression),
+        ]
+    if isinstance(node, exp.EQ | exp.NEQ | exp.GT | exp.GTE | exp.LT | exp.LTE):
+        _validate_having_comparison(node)
+        return [node]
+    raise UnsupportedSqlError(
+        "Only ANDed aggregate or column comparisons are supported in HAVING."
+    )
+
+
+def _validate_having_comparison(node: exp.Expression) -> None:
+    if not _is_supported_having_side(node.this):
+        raise UnsupportedSqlError(
+            "HAVING comparisons must compare an aggregate or column to a literal."
+        )
+    if not isinstance(node.expression, exp.Literal):
+        raise UnsupportedSqlError(
+            "HAVING comparisons must compare an aggregate or column to a literal."
+        )
+
+
+def _is_supported_having_side(node: exp.Expression) -> bool:
+    return isinstance(node, exp.AggFunc | exp.Column)
+
+
 def _join(node: exp.Join, ctes: dict[str, exp.Select] | None = None) -> Join:
     ctes = ctes or {}
     join_type = _join_type(node)
@@ -464,7 +511,6 @@ def _join_type(node: exp.Join) -> str | None:
 
 def _reject_unsupported_clauses(parsed: exp.Select) -> None:
     unsupported = {
-        "having": "HAVING",
         "qualify": "QUALIFY",
         "order": "ORDER BY",
         "limit": "LIMIT",

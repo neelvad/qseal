@@ -173,3 +173,16 @@ def test_check_does_not_prove_distinct_removal_with_group_by() -> None:
 
     assert result.status == VerificationStatus.UNKNOWN
     assert result.rule_name == "remove_redundant_distinct"
+
+
+def test_check_compares_having_predicates_for_identity() -> None:
+    original = parse_select(
+        "SELECT status, COUNT(*) AS n FROM users GROUP BY status HAVING COUNT(*) > 1"
+    )
+    rewritten = parse_select(
+        "SELECT status, COUNT(*) AS n FROM users GROUP BY status HAVING COUNT(*) > 2"
+    )
+
+    result = check_equivalence(original, rewritten, ConstraintCatalog())
+
+    assert result.status == VerificationStatus.UNKNOWN
