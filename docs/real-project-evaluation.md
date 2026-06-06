@@ -41,6 +41,19 @@ DuckDB projects use a generated temporary `profiles.yml` under the report
 directory and default to `uvx --from dbt-duckdb dbt`, so they can compile
 without cloud credentials or a global dbt-duckdb installation.
 
+Compare one or more completed run directories:
+
+```bash
+uv run scripts/compare_real_project_reports.py \
+  --scan-kind compiled \
+  snowprove-runs/real-projects/RUN_A \
+  snowprove-runs/real-projects/RUN_B
+
+uv run scripts/compare_real_project_reports.py \
+  --format json \
+  snowprove-runs/real-projects/RUN_A
+```
+
 If an individual repository has an unexpected layout or Snowprove rejects it
 before producing a report, the script records `raw-skipped.txt` and continues to
 the next project.
