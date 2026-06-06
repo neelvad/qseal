@@ -27,12 +27,30 @@ Useful overrides:
 SQLSOLVER_DIR=/path/to/SQLSolver scripts/run_sqlsolver_container_smoke.sh
 CASE_NAME=redundant_distinct scripts/run_sqlsolver_container_smoke.sh
 RUN_CANDIDATE_SMOKE=0 scripts/run_sqlsolver_container_smoke.sh
+RUN_FIXTURE_SMOKE=0 scripts/run_sqlsolver_container_smoke.sh
 CANDIDATE_CASE_NAME=redundant_distinct scripts/run_sqlsolver_container_smoke.sh
 COLIMA_CPUS=2 COLIMA_MEMORY=4 scripts/run_sqlsolver_container_smoke.sh
 STOP_COLIMA=0 scripts/run_sqlsolver_container_smoke.sh
 REBUILD_IMAGE=1 scripts/run_sqlsolver_container_smoke.sh
 REPORT_DIR="$PWD/snowprove-runs/manual" scripts/run_sqlsolver_container_smoke.sh
 ```
+
+To check an arbitrary SQL pair, place the SQL and schema files inside the
+Snowprove repository and run:
+
+```bash
+RUN_FIXTURE_SMOKE=0 \
+RUN_CANDIDATE_SMOKE=0 \
+PAIR_ORIGINAL_PATH=snowprove-runs/manual/original.sql \
+PAIR_REWRITTEN_PATH=snowprove-runs/manual/rewritten.sql \
+PAIR_SCHEMA_PATH=snowprove-runs/manual/schema.yml \
+REPORT_DIR="$PWD/snowprove-runs/manual/sqlsolver" \
+scripts/run_sqlsolver_container_smoke.sh
+```
+
+The result is written to `pair.verification.json`. Pair checks do not fail the
+wrapper for `UNKNOWN`, `UNSUPPORTED`, or `NOT_EQUIVALENT`; the JSON status is
+the compatibility result to inspect.
 
 The first run builds `snowprove-sqlsolver-smoke:latest`, which caches Java,
 `file`, curl, and `uv`. Later runs reuse that image, so they skip `apt-get` and

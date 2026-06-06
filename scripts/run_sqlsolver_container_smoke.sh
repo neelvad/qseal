@@ -9,8 +9,13 @@ COLIMA_CPUS="${COLIMA_CPUS:-2}"
 COLIMA_MEMORY="${COLIMA_MEMORY:-4}"
 STOP_COLIMA="${STOP_COLIMA:-1}"
 CASE_NAME="${CASE_NAME:-all}"
+RUN_FIXTURE_SMOKE="${RUN_FIXTURE_SMOKE:-1}"
 RUN_CANDIDATE_SMOKE="${RUN_CANDIDATE_SMOKE:-1}"
 CANDIDATE_CASE_NAME="${CANDIDATE_CASE_NAME:-redundant_distinct}"
+PAIR_ORIGINAL_PATH="${PAIR_ORIGINAL_PATH:-}"
+PAIR_REWRITTEN_PATH="${PAIR_REWRITTEN_PATH:-}"
+PAIR_SCHEMA_PATH="${PAIR_SCHEMA_PATH:-}"
+PAIR_SCHEMA_FORMAT="${PAIR_SCHEMA_FORMAT:-auto}"
 SMOKE_IMAGE="${SMOKE_IMAGE:-snowprove-sqlsolver-smoke:latest}"
 REBUILD_IMAGE="${REBUILD_IMAGE:-0}"
 REPORT_DIR="${REPORT_DIR:-$SNOWPROVE_DIR/snowprove-runs/sqlsolver-smoke/$(date -u +%Y%m%dT%H%M%SZ)}"
@@ -49,6 +54,52 @@ case "$REPORT_DIR" in
     ;;
 esac
 
+repo_container_path() {
+  local path="$1"
+  local absolute_path
+
+  if [[ ! -f "$path" && ! -f "$SNOWPROVE_DIR/$path" ]]; then
+    echo "Pair input not found: $path" >&2
+    exit 2
+  fi
+
+  if [[ "$path" != /* ]]; then
+    path="$SNOWPROVE_DIR/$path"
+  fi
+  absolute_path="$(cd "$(dirname "$path")" && pwd -P)/$(basename "$path")"
+
+  case "$absolute_path" in
+    "$SNOWPROVE_DIR"/*) printf '/snowprove/%s\n' "${absolute_path#"$SNOWPROVE_DIR"/}" ;;
+    *)
+      echo "Pair input must be inside the Snowprove repo: $absolute_path" >&2
+      exit 2
+      ;;
+  esac
+}
+
+pair_paths=("$PAIR_ORIGINAL_PATH" "$PAIR_REWRITTEN_PATH" "$PAIR_SCHEMA_PATH")
+pair_path_count=0
+for path in "${pair_paths[@]}"; do
+  if [[ -n "$path" ]]; then
+    pair_path_count=$((pair_path_count + 1))
+  fi
+done
+
+if [[ "$pair_path_count" != "0" && "$pair_path_count" != "3" ]]; then
+  echo "Set PAIR_ORIGINAL_PATH, PAIR_REWRITTEN_PATH, and PAIR_SCHEMA_PATH together." >&2
+  exit 2
+fi
+
+if [[ "$pair_path_count" == "3" ]]; then
+  CONTAINER_PAIR_ORIGINAL_PATH="$(repo_container_path "$PAIR_ORIGINAL_PATH")"
+  CONTAINER_PAIR_REWRITTEN_PATH="$(repo_container_path "$PAIR_REWRITTEN_PATH")"
+  CONTAINER_PAIR_SCHEMA_PATH="$(repo_container_path "$PAIR_SCHEMA_PATH")"
+else
+  CONTAINER_PAIR_ORIGINAL_PATH=""
+  CONTAINER_PAIR_REWRITTEN_PATH=""
+  CONTAINER_PAIR_SCHEMA_PATH=""
+fi
+
 docker_tty_args=(-i)
 if [[ -t 0 && -t 1 ]]; then
   docker_tty_args=(-it)
@@ -79,8 +130,13 @@ mkdir -p "$REPORT_DIR"
 echo "Reports will be written to: $REPORT_DIR"
 docker --context "colima-$COLIMA_PROFILE" run --rm "${docker_tty_args[@]}" \
   -e CASE_NAME="$CASE_NAME" \
+  -e RUN_FIXTURE_SMOKE="$RUN_FIXTURE_SMOKE" \
   -e RUN_CANDIDATE_SMOKE="$RUN_CANDIDATE_SMOKE" \
   -e CANDIDATE_CASE_NAME="$CANDIDATE_CASE_NAME" \
+  -e PAIR_ORIGINAL_PATH="$CONTAINER_PAIR_ORIGINAL_PATH" \
+  -e PAIR_REWRITTEN_PATH="$CONTAINER_PAIR_REWRITTEN_PATH" \
+  -e PAIR_SCHEMA_PATH="$CONTAINER_PAIR_SCHEMA_PATH" \
+  -e PAIR_SCHEMA_FORMAT="$PAIR_SCHEMA_FORMAT" \
   -e REPORT_DIR="$CONTAINER_REPORT_DIR" \
   -e UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-/tmp/snowprove-venv}" \
   -e UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/snowprove-uv-cache}" \
@@ -96,10 +152,16 @@ docker --context "colima-$COLIMA_PROFILE" run --rm "${docker_tty_args[@]}" \
       ./gradlew fatjar
     fi
 
-    CASE_NAME="$CASE_NAME" /snowprove/scripts/run_snowprove_sqlsolver_fixture.sh
+    if [[ "$RUN_FIXTURE_SMOKE" == "1" ]]; then
+      CASE_NAME="$CASE_NAME" /snowprove/scripts/run_snowprove_sqlsolver_fixture.sh
+    fi
 
     if [[ "$RUN_CANDIDATE_SMOKE" == "1" ]]; then
       CASE_NAME="$CANDIDATE_CASE_NAME" \
         /snowprove/scripts/run_snowprove_sqlsolver_candidate_smoke.sh
+    fi
+
+    if [[ -n "$PAIR_ORIGINAL_PATH" ]]; then
+      /snowprove/scripts/run_snowprove_sqlsolver_pair.sh
     fi
   '
