@@ -10,6 +10,31 @@ Snowprove JSON output is intended for CI and review tooling. Every artifact has:
 Only `PROVEN_EQUIVALENT` should be treated as safe. `UNKNOWN`, `UNSUPPORTED`,
 and `NOT_EQUIVALENT` are not safe rewrite approvals.
 
+## `duckdb_benchmark`
+
+Emitted by:
+
+```bash
+snowprove benchmark original.sql rewritten.sql \
+  --setup setup.sql \
+  --report-file benchmark.json \
+  --format json
+```
+
+Important fields:
+
+- `status`: `COMPLETED`, `ERROR`, or `TIMEOUT`
+- `environment`: DuckDB, Python, platform, database, thread, warmup,
+  repetition, and timeout metadata
+- `original` and `rewritten`: every timing sample, median, median absolute
+  deviation, range, row count, and `EXPLAIN` output
+- `speedup`: original median divided by rewritten median
+- `row_counts_match`: diagnostic cardinality comparison
+
+The evaluator materializes every result and alternates original/rewritten
+execution order. Row-count equality is not semantic equivalence; benchmark only
+after a verifier has approved the pair.
+
 ## `verification`
 
 Emitted by:

@@ -1,0 +1,79 @@
+import duckdb
+import pytest
+
+from snowprove.benchmark.duckdb import benchmark_query_pair
+from snowprove.benchmark.model import BenchmarkStatus
+
+SETUP_SQL = """
+CREATE TABLE users AS
+SELECT value AS user_id, value % 5 AS status
+FROM range(100) AS values(value);
+"""
+
+
+def test_benchmarks_query_pair_reproducibly() -> None:
+    result = benchmark_query_pair(
+        "SELECT DISTINCT user_id FROM users",
+        "SELECT user_id FROM users",
+        setup_sql=SETUP_SQL,
+        warmups=1,
+        repetitions=3,
+        timeout_seconds=5,
+        threads=1,
+    )
+
+    assert result.status == BenchmarkStatus.COMPLETED
+    assert result.environment.duckdb_version == duckdb.__version__
+    assert result.environment.threads == 1
+    assert result.environment.warmups == 1
+    assert result.environment.repetitions == 3
+    assert len(result.original.timings_ms) == 3
+    assert len(result.rewritten.timings_ms) == 3
+    assert result.original.median_ms is not None
+    assert result.rewritten.median_ms is not None
+    assert result.original.row_count == 100
+    assert result.rewritten.row_count == 100
+    assert result.row_counts_match is True
+    assert result.speedup is not None
+    assert "PROJECTION" in str(result.original.explain)
+
+
+def test_reports_duckdb_query_errors() -> None:
+    result = benchmark_query_pair(
+        "SELECT user_id FROM missing_users",
+        "SELECT user_id FROM missing_users",
+        warmups=0,
+        repetitions=1,
+    )
+
+    assert result.status == BenchmarkStatus.ERROR
+    assert "missing_users" in str(result.reason)
+    assert result.speedup is None
+    assert result.row_counts_match is None
+
+
+def test_interrupts_queries_that_exceed_timeout() -> None:
+    result = benchmark_query_pair(
+        "SELECT sum(a.i * b.i) FROM range(1000000) a(i), range(1000000) b(i)",
+        "SELECT 1",
+        warmups=0,
+        repetitions=1,
+        timeout_seconds=0.001,
+    )
+
+    assert result.status == BenchmarkStatus.TIMEOUT
+    assert "0.001 second timeout" in str(result.reason)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"warmups": -1}, "warmups"),
+        ({"repetitions": 0}, "repetitions"),
+        ({"timeout_seconds": 0}, "timeout_seconds"),
+        ({"threads": 0}, "threads"),
+    ],
+)
+def test_rejects_invalid_benchmark_settings(kwargs, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        benchmark_query_pair("SELECT 1", "SELECT 1", **kwargs)

@@ -52,6 +52,52 @@ tables:
     assert "PROVEN_EQUIVALENT" in result.output
 
 
+def test_benchmark_cli_writes_duckdb_artifact(tmp_path) -> None:
+    original = tmp_path / "original.sql"
+    rewritten = tmp_path / "rewritten.sql"
+    setup = tmp_path / "setup.sql"
+    report = tmp_path / "benchmark.json"
+    original.write_text("SELECT DISTINCT user_id FROM users")
+    rewritten.write_text("SELECT user_id FROM users")
+    setup.write_text(
+        """
+CREATE TABLE users AS
+SELECT value AS user_id
+FROM range(100) AS values(value);
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "benchmark",
+            str(original),
+            str(rewritten),
+            "--setup",
+            str(setup),
+            "--warmups",
+            "0",
+            "--repetitions",
+            "2",
+            "--report-file",
+            str(report),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(report.read_text())
+    assert payload["artifact_type"] == "duckdb_benchmark"
+    assert payload["dialect"] == "duckdb"
+    assert payload["status"] == "COMPLETED"
+    assert payload["environment"]["warmups"] == 0
+    assert payload["environment"]["repetitions"] == 2
+    assert payload["row_counts_match"] is True
+    assert payload["inputs"]["setup_path"] == str(setup)
+    assert str(report) in result.output
+
+
 def test_suggest_cli_reports_unsupported_sql(tmp_path) -> None:
     query = tmp_path / "query.sql"
     schema = tmp_path / "schema.yml"

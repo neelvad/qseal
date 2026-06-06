@@ -1,8 +1,26 @@
 from rich.text import Text
 
+from snowprove.benchmark.model import BenchmarkResult, BenchmarkStatus
 from snowprove.report.diff import render_rewrite_diff
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.verifier.model import VerificationResult
+
+
+def render_duckdb_benchmark_report(result: BenchmarkResult) -> Text:
+    output = Text()
+    output.append(f"{result.status.value}\n", style="bold")
+    if result.status != BenchmarkStatus.COMPLETED:
+        output.append(f"{result.reason or 'Benchmark failed.'}\n")
+        return output
+
+    output.append(
+        f"Original median: {result.original.median_ms:.3f} ms\n"
+        f"Rewritten median: {result.rewritten.median_ms:.3f} ms\n"
+        f"Speedup: {result.speedup:.3f}x\n"
+        f"Rows: {result.original.row_count} / {result.rewritten.row_count}\n"
+        f"Row counts match: {result.row_counts_match}\n"
+    )
+    return output
 
 
 def render_suggestion_report(suggestion: RewriteSuggestion) -> Text:

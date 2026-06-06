@@ -3,6 +3,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
+from snowprove.benchmark import BenchmarkStatus, benchmark_query_pair
 from snowprove.candidates.bundle import load_candidate_metadata
 from snowprove.constraints.loader import load_constraint_catalog
 from snowprove.dbt.project import DbtProjectDiscoveryError, discover_compiled_sql_path
@@ -14,6 +15,7 @@ from snowprove.report.json import (
     render_candidate_run_json,
     render_candidate_verifications_json,
     render_dbt_scan_json,
+    render_duckdb_benchmark_json,
     render_suggestion_json,
     render_suggestions_json,
     render_verification_json,
@@ -23,6 +25,7 @@ from snowprove.report.text import (
     render_candidate_verifications_report,
     render_dbt_scan_diff_report,
     render_dbt_scan_report,
+    render_duckdb_benchmark_report,
     render_suggestion_report,
     render_suggestions_report,
     render_verification_report,
@@ -62,6 +65,110 @@ def dbt_group() -> None:
 @main.group(name="candidates")
 def candidates_group() -> None:
     """Generate and verify candidate rewrites."""
+
+
+@main.command()
+@click.argument("original_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument("rewritten_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--database",
+    "database_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="DuckDB database file. Defaults to an in-memory database.",
+)
+@click.option(
+    "--setup",
+    "setup_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="SQL file executed once before plans, warmups, and measurements.",
+)
+@click.option(
+    "--warmups",
+    type=click.IntRange(min=0),
+    default=2,
+    show_default=True,
+    help="Warmup executions per query.",
+)
+@click.option(
+    "--repetitions",
+    type=click.IntRange(min=1),
+    default=5,
+    show_default=True,
+    help="Measured executions per query.",
+)
+@click.option(
+    "--timeout",
+    "timeout_seconds",
+    type=click.FloatRange(min=0, min_open=True),
+    default=30.0,
+    show_default=True,
+    help="Per-query timeout in seconds.",
+)
+@click.option(
+    "--threads",
+    type=click.IntRange(min=1),
+    default=1,
+    show_default=True,
+    help="DuckDB worker threads.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+@click.option(
+    "--report-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write a versioned JSON benchmark artifact to this file.",
+)
+def benchmark(
+    original_path: Path,
+    rewritten_path: Path,
+    database_path: Path | None,
+    setup_path: Path | None,
+    warmups: int,
+    repetitions: int,
+    timeout_seconds: float,
+    threads: int,
+    output_format: str,
+    report_file: Path | None,
+) -> None:
+    """Benchmark an original and rewritten query in DuckDB."""
+    result = benchmark_query_pair(
+        original_path.read_text(),
+        rewritten_path.read_text(),
+        database_path=database_path or ":memory:",
+        setup_sql=setup_path.read_text() if setup_path is not None else None,
+        warmups=warmups,
+        repetitions=repetitions,
+        timeout_seconds=timeout_seconds,
+        threads=threads,
+    ).model_copy(
+        update={
+            "inputs": {
+                "original_path": str(original_path),
+                "rewritten_path": str(rewritten_path),
+                "setup_path": str(setup_path) if setup_path is not None else "",
+            }
+        }
+    )
+    json_report = render_duckdb_benchmark_json(result)
+
+    if output_format == "json":
+        click.echo(json_report)
+    else:
+        console.print(render_duckdb_benchmark_report(result))
+
+    if report_file is not None:
+        report_file.parent.mkdir(parents=True, exist_ok=True)
+        report_file.write_text(f"{json_report}\n")
+        click.echo(f"Report file written: {report_file}", err=True)
+
+    if result.status != BenchmarkStatus.COMPLETED:
+        raise click.exceptions.Exit(1)
 
 
 @dbt_group.command(name="scan")

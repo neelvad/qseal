@@ -24,6 +24,7 @@ uv run snowprove check examples/distinct/original.sql examples/distinct/rewritte
 uv run snowprove candidates generate examples/distinct/original.sql --schema examples/distinct/schema.yml --out candidates/
 uv run snowprove candidates check examples/distinct/original.sql candidates/*.sql --schema examples/distinct/schema.yml
 uv run snowprove candidates run examples/distinct/original.sql --schema examples/distinct/schema.yml --out candidates/
+uv run snowprove benchmark examples/benchmark/original.sql examples/benchmark/rewritten.sql --setup examples/benchmark/setup.sql
 ```
 
 `suggest` proposes the first applicable verified rewrite. `check` verifies a
@@ -36,6 +37,24 @@ Snowflake remains the default dialect for compatibility. Pass
 `--dialect duckdb` to `suggest`, `check`, `candidates generate`, `candidates
 check`, `candidates run`, or `dbt scan` when processing DuckDB SQL. JSON
 artifacts record the selected dialect.
+
+`benchmark` executes a query pair in DuckDB with fixed thread count, warmups,
+alternating repeated measurements, full result materialization, per-query
+timeouts, and captured `EXPLAIN` plans. It reports observed performance only;
+row-count equality is not a proof of semantic equivalence.
+
+```bash
+uv run snowprove benchmark \
+  examples/benchmark/original.sql \
+  examples/benchmark/rewritten.sql \
+  --setup examples/benchmark/setup.sql \
+  --warmups 2 \
+  --repetitions 5 \
+  --timeout 30 \
+  --threads 1 \
+  --format json \
+  --report-file benchmark.json
+```
 
 Useful options:
 

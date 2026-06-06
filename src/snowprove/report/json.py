@@ -2,6 +2,7 @@ import json
 from collections.abc import Sequence
 from typing import Any
 
+from snowprove.benchmark.model import BenchmarkResult
 from snowprove.dialects import DEFAULT_DIALECT
 from snowprove.report.patch import PatchWriteResult
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
@@ -45,6 +46,14 @@ def render_verification_json(result: VerificationResult) -> str:
     payload["schema_version"] = 1
     payload["artifact_type"] = "verification"
     payload["proven"] = result.status == VerificationStatus.PROVEN_EQUIVALENT
+    return _dumps(payload)
+
+
+def render_duckdb_benchmark_json(result: BenchmarkResult) -> str:
+    payload = result.model_dump(mode="json")
+    payload["schema_version"] = 1
+    payload["artifact_type"] = "duckdb_benchmark"
+    payload["dialect"] = "duckdb"
     return _dumps(payload)
 
 
