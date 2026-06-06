@@ -5,6 +5,7 @@ from snowprove.rewrites.join_distinct_exists import RewriteJoinDistinctToExists
 from snowprove.rewrites.join_elimination import RemoveUnusedLeftJoin
 from snowprove.rewrites.not_null_filter import RemoveRedundantNotNullFilter
 from snowprove.rewrites.predicate_pushdown import PredicatePushdown
+from snowprove.rewrites.registry import apply_rewrite_match, available_rewrite_matches
 from snowprove.verifier.model import VerificationResult
 
 
@@ -21,6 +22,21 @@ def check_equivalence(
             rule_name="normalized_identity",
             reason="Queries normalize to the same supported IR.",
         )
+
+    for match in available_rewrite_matches(original, constraints):
+        suggestion = apply_rewrite_match(original, constraints, match)
+        if suggestion.rewritten_sql is None:
+            continue
+        expected = _parse_expected(suggestion.rewritten_sql, rewritten)
+        if _same_normalized_query(expected, rewritten):
+            return VerificationResult(
+                status=VerificationStatus.PROVEN_EQUIVALENT,
+                original_sql=original.raw_sql,
+                rewritten_sql=rewritten.raw_sql,
+                rule_name=suggestion.rule_name,
+                assumptions=suggestion.assumptions,
+                reason=suggestion.reason,
+            )
 
     if _is_distinct_removal(original, rewritten):
         return _check_distinct_removal(original, rewritten, constraints)

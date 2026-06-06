@@ -113,6 +113,16 @@ Structured rewrite actions:
 - redundant non-null filters expose one action per predicate
 - legacy `apply()` behavior remains available to current CLI workflows
 
+Rewrite environment:
+
+- framework-neutral `RewriteEnvironment.reset(task)` / `step(action_id)`
+- immutable task, observation, action, and transition models
+- action IDs use `rule_name::match_id`
+- every transition is verified before state advances
+- optional injected performance evaluator
+- reward is the log speedup from current SQL to next SQL
+- unproven transitions terminate without advancing; maximum steps truncate
+
 dbt workflows:
 
 - scans `models/**/*.sql`
@@ -265,12 +275,13 @@ Completed:
    uniqueness, nullability, skew, and duplicates.
 4. Rewrite rules expose structured matches and applications as a finite action
    space while preserving legacy CLI behavior.
+5. A framework-neutral environment provides verified `reset()` / `step()`
+   episodes and optional incremental benchmark rewards.
 
 Next:
 
-1. Add a framework-neutral `reset()` / `step()` environment contract.
-2. Cache solver and benchmark results and emit trajectory artifacts.
-3. Establish fixed-order, random, greedy, beam-search, and short exhaustive
+1. Cache solver and benchmark results and emit trajectory artifacts.
+2. Establish fixed-order, random, greedy, beam-search, and short exhaustive
    baselines before training a learned policy.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least

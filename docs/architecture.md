@@ -24,6 +24,8 @@ SQL text
 - `verifier`: proves supported original/rewritten query pairs.
 - `benchmark`: measures verified query pairs reproducibly in DuckDB.
 - `fixtures`: generates seeded DuckDB databases and reproducibility manifests.
+- `environment`: exposes framework-neutral rewrite episodes through `reset()`
+  and `step()`.
 - `report`: renders human-readable CLI output.
 
 ## Rewrite Registry

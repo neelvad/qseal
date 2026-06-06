@@ -78,6 +78,11 @@ uv run snowprove benchmark original.sql rewritten.sql \
   --database benchmark.duckdb
 ```
 
+For search or RL experiments, `snowprove.environment.RewriteEnvironment`
+provides a framework-neutral `reset(task)` / `step(action_id)` API. It
+enumerates structured rewrite actions, verifies every transition before
+advancing, and can attach incremental DuckDB log-speedup rewards.
+
 Useful options:
 
 ```bash
