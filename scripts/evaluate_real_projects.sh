@@ -14,6 +14,7 @@ REFRESH="${REFRESH:-0}"
 PROJECT_SPECS=(
   "dbt-labs-jaffle-shop|https://github.com/dbt-labs/jaffle-shop.git|.|default"
   "dbt-labs-jaffle-shop-duckdb|https://github.com/dbt-labs/jaffle_shop_duckdb.git|.|duckdb"
+  "kestra-dbt-demo|https://github.com/kestra-io/dbt-demo.git|.|duckdb"
   "lightdash-jaffle-shop|https://github.com/lightdash/jaffle_shop.git|.|default"
   "snowflake-dbt-demo-project|https://github.com/dpguthrie/snowflake-dbt-demo-project.git|.|default"
   "fivetran-dbt-shopify|https://github.com/fivetran/dbt_shopify.git|.|default"

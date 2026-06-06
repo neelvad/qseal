@@ -8,6 +8,7 @@ that reports are understandable.
 
 - `dbt-labs/jaffle-shop`
 - `dbt-labs/jaffle_shop_duckdb`
+- `kestra-io/dbt-demo`
 - `Snowflake-Labs/getting-started-with-dbt-on-snowflake`
 - `fivetran/dbt_shopify`
 - one Jinja-heavy dbt project with macros, refs, sources, and compiled SQL
