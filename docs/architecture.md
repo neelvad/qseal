@@ -23,6 +23,7 @@ SQL text
 - `rewrites`: proposes hand-written rewrite candidates.
 - `verifier`: proves supported original/rewritten query pairs.
 - `benchmark`: measures verified query pairs reproducibly in DuckDB.
+- `fixtures`: generates seeded DuckDB databases and reproducibility manifests.
 - `report`: renders human-readable CLI output.
 
 ## Rewrite Registry

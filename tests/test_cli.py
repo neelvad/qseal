@@ -98,6 +98,42 @@ FROM range(100) AS values(value);
     assert str(report) in result.output
 
 
+def test_fixtures_create_cli_writes_database_and_manifest(tmp_path) -> None:
+    database = tmp_path / "fixture.duckdb"
+    manifest = tmp_path / "fixture.json"
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "fixtures",
+            "create",
+            str(database),
+            "--manifest",
+            str(manifest),
+            "--seed",
+            "17",
+            "--users",
+            "100",
+            "--orders",
+            "500",
+            "--events",
+            "200",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "duckdb_fixture"
+    assert payload["spec"]["seed"] == 17
+    assert payload["tables"]["users"]["row_count"] == 100
+    assert payload["tables"]["orders"]["row_count"] == 500
+    assert payload["tables"]["events"]["row_count"] == 200
+    assert database.exists()
+    assert json.loads(manifest.read_text()) == payload
+
+
 def test_suggest_cli_reports_unsupported_sql(tmp_path) -> None:
     query = tmp_path / "query.sql"
     schema = tmp_path / "schema.yml"

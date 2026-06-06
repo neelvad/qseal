@@ -10,6 +10,25 @@ Snowprove JSON output is intended for CI and review tooling. Every artifact has:
 Only `PROVEN_EQUIVALENT` should be treated as safe. `UNKNOWN`, `UNSUPPORTED`,
 and `NOT_EQUIVALENT` are not safe rewrite approvals.
 
+## `duckdb_fixture`
+
+Emitted by:
+
+```bash
+snowprove fixtures create fixture.duckdb --seed 42 --format json
+```
+
+The same JSON is written beside the database by default as
+`fixture.duckdb.manifest.json`.
+
+Important fields:
+
+- `spec`: seed, table row counts, and requested distribution controls
+- `tables`: row counts, observed statistics, and deterministic content
+  fingerprints
+- `duckdb_version`: engine version used to generate the fixture
+- `database_path`: reusable DuckDB database path
+
 ## `duckdb_benchmark`
 
 Emitted by:

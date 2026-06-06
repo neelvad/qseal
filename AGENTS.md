@@ -38,6 +38,7 @@ uv run snowprove suggest query.sql --schema schema.yml --all --format json
 uv run snowprove check original.sql rewritten.sql --schema schema.yml
 uv run snowprove check original.sql rewritten.sql --schema schema.yml --fail-on unproven --format json
 uv run snowprove check original.sql rewritten.sql --schema schema.yml --verifier sqlsolver --solver-command 'SQLSOLVER_COMMAND'
+uv run snowprove fixtures create fixture.duckdb --seed 42
 uv run snowprove benchmark original.sql rewritten.sql --setup setup.sql --report-file benchmark.json
 uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml
 uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml --format json
@@ -152,6 +153,16 @@ DuckDB performance evaluation:
   `EXPLAIN` plans, speedup, and runtime versions
 - benchmark cardinality is diagnostic only and does not replace verification
 
+Seeded DuckDB fixtures:
+
+- `snowprove fixtures create DATABASE`
+- deterministic set-based generation with no `random()` calls
+- `users`, `orders`, and `events` tables cover selectivity, nullability,
+  join cardinality, skew, duplicates, and table size
+- manifests record specifications, observed statistics, engine version, and
+  deterministic content fingerprints
+- existing outputs require explicit `--force`
+
 Local fixture/eval coverage:
 
 - `tests/fixtures/dbt_projects/jaffle_like/` captures a small dbt-like project
@@ -241,16 +252,16 @@ Completed:
 1. DuckDB is an explicit parser, CLI, artifact, and verifier dialect.
 2. The DuckDB performance evaluator supports warmups, repeated measurements,
    plans, timeouts, fixed threads, full materialization, and version metadata.
+3. Seeded DuckDB fixtures cover table size, selectivity, join cardinality,
+   uniqueness, nullability, skew, and duplicates.
 
 Next:
 
-1. Add seeded database fixtures covering table size, selectivity, cardinality,
-   uniqueness, nullability, skew, and duplicates.
-2. Refactor rules to expose structured matches and applications so they form a
+1. Refactor rules to expose structured matches and applications so they form a
    finite action space.
-3. Add a framework-neutral `reset()` / `step()` environment contract.
-4. Cache solver and benchmark results and emit trajectory artifacts.
-5. Establish fixed-order, random, greedy, beam-search, and short exhaustive
+2. Add a framework-neutral `reset()` / `step()` environment contract.
+3. Cache solver and benchmark results and emit trajectory artifacts.
+4. Establish fixed-order, random, greedy, beam-search, and short exhaustive
    baselines before training a learned policy.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least

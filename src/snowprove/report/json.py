@@ -4,6 +4,7 @@ from typing import Any
 
 from snowprove.benchmark.model import BenchmarkResult
 from snowprove.dialects import DEFAULT_DIALECT
+from snowprove.fixtures.model import DuckDbFixtureManifest
 from snowprove.report.patch import PatchWriteResult
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.verifier.model import VerificationResult
@@ -55,6 +56,10 @@ def render_duckdb_benchmark_json(result: BenchmarkResult) -> str:
     payload["artifact_type"] = "duckdb_benchmark"
     payload["dialect"] = "duckdb"
     return _dumps(payload)
+
+
+def render_duckdb_fixture_json(manifest: DuckDbFixtureManifest) -> str:
+    return _dumps(manifest.model_dump(mode="json"))
 
 
 def render_candidate_verifications_json(

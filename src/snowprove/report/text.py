@@ -1,6 +1,7 @@
 from rich.text import Text
 
 from snowprove.benchmark.model import BenchmarkResult, BenchmarkStatus
+from snowprove.fixtures.model import DuckDbFixtureManifest
 from snowprove.report.diff import render_rewrite_diff
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.verifier.model import VerificationResult
@@ -20,6 +21,16 @@ def render_duckdb_benchmark_report(result: BenchmarkResult) -> Text:
         f"Rows: {result.original.row_count} / {result.rewritten.row_count}\n"
         f"Row counts match: {result.row_counts_match}\n"
     )
+    return output
+
+
+def render_duckdb_fixture_report(manifest: DuckDbFixtureManifest) -> Text:
+    output = Text()
+    output.append("DuckDB fixture created\n", style="bold")
+    output.append(f"Database: {manifest.database_path}\n")
+    output.append(f"Seed: {manifest.spec.seed}\n")
+    for name, table in manifest.tables.items():
+        output.append(f"{name}: {table.row_count} rows\n")
     return output
 
 

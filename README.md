@@ -24,6 +24,7 @@ uv run snowprove check examples/distinct/original.sql examples/distinct/rewritte
 uv run snowprove candidates generate examples/distinct/original.sql --schema examples/distinct/schema.yml --out candidates/
 uv run snowprove candidates check examples/distinct/original.sql candidates/*.sql --schema examples/distinct/schema.yml
 uv run snowprove candidates run examples/distinct/original.sql --schema examples/distinct/schema.yml --out candidates/
+uv run snowprove fixtures create /tmp/snowprove-fixture.duckdb --seed 42
 uv run snowprove benchmark examples/benchmark/original.sql examples/benchmark/rewritten.sql --setup examples/benchmark/setup.sql
 ```
 
@@ -54,6 +55,27 @@ uv run snowprove benchmark \
   --threads 1 \
   --format json \
   --report-file benchmark.json
+```
+
+`fixtures create` builds a reusable seeded DuckDB database containing `users`,
+`orders`, and `events`. Its controls cover row counts, predicate selectivity,
+nullability, duplicate natural keys, dimension/fact skew, and segment
+cardinality. The adjacent manifest records the requested specification,
+observed statistics, DuckDB version, and deterministic table fingerprints.
+
+```bash
+uv run snowprove fixtures create benchmark.duckdb \
+  --seed 42 \
+  --users 10000 \
+  --orders 100000 \
+  --events 50000 \
+  --active-fraction 0.2 \
+  --null-fraction 0.1 \
+  --duplicate-fraction 0.25 \
+  --skew-fraction 0.8
+
+uv run snowprove benchmark original.sql rewritten.sql \
+  --database benchmark.duckdb
 ```
 
 Useful options:
