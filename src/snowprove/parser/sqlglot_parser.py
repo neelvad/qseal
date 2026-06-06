@@ -223,7 +223,6 @@ def _validate_opaque_cte_relation(
     if cte.args.get("distinct") is not None:
         raise UnsupportedSqlError("CTE relation references with DISTINCT are not supported yet.")
     for arg_name, clause_name in (
-        ("group", "GROUP BY"),
         ("qualify", "QUALIFY"),
         ("order", "ORDER BY"),
         ("limit", "LIMIT"),
@@ -239,9 +238,11 @@ def _validate_opaque_cte_relation(
     if from_expr.this.name in ctes:
         _validate_opaque_cte_relation(from_expr.this.name, ctes, seen | {cte_name})
 
+    group_by = _group_by_columns(cte.args.get("group"))
     for projection in cte.expressions:
-        _projection_to_column(projection)
+        _projection_to_column(projection, allow_aggregate=bool(group_by))
     _where_predicates(cte.args.get("where"))
+    _having_predicates(cte.args.get("having"), has_group_by=bool(group_by))
 
 
 def _passthrough_cte_source(

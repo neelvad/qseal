@@ -257,6 +257,28 @@ def test_parses_simple_cte_relations_in_from_and_join() -> None:
     ]
 
 
+def test_parses_grouped_cte_relation_reference() -> None:
+    query = parse_select(
+        """
+        WITH all_values AS (
+          SELECT
+            status AS value_field,
+            COUNT(*) AS n_records
+          FROM orders
+          GROUP BY status
+          HAVING COUNT(*) > 1
+        )
+        SELECT *
+        FROM all_values
+        WHERE n_records > 0
+        """
+    )
+
+    assert query.table == "all_values"
+    assert query.projections[0].is_star is True
+    assert [predicate.to_sql() for predicate in query.predicates] == ["n_records > 0"]
+
+
 def test_parse_simple_left_join() -> None:
     query = parse_select(
         """
