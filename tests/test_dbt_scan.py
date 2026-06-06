@@ -323,7 +323,7 @@ def test_scan_synthetic_duckdb_fixture_reports_raw_blockers() -> None:
 
     result = scan_dbt_project(project, rules=DEFAULT_RULES, include_all=True)
 
-    assert result.model_count == 8
+    assert result.model_count == 9
     assert result.proven_finding_count() == 1
     assert result.status_counts() == {
         "UNKNOWN": 1,
@@ -352,7 +352,7 @@ def test_scan_synthetic_duckdb_fixture_reports_compiled_blockers() -> None:
         compiled_path=compiled_path,
     )
 
-    assert result.model_count == 8
+    assert result.model_count == 9
     assert result.proven_finding_count() == 1
     assert result.status_counts() == {
         "UNKNOWN": 1,

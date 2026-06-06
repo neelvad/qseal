@@ -219,8 +219,6 @@ def _validate_opaque_cte_relation(
     cte = ctes[cte_name]
     if cte.args.get("with_") is not None:
         raise UnsupportedSqlError("Nested WITH clauses are not supported yet.")
-    if cte.args.get("joins"):
-        raise UnsupportedSqlError("CTE relation references with JOINs are not supported yet.")
     if cte.args.get("distinct") is not None:
         raise UnsupportedSqlError("CTE relation references with DISTINCT are not supported yet.")
     for arg_name, clause_name in (
@@ -242,6 +240,8 @@ def _validate_opaque_cte_relation(
     group_by = _group_by_columns(cte.args.get("group"))
     for projection in cte.expressions:
         _projection_to_column(projection, allow_aggregate=bool(group_by))
+    for join in cte.args.get("joins") or []:
+        _join(join, ctes)
     _where_predicates(cte.args.get("where"))
     _having_predicates(cte.args.get("having"), has_group_by=bool(group_by))
 

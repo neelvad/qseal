@@ -290,6 +290,38 @@ def test_parses_grouped_cte_relation_reference() -> None:
     assert [predicate.to_sql() for predicate in query.predicates] == ["n_records > 0"]
 
 
+def test_parses_grouped_cte_relation_with_join() -> None:
+    query = parse_select(
+        """
+        WITH orders AS (
+          SELECT * FROM stg_orders
+        ),
+        payments AS (
+          SELECT * FROM stg_payments
+        ),
+        customer_payments AS (
+          SELECT
+            orders.customer_id,
+            SUM(payments.amount) AS total_amount
+          FROM payments
+          LEFT JOIN orders
+            ON payments.order_id = orders.order_id
+          GROUP BY orders.customer_id
+        )
+        SELECT *
+        FROM customer_payments
+        """
+    )
+
+    assert query.table == "stg_payments"
+    assert query.joins[0].table == "orders"
+    assert [column.to_sql() for column in query.group_by] == ["orders.customer_id"]
+    assert [projection.to_sql() for projection in query.projections] == [
+        "orders.customer_id",
+        "SUM(payments.amount) AS total_amount",
+    ]
+
+
 def test_parse_simple_left_join() -> None:
     query = parse_select(
         """
