@@ -44,6 +44,7 @@ RUN_CANDIDATE_SMOKE=0 \
 PAIR_ORIGINAL_PATH=snowprove-runs/manual/original.sql \
 PAIR_REWRITTEN_PATH=snowprove-runs/manual/rewritten.sql \
 PAIR_SCHEMA_PATH=snowprove-runs/manual/schema.yml \
+PAIR_DIALECT=duckdb \
 REPORT_DIR="$PWD/snowprove-runs/manual/sqlsolver" \
 scripts/run_sqlsolver_container_smoke.sh
 ```

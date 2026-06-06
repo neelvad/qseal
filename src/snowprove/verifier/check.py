@@ -111,6 +111,7 @@ def _same_normalized_query(left: SelectQuery, right: SelectQuery) -> bool:
         and left.group_by == right.group_by
         and left.having == right.having
         and left.distinct == right.distinct
+        and left.dialect == right.dialect
     )
 
 
@@ -118,7 +119,7 @@ def _parse_expected(sql: str, fallback: SelectQuery) -> SelectQuery:
     try:
         from snowprove.parser.sqlglot_parser import parse_select
 
-        return parse_select(sql)
+        return parse_select(sql, dialect=fallback.dialect)
     except Exception:
         return fallback
 

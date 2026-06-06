@@ -49,6 +49,10 @@ uv run snowprove dbt scan . --apply-patches
 uv run snowprove dbt scan . --use-compiled
 ```
 
+Snowflake is the compatibility default. SQL-facing commands accept
+`--dialect duckdb` to parse, verify, scan, and report DuckDB semantics
+explicitly.
+
 Important validation commands:
 
 ```bash
@@ -76,6 +80,13 @@ Supported SQL subset includes:
 - `INNER JOIN ... ON a.col = b.col`
 - `LEFT JOIN ... ON a.col = b.col`
 - qualified Snowflake relation names such as `analytics.public.users`
+
+Dialect handling:
+
+- explicit `snowflake` and `duckdb` dialects
+- dialect propagation through parsing, nested queries, CTE validation, dbt
+  scans, verifier requests, SQLSolver pair runs, and JSON artifacts
+- Snowflake remains the default for existing callers
 
 Trusted constraints:
 

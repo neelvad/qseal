@@ -3,6 +3,13 @@ import pytest
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 
 
+def test_parse_select_with_explicit_duckdb_dialect() -> None:
+    query = parse_select("SELECT user_id FROM users", dialect="duckdb")
+
+    assert query.dialect == "duckdb"
+    assert query.to_sql() == "SELECT user_id\nFROM users;"
+
+
 def test_parse_select_with_where_predicates() -> None:
     query = parse_select(
         "SELECT DISTINCT user_id FROM users WHERE user_id = 1 AND status = 'active'"

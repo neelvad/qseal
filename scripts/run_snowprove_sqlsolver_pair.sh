@@ -9,6 +9,7 @@ PAIR_ORIGINAL_PATH="${PAIR_ORIGINAL_PATH:?PAIR_ORIGINAL_PATH is required}"
 PAIR_REWRITTEN_PATH="${PAIR_REWRITTEN_PATH:?PAIR_REWRITTEN_PATH is required}"
 PAIR_SCHEMA_PATH="${PAIR_SCHEMA_PATH:?PAIR_SCHEMA_PATH is required}"
 PAIR_SCHEMA_FORMAT="${PAIR_SCHEMA_FORMAT:-auto}"
+PAIR_DIALECT="${PAIR_DIALECT:-snowflake}"
 report_path="$REPORT_DIR/pair.verification.json"
 
 if ! command -v uv >/dev/null 2>&1; then
@@ -37,6 +38,7 @@ echo "SQLSolver pair check"
     "$PAIR_REWRITTEN_PATH" \
     --schema "$PAIR_SCHEMA_PATH" \
     --schema-format "$PAIR_SCHEMA_FORMAT" \
+    --dialect "$PAIR_DIALECT" \
     --verifier sqlsolver \
     --solver-command "$SOLVER_COMMAND" \
     --timeout "$TIMEOUT" \

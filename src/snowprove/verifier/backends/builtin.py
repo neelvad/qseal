@@ -1,4 +1,5 @@
 from snowprove.constraints.model import ConstraintCatalog
+from snowprove.dialects import DEFAULT_DIALECT, SqlDialect
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.rewrites.base import VerificationStatus
 from snowprove.verifier.check import check_equivalence
@@ -13,9 +14,10 @@ class BuiltinVerifierBackend:
         original_sql: str,
         rewritten_sql: str,
         constraints: ConstraintCatalog,
+        dialect: SqlDialect = DEFAULT_DIALECT,
     ) -> VerificationResult:
         try:
-            original = parse_select(original_sql)
+            original = parse_select(original_sql, dialect=dialect)
         except UnsupportedSqlError as error:
             return VerificationResult(
                 status=VerificationStatus.UNSUPPORTED,
@@ -25,7 +27,7 @@ class BuiltinVerifierBackend:
             )
 
         try:
-            rewritten = parse_select(rewritten_sql)
+            rewritten = parse_select(rewritten_sql, dialect=dialect)
         except UnsupportedSqlError as error:
             return VerificationResult(
                 status=VerificationStatus.UNSUPPORTED,

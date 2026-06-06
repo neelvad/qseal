@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 from snowprove.constraints.model import ConstraintCatalog
+from snowprove.dialects import DEFAULT_DIALECT, SqlDialect
 from snowprove.rewrites.base import VerificationStatus
 from snowprove.verifier.backends.external_contract import ExternalSolverRequest
 from snowprove.verifier.model import VerificationResult
@@ -26,6 +27,7 @@ class SqlSolverBackend:
         original_sql: str,
         rewritten_sql: str,
         constraints: ConstraintCatalog,
+        dialect: SqlDialect = DEFAULT_DIALECT,
     ) -> VerificationResult:
         if not self.solver_command:
             return VerificationResult(
@@ -40,6 +42,7 @@ class SqlSolverBackend:
             original_sql=original_sql,
             rewritten_sql=rewritten_sql,
             constraints=constraints,
+            dialect=dialect,
             solver_command=self.solver_command,
             timeout_seconds=self.timeout_seconds,
         )

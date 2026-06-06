@@ -4,6 +4,8 @@ Snowprove JSON output is intended for CI and review tooling. Every artifact has:
 
 - `schema_version`: currently `1`
 - `artifact_type`: identifies the payload shape
+- `dialect`: selected SQL dialect, or `inputs.dialect` on individual
+  verification results
 
 Only `PROVEN_EQUIVALENT` should be treated as safe. `UNKNOWN`, `UNSUPPORTED`,
 and `NOT_EQUIVALENT` are not safe rewrite approvals.

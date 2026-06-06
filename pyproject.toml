@@ -1,7 +1,7 @@
 [project]
 name = "snowprove"
 version = "0.1.0"
-description = "Verified-safe SQL rewrites for a constrained Snowflake SQL subset."
+description = "Verified-safe SQL rewrites for a constrained Snowflake and DuckDB SQL subset."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"

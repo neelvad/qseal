@@ -197,6 +197,37 @@ tables:
     assert payload["rule_name"] == "remove_redundant_distinct"
 
 
+def test_suggest_cli_records_duckdb_dialect(tmp_path) -> None:
+    query = tmp_path / "query.sql"
+    schema = tmp_path / "schema.yml"
+    query.write_text("SELECT DISTINCT user_id FROM users")
+    schema.write_text(
+        """
+tables:
+  users:
+    unique:
+      - [user_id]
+"""
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "suggest",
+            str(query),
+            "--schema",
+            str(schema),
+            "--dialect",
+            "duckdb",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.output)["dialect"] == "duckdb"
+
+
 def test_suggest_cli_can_report_all_json(tmp_path) -> None:
     query = tmp_path / "query.sql"
     schema = tmp_path / "schema.yml"
@@ -256,6 +287,7 @@ tables:
     assert payload["inputs"]["rewritten_path"] == str(rewritten)
     assert payload["inputs"]["schema_path"] == str(schema)
     assert payload["inputs"]["schema_format"] == "auto"
+    assert payload["inputs"]["dialect"] == "snowflake"
 
 
 def test_check_cli_can_fail_on_unproven(tmp_path) -> None:

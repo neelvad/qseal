@@ -38,6 +38,22 @@ models:
     assert result.results[0].suggestions[0].status == VerificationStatus.PROVEN_EQUIVALENT
 
 
+def test_scan_dbt_project_records_explicit_duckdb_dialect(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "users.sql").write_text("SELECT user_id FROM users")
+    (models / "schema.yml").write_text("models: []\n")
+
+    result = scan_dbt_project(
+        tmp_path,
+        rules=DEFAULT_RULES,
+        include_all=True,
+        dialect="duckdb",
+    )
+
+    assert result.dialect == "duckdb"
+
+
 def test_scan_dbt_project_matches_constraints_for_qualified_relations(tmp_path: Path) -> None:
     models = tmp_path / "models"
     models.mkdir()

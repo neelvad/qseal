@@ -1,11 +1,10 @@
 # snowprove
 
-Verified-safe SQL rewrites for a constrained Snowflake SQL subset.
+Verified-safe SQL rewrites for a constrained Snowflake and DuckDB SQL subset.
 
 Snowprove is an early CLI-first project. The goal is narrow: prove that small,
 hand-written SQL rewrite rules are semantically safe under explicit schema
-constraints, then leave performance validation to Snowflake `EXPLAIN` or
-benchmarks later.
+constraints, then leave performance validation to engine plans or benchmarks.
 
 It does **not** claim that a rewrite is always faster. It claims that a supported
 rewrite returns the same rows under the declared assumptions.
@@ -20,6 +19,7 @@ uv sync
 
 ```bash
 uv run snowprove suggest examples/distinct/original.sql --schema examples/distinct/schema.yml
+uv run snowprove suggest query.sql --schema schema.yml --dialect duckdb
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml
 uv run snowprove candidates generate examples/distinct/original.sql --schema examples/distinct/schema.yml --out candidates/
 uv run snowprove candidates check examples/distinct/original.sql candidates/*.sql --schema examples/distinct/schema.yml
@@ -31,6 +31,11 @@ specific original/rewritten query pair. `candidates generate` writes candidate
 SQL files from Snowprove's existing rewrite rules. `candidates check` verifies
 multiple generated candidate rewrites against one original query. `candidates
 run` does both steps in one command.
+
+Snowflake remains the default dialect for compatibility. Pass
+`--dialect duckdb` to `suggest`, `check`, `candidates generate`, `candidates
+check`, `candidates run`, or `dbt scan` when processing DuckDB SQL. JSON
+artifacts record the selected dialect.
 
 Useful options:
 

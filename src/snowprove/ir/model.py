@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
+from snowprove.dialects import DEFAULT_DIALECT, SqlDialect
+
 
 class ColumnRef(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -151,6 +153,7 @@ class SelectQuery(BaseModel):
     having: tuple[HavingPredicate, ...] = ()
     distinct: bool
     raw_sql: str
+    dialect: SqlDialect = DEFAULT_DIALECT
 
     def is_direct_table(self) -> bool:
         return self.table is not None and self.subquery is None

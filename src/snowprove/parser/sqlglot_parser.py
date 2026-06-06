@@ -2,6 +2,7 @@ import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ParseError
 
+from snowprove.dialects import DEFAULT_DIALECT, SqlDialect
 from snowprove.ir.model import (
     ColumnRef,
     ExistsPredicate,
@@ -19,9 +20,9 @@ class UnsupportedSqlError(ValueError):
     pass
 
 
-def parse_select(sql: str) -> SelectQuery:
+def parse_select(sql: str, dialect: SqlDialect = DEFAULT_DIALECT) -> SelectQuery:
     try:
-        parsed = sqlglot.parse_one(sql, read="snowflake")
+        parsed = sqlglot.parse_one(sql, read=dialect)
     except ParseError as error:
         raise UnsupportedSqlError(f"Could not parse SQL: {error}") from error
 
@@ -37,15 +38,19 @@ def parse_select(sql: str) -> SelectQuery:
 
     _reject_unsupported_clauses(parsed)
 
-    source = _source(from_expr.this, ctes)
-    joins = [_join(join, ctes) for join in parsed.args.get("joins") or []]
+    source = _source(from_expr.this, ctes, dialect)
+    joins = [_join(join, ctes, dialect) for join in parsed.args.get("joins") or []]
     group_by = _group_by_columns(parsed.args.get("group"))
-    having = _having_predicates(parsed.args.get("having"), has_group_by=bool(group_by))
+    having = _having_predicates(
+        parsed.args.get("having"),
+        has_group_by=bool(group_by),
+        dialect=dialect,
+    )
     projections = [
-        _projection_to_column(expr, allow_aggregate=bool(group_by))
+        _projection_to_column(expr, allow_aggregate=bool(group_by), dialect=dialect)
         for expr in parsed.expressions
     ]
-    predicates = _where_predicates(parsed.args.get("where"))
+    predicates = _where_predicates(parsed.args.get("where"), dialect)
 
     return SelectQuery(
         **source,
@@ -56,24 +61,29 @@ def parse_select(sql: str) -> SelectQuery:
         having=tuple(having),
         distinct=parsed.args.get("distinct") is not None,
         raw_sql=sql.strip(),
+        dialect=dialect,
     )
 
 
-def _source(node: exp.Expression, ctes: dict[str, exp.Select] | None = None) -> dict[str, object]:
+def _source(
+    node: exp.Expression,
+    ctes: dict[str, exp.Select] | None = None,
+    dialect: SqlDialect = DEFAULT_DIALECT,
+) -> dict[str, object]:
     ctes = ctes or {}
     if isinstance(node, exp.Table):
         if node.name in ctes:
-            return _cte_source(node, ctes)
+            return _cte_source(node, ctes, dialect)
         return {
             "table": node.name,
-            "table_sql": _relation_sql_without_alias(node),
+            "table_sql": _relation_sql_without_alias(node, dialect),
             "table_alias": node.alias or None,
         }
     if isinstance(node, exp.Subquery):
         if not isinstance(node.this, exp.Select):
             raise UnsupportedSqlError("Only SELECT subqueries are supported.")
         return {
-            "subquery": _parse_select_expression(node.this, ctes),
+            "subquery": _parse_select_expression(node.this, ctes, dialect),
             "alias": node.alias or None,
         }
     raise UnsupportedSqlError("Only direct tables and simple subqueries are supported.")
@@ -82,6 +92,7 @@ def _source(node: exp.Expression, ctes: dict[str, exp.Select] | None = None) -> 
 def _parse_select_expression(
     parsed: exp.Select,
     ctes: dict[str, exp.Select] | None = None,
+    dialect: SqlDialect = DEFAULT_DIALECT,
 ) -> SelectQuery:
     ctes = ctes or {}
     if parsed.args.get("with_") is not None:
@@ -94,15 +105,19 @@ def _parse_select_expression(
 
     _reject_unsupported_clauses(parsed)
 
-    source = _source(from_expr.this, ctes)
-    joins = [_join(join, ctes) for join in parsed.args.get("joins") or []]
+    source = _source(from_expr.this, ctes, dialect)
+    joins = [_join(join, ctes, dialect) for join in parsed.args.get("joins") or []]
     group_by = _group_by_columns(parsed.args.get("group"))
-    having = _having_predicates(parsed.args.get("having"), has_group_by=bool(group_by))
+    having = _having_predicates(
+        parsed.args.get("having"),
+        has_group_by=bool(group_by),
+        dialect=dialect,
+    )
     projections = [
-        _projection_to_column(expr, allow_aggregate=bool(group_by))
+        _projection_to_column(expr, allow_aggregate=bool(group_by), dialect=dialect)
         for expr in parsed.expressions
     ]
-    predicates = _where_predicates(parsed.args.get("where"))
+    predicates = _where_predicates(parsed.args.get("where"), dialect)
 
     return SelectQuery(
         **source,
@@ -112,7 +127,8 @@ def _parse_select_expression(
         group_by=tuple(group_by),
         having=tuple(having),
         distinct=parsed.args.get("distinct") is not None,
-        raw_sql=parsed.sql(dialect="snowflake"),
+        raw_sql=parsed.sql(dialect=dialect),
+        dialect=dialect,
     )
 
 
@@ -191,12 +207,16 @@ def _inline_cte_projection(
     return inlined
 
 
-def _cte_source(node: exp.Table, ctes: dict[str, exp.Select]) -> dict[str, object]:
+def _cte_source(
+    node: exp.Table,
+    ctes: dict[str, exp.Select],
+    dialect: SqlDialect = DEFAULT_DIALECT,
+) -> dict[str, object]:
     cte_name = node.name
     try:
-        source = _passthrough_cte_source(cte_name, ctes)
+        source = _passthrough_cte_source(cte_name, ctes, dialect=dialect)
     except UnsupportedSqlError:
-        _validate_opaque_cte_relation(cte_name, ctes)
+        _validate_opaque_cte_relation(cte_name, ctes, dialect=dialect)
         source = {
             "table": cte_name,
             "table_sql": cte_name,
@@ -212,6 +232,7 @@ def _validate_opaque_cte_relation(
     cte_name: str,
     ctes: dict[str, exp.Select],
     seen: frozenset[str] = frozenset(),
+    dialect: SqlDialect = DEFAULT_DIALECT,
 ) -> None:
     if cte_name in seen:
         raise UnsupportedSqlError(f"Recursive CTE reference is not supported: {cte_name}.")
@@ -235,21 +256,35 @@ def _validate_opaque_cte_relation(
     if from_expr is None or not isinstance(from_expr.this, exp.Table):
         raise UnsupportedSqlError("CTE relation references must read from one direct table.")
     if from_expr.this.name in ctes:
-        _validate_opaque_cte_relation(from_expr.this.name, ctes, seen | {cte_name})
+        _validate_opaque_cte_relation(
+            from_expr.this.name,
+            ctes,
+            seen | {cte_name},
+            dialect,
+        )
 
     group_by = _group_by_columns(cte.args.get("group"))
     for projection in cte.expressions:
-        _projection_to_column(projection, allow_aggregate=bool(group_by))
+        _projection_to_column(
+            projection,
+            allow_aggregate=bool(group_by),
+            dialect=dialect,
+        )
     for join in cte.args.get("joins") or []:
-        _join(join, ctes)
-    _where_predicates(cte.args.get("where"))
-    _having_predicates(cte.args.get("having"), has_group_by=bool(group_by))
+        _join(join, ctes, dialect)
+    _where_predicates(cte.args.get("where"), dialect)
+    _having_predicates(
+        cte.args.get("having"),
+        has_group_by=bool(group_by),
+        dialect=dialect,
+    )
 
 
 def _passthrough_cte_source(
     cte_name: str,
     ctes: dict[str, exp.Select],
     seen: frozenset[str] = frozenset(),
+    dialect: SqlDialect = DEFAULT_DIALECT,
 ) -> dict[str, object]:
     if cte_name in seen:
         raise UnsupportedSqlError(f"Recursive CTE reference is not supported: {cte_name}.")
@@ -266,11 +301,16 @@ def _passthrough_cte_source(
 
     table = from_expr.this
     if table.name in ctes:
-        return _passthrough_cte_source(table.name, ctes, seen | {cte_name})
+        return _passthrough_cte_source(
+            table.name,
+            ctes,
+            seen | {cte_name},
+            dialect,
+        )
 
     return {
         "table": table.name,
-        "table_sql": _relation_sql_without_alias(table),
+        "table_sql": _relation_sql_without_alias(table, dialect),
         "table_alias": table.alias or None,
     }
 
@@ -355,6 +395,7 @@ def _project_with_alias(projection: exp.Expression, alias: str | None) -> exp.Ex
 def _projection_to_column(
     node: exp.Expression,
     allow_aggregate: bool = False,
+    dialect: SqlDialect = DEFAULT_DIALECT,
 ) -> ColumnRef:
     if isinstance(node, exp.Star):
         return ColumnRef(name="*", is_star=True)
@@ -375,7 +416,7 @@ def _projection_to_column(
         return ColumnRef(
             name=node.alias,
             alias=node.alias,
-            expression_sql=node.this.sql(dialect="snowflake"),
+            expression_sql=node.this.sql(dialect=dialect),
         )
     raise UnsupportedSqlError(
         "Only direct columns, stars, and simple aliased scalar projections are supported."
@@ -428,13 +469,14 @@ def _group_by_columns(group: exp.Group | None) -> list[ColumnRef]:
 def _having_predicates(
     having: exp.Having | None,
     has_group_by: bool,
+    dialect: SqlDialect = DEFAULT_DIALECT,
 ) -> list[HavingPredicate]:
     if having is None:
         return []
     if not has_group_by:
         raise UnsupportedSqlError("HAVING without GROUP BY is not supported yet.")
     return [
-        HavingPredicate(expression_sql=expression.sql(dialect="snowflake"))
+        HavingPredicate(expression_sql=expression.sql(dialect=dialect))
         for expression in _having_expression(having.this)
     ]
 
@@ -468,7 +510,11 @@ def _is_supported_having_side(node: exp.Expression) -> bool:
     return isinstance(node, exp.AggFunc | exp.Column)
 
 
-def _join(node: exp.Join, ctes: dict[str, exp.Select] | None = None) -> Join:
+def _join(
+    node: exp.Join,
+    ctes: dict[str, exp.Select] | None = None,
+    dialect: SqlDialect = DEFAULT_DIALECT,
+) -> Join:
     ctes = ctes or {}
     join_type = _join_type(node)
     if join_type is None:
@@ -476,7 +522,7 @@ def _join(node: exp.Join, ctes: dict[str, exp.Select] | None = None) -> Join:
     if not isinstance(node.this, exp.Table):
         raise UnsupportedSqlError("Only direct table JOIN targets are supported.")
     if node.this.name in ctes:
-        _validate_opaque_cte_relation(node.this.name, ctes)
+        _validate_opaque_cte_relation(node.this.name, ctes, dialect=dialect)
 
     condition = node.args.get("on")
     if not isinstance(condition, exp.EQ):
@@ -491,7 +537,7 @@ def _join(node: exp.Join, ctes: dict[str, exp.Select] | None = None) -> Join:
     return Join(
         join_type=join_type,
         table=node.this.name,
-        table_sql=_relation_sql_without_alias(node.this),
+        table_sql=_relation_sql_without_alias(node.this, dialect),
         alias=node.this.alias or None,
         condition=JoinCondition(
             left=ColumnRef(table=condition.this.table or None, name=condition.this.name),
@@ -522,17 +568,23 @@ def _reject_unsupported_clauses(parsed: exp.Select) -> None:
             raise UnsupportedSqlError(f"{clause_name} is not supported yet.")
 
 
-def _where_predicates(where: exp.Where | None) -> list[Predicate | InPredicate | ExistsPredicate]:
+def _where_predicates(
+    where: exp.Where | None,
+    dialect: SqlDialect = DEFAULT_DIALECT,
+) -> list[Predicate | InPredicate | ExistsPredicate]:
     if where is None:
         return []
-    return _predicate_expression(where.this)
+    return _predicate_expression(where.this, dialect)
 
 
-def _predicate_expression(node: exp.Expression) -> list[Predicate | InPredicate | ExistsPredicate]:
+def _predicate_expression(
+    node: exp.Expression,
+    dialect: SqlDialect = DEFAULT_DIALECT,
+) -> list[Predicate | InPredicate | ExistsPredicate]:
     if isinstance(node, exp.And):
         return [
-            *_predicate_expression(node.this),
-            *_predicate_expression(node.expression),
+            *_predicate_expression(node.this, dialect),
+            *_predicate_expression(node.expression, dialect),
         ]
     if isinstance(node, exp.EQ | exp.GT | exp.GTE | exp.LT | exp.LTE):
         return [_comparison(node)]
@@ -543,7 +595,7 @@ def _predicate_expression(node: exp.Expression) -> list[Predicate | InPredicate 
     if isinstance(node, exp.Is | exp.Not):
         return [_null_predicate(node)]
     if isinstance(node, exp.Exists):
-        return [_exists_predicate(node)]
+        return [_exists_predicate(node, dialect)]
     raise UnsupportedSqlError(
         "Only ANDed column/literal comparisons, IN predicates, NULL predicates, "
         "and simple EXISTS predicates are supported."
@@ -607,7 +659,10 @@ def _null_predicate(node: exp.Expression) -> Predicate:
     )
 
 
-def _exists_predicate(node: exp.Exists) -> ExistsPredicate:
+def _exists_predicate(
+    node: exp.Exists,
+    dialect: SqlDialect = DEFAULT_DIALECT,
+) -> ExistsPredicate:
     select = node.this
     if not isinstance(select, exp.Select):
         raise UnsupportedSqlError("EXISTS predicates must contain a SELECT subquery.")
@@ -639,7 +694,7 @@ def _exists_predicate(node: exp.Exists) -> ExistsPredicate:
 
     return ExistsPredicate(
         table=from_expr.this.name,
-        table_sql=_relation_sql_without_alias(from_expr.this),
+        table_sql=_relation_sql_without_alias(from_expr.this, dialect),
         alias=from_expr.this.alias or None,
         condition=JoinCondition(
             left=ColumnRef(table=where.this.this.table or None, name=where.this.this.name),
@@ -665,7 +720,10 @@ def _operator(node: exp.Expression) -> str:
     raise UnsupportedSqlError("Unsupported WHERE comparison operator.")
 
 
-def _relation_sql_without_alias(node: exp.Table) -> str:
+def _relation_sql_without_alias(
+    node: exp.Table,
+    dialect: SqlDialect = DEFAULT_DIALECT,
+) -> str:
     relation = node.copy()
     relation.set("alias", None)
-    return relation.sql(dialect="snowflake")
+    return relation.sql(dialect=dialect)

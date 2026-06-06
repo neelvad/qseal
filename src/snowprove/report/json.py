@@ -2,19 +2,29 @@ import json
 from collections.abc import Sequence
 from typing import Any
 
+from snowprove.dialects import DEFAULT_DIALECT
 from snowprove.report.patch import PatchWriteResult
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.verifier.model import VerificationResult
 
 
-def render_suggestion_json(suggestion: RewriteSuggestion) -> str:
+def render_suggestion_json(
+    suggestion: RewriteSuggestion,
+    *,
+    dialect: str = DEFAULT_DIALECT,
+) -> str:
     payload = suggestion.model_dump(mode="json")
     payload["schema_version"] = 1
     payload["artifact_type"] = "suggestion"
+    payload["dialect"] = dialect
     return _dumps(payload)
 
 
-def render_suggestions_json(suggestions: Sequence[RewriteSuggestion]) -> str:
+def render_suggestions_json(
+    suggestions: Sequence[RewriteSuggestion],
+    *,
+    dialect: str = DEFAULT_DIALECT,
+) -> str:
     visible = [
         suggestion
         for suggestion in suggestions
@@ -24,6 +34,7 @@ def render_suggestions_json(suggestions: Sequence[RewriteSuggestion]) -> str:
         {
             "schema_version": 1,
             "artifact_type": "suggestions",
+            "dialect": dialect,
             "results": [suggestion.model_dump(mode="json") for suggestion in visible],
         }
     )
@@ -40,12 +51,15 @@ def render_verification_json(result: VerificationResult) -> str:
 def render_candidate_verifications_json(
     results: Sequence[VerificationResult],
     metadata_by_path: dict[str, dict[str, Any]] | None = None,
+    *,
+    dialect: str = DEFAULT_DIALECT,
 ) -> str:
     metadata_by_path = metadata_by_path or {}
     return _dumps(
         {
             "schema_version": 1,
             "artifact_type": "candidate_verifications",
+            "dialect": dialect,
             "result_count": len(results),
             "proven_count": sum(
                 result.status == VerificationStatus.PROVEN_EQUIVALENT
@@ -71,11 +85,13 @@ def render_candidate_generation_json(
     output_dir: str,
     generated: Sequence[dict[str, str]],
     skipped: Sequence[dict[str, str]],
+    dialect: str = DEFAULT_DIALECT,
 ) -> str:
     return _dumps(
         {
             "schema_version": 1,
             "artifact_type": "candidate_generation",
+            "dialect": dialect,
             "original_path": original_path,
             "output_dir": output_dir,
             "generated_count": len(generated),
@@ -90,11 +106,13 @@ def render_candidate_run_json(
     *,
     generation: dict[str, Any],
     verifications: Sequence[VerificationResult],
+    dialect: str = DEFAULT_DIALECT,
 ) -> str:
     return _dumps(
         {
             "schema_version": 1,
             "artifact_type": "candidate_run",
+            "dialect": dialect,
             "generation": generation,
             "verification": {
                 "result_count": len(verifications),

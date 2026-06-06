@@ -7,6 +7,7 @@ from snowprove.candidates.bundle import load_candidate_metadata
 from snowprove.constraints.loader import load_constraint_catalog
 from snowprove.dbt.project import DbtProjectDiscoveryError, discover_compiled_sql_path
 from snowprove.dbt.scan import scan_dbt_project
+from snowprove.dialects import DEFAULT_DIALECT, SUPPORTED_DIALECTS
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.report.json import (
     render_candidate_generation_json,
@@ -45,11 +46,12 @@ RuleChoice = click.Choice(rule_names(), case_sensitive=False)
 FailOn = click.Choice(["none", "findings"], case_sensitive=False)
 CheckFailOn = click.Choice(["none", "unproven"], case_sensitive=False)
 VerifierChoice = click.Choice(["builtin", "external", "sqlsolver"], case_sensitive=False)
+DialectChoice = click.Choice(SUPPORTED_DIALECTS, case_sensitive=False)
 
 
 @click.group()
 def main() -> None:
-    """Verified-safe SQL rewrites for a constrained Snowflake SQL subset."""
+    """Verified-safe SQL rewrites for a constrained SQL subset."""
 
 
 @main.group(name="dbt")
@@ -125,6 +127,13 @@ def candidates_group() -> None:
     is_flag=True,
     help="Auto-discover and scan compiled SQL under target/compiled/.",
 )
+@click.option(
+    "--dialect",
+    type=DialectChoice,
+    default=DEFAULT_DIALECT,
+    show_default=True,
+    help="SQL dialect used to parse model SQL.",
+)
 def dbt_scan(
     project_path: Path,
     show_all: bool,
@@ -137,6 +146,7 @@ def dbt_scan(
     patch_dir: Path | None,
     apply_patches: bool,
     use_compiled: bool,
+    dialect: str,
 ) -> None:
     """Scan dbt model SQL files for verified rewrite opportunities."""
     if show_diff and output_format == "json":
@@ -160,6 +170,7 @@ def dbt_scan(
             rules=select_rules(selected_rules),
             include_all=show_all,
             compiled_path=compiled_path,
+            dialect=dialect,
         )
     except DbtProjectDiscoveryError as error:
         raise click.ClickException(str(error)) from error
@@ -241,6 +252,13 @@ def dbt_scan(
     show_default=True,
     help="Output format.",
 )
+@click.option(
+    "--dialect",
+    type=DialectChoice,
+    default=DEFAULT_DIALECT,
+    show_default=True,
+    help="SQL dialect used to parse and render the query.",
+)
 def suggest(
     query_path: Path,
     schema_path: Path,
@@ -248,11 +266,12 @@ def suggest(
     show_all: bool,
     selected_rules: tuple[str, ...],
     output_format: str,
+    dialect: str,
 ) -> None:
     """Suggest verified-safe rewrites for one SQL query."""
     raw_sql = query_path.read_text()
     try:
-        query = parse_select(raw_sql)
+        query = parse_select(raw_sql, dialect=dialect)
         constraints = _load_constraints(schema_path, schema_format)
         suggestions = suggest_rewrites(query, constraints, rules=select_rules(selected_rules))
     except UnsupportedSqlError as error:
@@ -267,14 +286,14 @@ def suggest(
 
     if show_all:
         if output_format == "json":
-            click.echo(render_suggestions_json(suggestions))
+            click.echo(render_suggestions_json(suggestions, dialect=dialect))
         else:
             console.print(render_suggestions_report(suggestions))
         return
 
     suggestion = first_applicable_suggestion(suggestions)
     if output_format == "json":
-        click.echo(render_suggestion_json(suggestion))
+        click.echo(render_suggestion_json(suggestion, dialect=dialect))
     else:
         console.print(render_suggestion_report(suggestion))
 
@@ -328,6 +347,13 @@ def suggest(
     show_default=True,
     help="Output format.",
 )
+@click.option(
+    "--dialect",
+    type=DialectChoice,
+    default=DEFAULT_DIALECT,
+    show_default=True,
+    help="SQL dialect used to parse and render the query.",
+)
 def candidates_generate(
     query_path: Path,
     schema_path: Path,
@@ -337,11 +363,12 @@ def candidates_generate(
     selected_rules: tuple[str, ...],
     force: bool,
     output_format: str,
+    dialect: str,
 ) -> None:
     """Generate candidate SQL files from Snowprove's rewrite rules."""
     raw_sql = query_path.read_text()
     try:
-        query = parse_select(raw_sql)
+        query = parse_select(raw_sql, dialect=dialect)
         constraints = _load_constraints(schema_path, schema_format)
         suggestions = suggest_rewrites(query, constraints, rules=select_rules(selected_rules))
     except (UnsupportedSqlError, ValueError) as error:
@@ -361,6 +388,7 @@ def candidates_generate(
                 output_dir=str(output_dir),
                 generated=generated,
                 skipped=skipped,
+                dialect=dialect,
             )
         )
         return
@@ -451,6 +479,13 @@ def candidates_generate(
     type=int,
     help="External verifier timeout in seconds.",
 )
+@click.option(
+    "--dialect",
+    type=DialectChoice,
+    default=DEFAULT_DIALECT,
+    show_default=True,
+    help="SQL dialect used for generation and verification.",
+)
 def candidates_run(
     query_path: Path,
     schema_path: Path,
@@ -465,11 +500,12 @@ def candidates_run(
     verifier: str,
     solver_command: str | None,
     timeout_seconds: int | None,
+    dialect: str,
 ) -> None:
     """Generate candidate SQL files and verify them in one command."""
     raw_sql = query_path.read_text()
     try:
-        query = parse_select(raw_sql)
+        query = parse_select(raw_sql, dialect=dialect)
         constraints = _load_constraints(schema_path, schema_format)
         suggestions = suggest_rewrites(query, constraints, rules=select_rules(selected_rules))
     except (UnsupportedSqlError, ValueError) as error:
@@ -492,14 +528,20 @@ def candidates_run(
         verifier=verifier,
         solver_command=solver_command,
         timeout_seconds=timeout_seconds,
+        dialect=dialect,
     )
     generation = _candidate_generation_payload(
         query_path,
         output_dir,
         generated,
         skipped,
+        dialect,
     )
-    json_report = render_candidate_run_json(generation=generation, verifications=results)
+    json_report = render_candidate_run_json(
+        generation=generation,
+        verifications=results,
+        dialect=dialect,
+    )
 
     if output_format == "json":
         click.echo(json_report)
@@ -574,6 +616,13 @@ def candidates_run(
     type=int,
     help="External verifier timeout in seconds.",
 )
+@click.option(
+    "--dialect",
+    type=DialectChoice,
+    default=DEFAULT_DIALECT,
+    show_default=True,
+    help="SQL dialect used for verification.",
+)
 def check(
     original_path: Path,
     rewritten_path: Path,
@@ -584,6 +633,7 @@ def check(
     verifier: str,
     solver_command: str | None,
     timeout_seconds: int | None,
+    dialect: str,
 ) -> None:
     """Check whether two supported SQL queries are equivalent."""
     original_sql = original_path.read_text()
@@ -602,6 +652,7 @@ def check(
         original_sql,
         rewritten_sql,
         constraints,
+        dialect=dialect,
     )
     result = result.model_copy(
         update={
@@ -610,6 +661,7 @@ def check(
                 rewritten_path,
                 schema_path,
                 schema_format,
+                dialect,
             )
         }
     )
@@ -675,6 +727,13 @@ def check(
     type=int,
     help="External verifier timeout in seconds.",
 )
+@click.option(
+    "--dialect",
+    type=DialectChoice,
+    default=DEFAULT_DIALECT,
+    show_default=True,
+    help="SQL dialect used for verification.",
+)
 def candidates_check(
     original_path: Path,
     candidate_paths: tuple[Path, ...],
@@ -686,6 +745,7 @@ def candidates_check(
     verifier: str,
     solver_command: str | None,
     timeout_seconds: int | None,
+    dialect: str,
 ) -> None:
     """Check generated candidate SQL files against one original query."""
     original_sql = original_path.read_text()
@@ -706,6 +766,7 @@ def candidates_check(
         verifier=verifier,
         solver_command=solver_command,
         timeout_seconds=timeout_seconds,
+        dialect=dialect,
     )
     metadata_by_path = load_candidate_metadata(candidates_dir)
 
@@ -714,6 +775,7 @@ def candidates_check(
             render_candidate_verifications_json(
                 results,
                 metadata_by_path=metadata_by_path,
+                dialect=dialect,
             )
         )
     else:
@@ -740,12 +802,14 @@ def _verification_inputs(
     rewritten_path: Path,
     schema_path: Path,
     schema_format: str,
+    dialect: str,
 ) -> dict[str, str]:
     return {
         "original_path": str(original_path),
         "rewritten_path": str(rewritten_path),
         "schema_path": str(schema_path),
         "schema_format": schema_format,
+        "dialect": dialect,
     }
 
 
@@ -764,6 +828,7 @@ def _verify_candidates(
     verifier: str,
     solver_command: str | None,
     timeout_seconds: int | None,
+    dialect: str,
 ) -> list[VerificationResult]:
     backend = get_verifier_backend(
         verifier,
@@ -771,13 +836,19 @@ def _verify_candidates(
         timeout_seconds=timeout_seconds,
     )
     return [
-        backend.verify(original_sql, candidate_path.read_text(), constraints).model_copy(
+        backend.verify(
+            original_sql,
+            candidate_path.read_text(),
+            constraints,
+            dialect=dialect,
+        ).model_copy(
             update={
                 "inputs": _verification_inputs(
                     original_path,
                     candidate_path,
                     schema_path,
                     schema_format,
+                    dialect,
                 )
             }
         )
@@ -846,10 +917,12 @@ def _candidate_generation_payload(
     output_dir: Path,
     generated: list[dict[str, str]],
     skipped: list[dict[str, str]],
+    dialect: str,
 ) -> dict[str, object]:
     return {
         "original_path": str(query_path),
         "output_dir": str(output_dir),
+        "dialect": dialect,
         "generated_count": len(generated),
         "skipped_count": len(skipped),
         "generated": generated,

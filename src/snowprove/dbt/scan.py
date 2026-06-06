@@ -6,6 +6,7 @@ from snowprove.constraints.dbt_loader import load_dbt_constraints
 from snowprove.constraints.model import ConstraintCatalog, TableConstraints
 from snowprove.dbt.jinja import preprocess_dbt_sql
 from snowprove.dbt.project import discover_dbt_project
+from snowprove.dialects import DEFAULT_DIALECT, SqlDialect
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.rewrites.registry import RewriteRule, first_applicable_suggestion, suggest_rewrites
@@ -60,6 +61,7 @@ class DbtScanResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     project_path: Path
+    dialect: SqlDialect = DEFAULT_DIALECT
     model_count: int
     results: tuple[DbtModelScanResult, ...] = Field(default_factory=tuple)
 
@@ -112,13 +114,14 @@ def scan_dbt_project(
     rules: tuple[RewriteRule, ...],
     include_all: bool = False,
     compiled_path: Path | None = None,
+    dialect: SqlDialect = DEFAULT_DIALECT,
 ) -> DbtScanResult:
     project = discover_dbt_project(project_path, compiled_path=compiled_path)
     constraints = _load_project_constraints(project.schema_yml_files)
     results = []
 
     for model_path in project.model_sql_files:
-        suggestions = _scan_model(model_path, constraints, rules, include_all)
+        suggestions = _scan_model(model_path, constraints, rules, include_all, dialect)
         if suggestions:
             source_sql = model_path.read_text()
             preprocessed = preprocess_dbt_sql(source_sql)
@@ -137,6 +140,7 @@ def scan_dbt_project(
 
     return DbtScanResult(
         project_path=project_path,
+        dialect=dialect,
         model_count=len(project.model_sql_files),
         results=tuple(results),
     )
@@ -147,6 +151,7 @@ def _scan_model(
     constraints: ConstraintCatalog,
     rules: tuple[RewriteRule, ...],
     include_all: bool,
+    dialect: SqlDialect,
 ) -> list[RewriteSuggestion]:
     source_sql = model_path.read_text()
     preprocessed = preprocess_dbt_sql(source_sql)
@@ -164,7 +169,7 @@ def _scan_model(
         )
 
     try:
-        query = parse_select(preprocessed.sql)
+        query = parse_select(preprocessed.sql, dialect=dialect)
     except UnsupportedSqlError as error:
         return _visible_suggestions(
             [
