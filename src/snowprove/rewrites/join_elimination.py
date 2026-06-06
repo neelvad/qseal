@@ -1,5 +1,5 @@
 from snowprove.constraints.model import ConstraintCatalog
-from snowprove.ir.model import Join, Predicate, SelectQuery
+from snowprove.ir.model import InPredicate, Join, Predicate, SelectQuery
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 
 
@@ -83,7 +83,7 @@ def _uses_joined_relation(query: SelectQuery, join: Join) -> bool:
 
 
 def _predicate_uses_joined_relation(predicate, joined_name: str) -> bool:
-    if not isinstance(predicate, Predicate):
+    if not isinstance(predicate, Predicate | InPredicate):
         return True
     return predicate.left.table == joined_name
 

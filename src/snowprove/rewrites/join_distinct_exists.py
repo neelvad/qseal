@@ -1,5 +1,5 @@
 from snowprove.constraints.model import ConstraintCatalog
-from snowprove.ir.model import ExistsPredicate, Join, Predicate, SelectQuery
+from snowprove.ir.model import ExistsPredicate, InPredicate, Join, Predicate, SelectQuery
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 
 
@@ -115,10 +115,10 @@ def _join_condition_connects_left_and_right(join: Join, left_relation: str) -> b
 
 
 def _predicates_only_reference_left_relation(
-    predicates: tuple[Predicate | ExistsPredicate, ...],
+    predicates: tuple[Predicate | InPredicate | ExistsPredicate, ...],
     left_relation: str,
 ) -> bool:
     return all(
-        isinstance(predicate, Predicate) and predicate.left.table == left_relation
+        isinstance(predicate, Predicate | InPredicate) and predicate.left.table == left_relation
         for predicate in predicates
     )

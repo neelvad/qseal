@@ -6,6 +6,7 @@ from snowprove.ir.model import (
     ColumnRef,
     ExistsPredicate,
     HavingPredicate,
+    InPredicate,
     Join,
     JoinCondition,
     LiteralValue,
@@ -521,13 +522,13 @@ def _reject_unsupported_clauses(parsed: exp.Select) -> None:
             raise UnsupportedSqlError(f"{clause_name} is not supported yet.")
 
 
-def _where_predicates(where: exp.Where | None) -> list[Predicate | ExistsPredicate]:
+def _where_predicates(where: exp.Where | None) -> list[Predicate | InPredicate | ExistsPredicate]:
     if where is None:
         return []
     return _predicate_expression(where.this)
 
 
-def _predicate_expression(node: exp.Expression) -> list[Predicate | ExistsPredicate]:
+def _predicate_expression(node: exp.Expression) -> list[Predicate | InPredicate | ExistsPredicate]:
     if isinstance(node, exp.And):
         return [
             *_predicate_expression(node.this),
@@ -535,13 +536,17 @@ def _predicate_expression(node: exp.Expression) -> list[Predicate | ExistsPredic
         ]
     if isinstance(node, exp.EQ | exp.GT | exp.GTE | exp.LT | exp.LTE):
         return [_comparison(node)]
+    if isinstance(node, exp.In):
+        return [_in_predicate(node)]
+    if isinstance(node, exp.Not) and isinstance(node.this, exp.In):
+        return [_in_predicate(node.this, negated=True)]
     if isinstance(node, exp.Is | exp.Not):
         return [_null_predicate(node)]
     if isinstance(node, exp.Exists):
         return [_exists_predicate(node)]
     raise UnsupportedSqlError(
-        "Only ANDed column/literal comparisons, NULL predicates, and simple EXISTS "
-        "predicates are supported."
+        "Only ANDed column/literal comparisons, IN predicates, NULL predicates, "
+        "and simple EXISTS predicates are supported."
     )
 
 
@@ -556,6 +561,27 @@ def _comparison(node: exp.Expression) -> Predicate:
             value=str(node.expression.this),
             is_string=bool(node.expression.is_string),
         ),
+    )
+
+
+def _in_predicate(node: exp.In, negated: bool = False) -> InPredicate:
+    if not isinstance(node.this, exp.Column):
+        raise UnsupportedSqlError("WHERE IN predicates must compare a column to literals.")
+    if not node.expressions:
+        raise UnsupportedSqlError("WHERE IN predicates must include at least one literal.")
+    if any(not isinstance(expression, exp.Literal) for expression in node.expressions):
+        raise UnsupportedSqlError("WHERE IN predicates must compare a column to literals.")
+
+    return InPredicate(
+        left=ColumnRef(table=node.this.table or None, name=node.this.name),
+        values=tuple(
+            LiteralValue(
+                value=str(expression.this),
+                is_string=bool(expression.is_string),
+            )
+            for expression in node.expressions
+        ),
+        negated=negated,
     )
 
 

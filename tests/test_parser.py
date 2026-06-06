@@ -139,6 +139,17 @@ def test_parse_select_with_null_predicates() -> None:
     ]
 
 
+def test_parse_select_with_in_predicates() -> None:
+    query = parse_select(
+        "SELECT * FROM orders WHERE status NOT IN ('placed', 'returned') AND user_id IN (1, 2)"
+    )
+
+    assert [predicate.to_sql() for predicate in query.predicates] == [
+        "status NOT IN ('placed', 'returned')",
+        "user_id IN (1, 2)",
+    ]
+
+
 def test_parse_select_with_exists_predicate() -> None:
     query = parse_select(
         """

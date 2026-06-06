@@ -63,6 +63,19 @@ class Predicate(BaseModel):
         return Predicate(left=self.left.unqualified(), operator=self.operator, right=self.right)
 
 
+class InPredicate(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    left: ColumnRef
+    values: tuple[LiteralValue, ...]
+    negated: bool = False
+
+    def to_sql(self) -> str:
+        operator = "NOT IN" if self.negated else "IN"
+        values = ", ".join(value.to_sql() for value in self.values)
+        return f"{self.left.to_sql()} {operator} ({values})"
+
+
 class HavingPredicate(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -133,7 +146,7 @@ class SelectQuery(BaseModel):
     alias: str | None = None
     joins: tuple[Join, ...] = ()
     projections: tuple[ColumnRef, ...]
-    predicates: tuple[Predicate | ExistsPredicate, ...] = ()
+    predicates: tuple[Predicate | InPredicate | ExistsPredicate, ...] = ()
     group_by: tuple[ColumnRef, ...] = ()
     having: tuple[HavingPredicate, ...] = ()
     distinct: bool
