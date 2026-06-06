@@ -49,3 +49,21 @@ conservative, not by pretending to verify all Snowflake SQL.
 - SMT-backed verification experiments
 - adapters for SQLSolver, QED, or related SQL-equivalence tools
 - Lean/Coq proofs for the internal rewrite rules
+
+## DuckDB Rewrite-Policy Research
+
+This track uses DuckDB as a reproducible local execution engine while keeping
+semantic equivalence and performance measurement separate.
+
+1. Explicit DuckDB dialect propagation through parsing, verification, and
+   artifacts.
+2. Repeated DuckDB benchmarks with warmups, plans, timeouts, and version data.
+3. Seeded query and database fixtures with varied sizes and distributions.
+4. Structured rewrite matches that define a finite action space.
+5. A framework-neutral environment returning solver status, benchmark results,
+   reward, and termination state.
+6. Content-addressed caches and JSONL or Parquet trajectory artifacts.
+7. Fixed-order, random, greedy, beam-search, and exhaustive-search baselines.
+8. A small learned ranking or rule-selection policy.
+9. SFT and verifier-guided RL for SQL generation only after structured-policy
+   experiments demonstrate useful generalization.

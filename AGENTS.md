@@ -6,7 +6,8 @@ sessions can resume quickly.
 ## Project Goal
 
 Snowprove is a CLI-first prototype for verified-safe SQL rewrites over a small
-Snowflake/dbt subset. The eventual direction is:
+SQL/dbt subset. Snowflake remains the likely commercial target, while DuckDB is
+the local research and benchmarking dialect. The eventual direction is:
 
 1. A user supplies a base SQL query.
 2. An untrusted generator, eventually an LLM, proposes an optimized candidate.
@@ -15,6 +16,15 @@ Snowflake/dbt subset. The eventual direction is:
 
 The current product does not prove performance improvement. It proves semantic
 equivalence for supported rewrite patterns under trusted schema assumptions.
+
+An additional research direction is verifier-guided rewrite optimization:
+
+1. Generate reproducible DuckDB query and data-distribution tasks.
+2. Expose existing rewrite rules as structured actions.
+3. Use an equivalence solver as the semantic-safety oracle.
+4. Use repeatable DuckDB benchmarks as the performance reward.
+5. Compare learned policies with fixed-order, random, greedy, beam-search, and
+   exhaustive-search baselines.
 
 ## Current Status
 
@@ -201,21 +211,23 @@ calling SQLSolver.
 
 ## Recommended Next Step
 
-Next likely step is to make the SQLSolver backend easier to invoke from the
-Colima container, then test `snowprove check --verifier sqlsolver` against the
-checked-in solver compatibility fixtures end-to-end.
+Prepare the regular codebase for a small DuckDB rewrite-policy experiment:
 
-Practical options:
+1. Make DuckDB an explicit parser, CLI, artifact, and verifier dialect.
+2. Add a reproducible DuckDB performance evaluator with warmups, repeated
+   measurements, plans, timeouts, and version metadata.
+3. Add seeded database fixtures covering table size, selectivity, cardinality,
+   uniqueness, nullability, skew, and duplicates.
+4. Refactor rules to expose structured matches and applications so they form a
+   finite action space.
+5. Add a framework-neutral `reset()` / `step()` environment contract.
+6. Cache solver and benchmark results and emit trajectory artifacts.
+7. Establish fixed-order, random, greedy, beam-search, and short exhaustive
+   baselines before training a learned policy.
 
-- add a small container-side wrapper script that runs SQLSolver with
-  `/sqlsolver/build/libs/sqlsolver-v1.1.0.jar` and `/sqlsolver/lib`
-- run Snowprove from the mounted repo inside the x86_64 container with
-  `uv run snowprove check ... --verifier sqlsolver --solver-command ...`
-- or keep the backend unit-tested locally and use
-  `scripts/run_sqlsolver_fixture.sh` as the manual solver smoke test
-
-After that, consider a thin documented command for the x86_64 container workflow
-or a Dockerfile if repeated setup becomes annoying.
+The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least
+five structured actions, solver-backed equivalence rewards, repeatable latency
+measurement, cached trajectories, and non-RL baselines.
 
 ## Likely Future Work
 
@@ -246,3 +258,12 @@ LLM phase, later:
 - add an untrusted candidate-generation command
 - run every candidate through `check --fail-on unproven`
 - never apply or recommend an LLM rewrite unless Snowprove proves equivalence
+
+RL research phase:
+
+- keep the first policy structured rather than free-form SQL generation
+- treat solver `UNKNOWN`, timeout, and unsupported results as unusable rewards
+- prevent identity rewrites from becoming the dominant safe policy
+- store normalized SQL, schema, fixture, solver version, DuckDB version, plans,
+  timings, and reward for every evaluated transition
+- scale to small-model SFT/GRPO only after search baselines are established
