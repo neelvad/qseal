@@ -105,6 +105,9 @@ def test_step_rejects_unproven_transition_without_advancing_state() -> None:
     assert transition.reward == -1
     assert transition.terminated is True
     assert transition.observation == observation
+    assert transition.proposed_sql == (
+        "SELECT user_id\nFROM users\nWHERE display_name IS NOT NULL;"
+    )
     assert transition.verification.status == VerificationStatus.NOT_EQUIVALENT
     with pytest.raises(RuntimeError, match="episode is complete"):
         environment.step(observation.actions[0].action_id)

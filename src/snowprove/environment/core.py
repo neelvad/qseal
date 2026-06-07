@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import math
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from snowprove.benchmark import BenchmarkResult, BenchmarkStatus, benchmark_query_pair
 from snowprove.environment.model import (
@@ -28,6 +29,16 @@ class PerformanceEvaluator(Protocol):
         pass
 
 
+class TrajectoryRecorder(Protocol):
+    def record(
+        self,
+        task: EnvironmentTask,
+        before: EnvironmentObservation,
+        transition: EnvironmentTransition,
+    ) -> Any:
+        pass
+
+
 class DuckDbPerformanceEvaluator:
     def __init__(
         self,
@@ -38,6 +49,7 @@ class DuckDbPerformanceEvaluator:
         repetitions: int = 5,
         timeout_seconds: float = 30.0,
         threads: int = 1,
+        fixture_fingerprint: str | None = None,
     ) -> None:
         self.database_path = database_path
         self.setup_sql = setup_sql
@@ -45,6 +57,7 @@ class DuckDbPerformanceEvaluator:
         self.repetitions = repetitions
         self.timeout_seconds = timeout_seconds
         self.threads = threads
+        self.fixture_fingerprint = fixture_fingerprint
 
     def evaluate(self, original_sql: str, rewritten_sql: str) -> BenchmarkResult:
         return benchmark_query_pair(
@@ -58,6 +71,22 @@ class DuckDbPerformanceEvaluator:
             threads=self.threads,
         )
 
+    def cache_context(self) -> dict[str, Any]:
+        return {
+            "evaluator": "duckdb",
+            "database_path": str(self.database_path),
+            "fixture_fingerprint": self.fixture_fingerprint,
+            "setup_sha256": (
+                hashlib.sha256(self.setup_sql.encode()).hexdigest()
+                if self.setup_sql is not None
+                else None
+            ),
+            "warmups": self.warmups,
+            "repetitions": self.repetitions,
+            "timeout_seconds": self.timeout_seconds,
+            "threads": self.threads,
+        }
+
 
 class RewriteEnvironment:
     def __init__(
@@ -65,10 +94,12 @@ class RewriteEnvironment:
         *,
         verifier: VerifierBackend | None = None,
         performance_evaluator: PerformanceEvaluator | None = None,
+        trajectory_recorder: TrajectoryRecorder | None = None,
         rules: tuple[RewriteRule, ...] = DEFAULT_RULES,
     ) -> None:
         self.verifier = verifier or BuiltinVerifierBackend()
         self.performance_evaluator = performance_evaluator
+        self.trajectory_recorder = trajectory_recorder
         self.rules = rules
         self._task: EnvironmentTask | None = None
         self._observation: EnvironmentObservation | None = None
@@ -114,15 +145,18 @@ class RewriteEnvironment:
         )
         if verification.status != VerificationStatus.PROVEN_EQUIVALENT:
             self._done = True
-            return EnvironmentTransition(
+            transition = EnvironmentTransition(
                 action=action,
                 observation=observation,
+                proposed_sql=suggestion.rewritten_sql,
                 reward=_verification_failure_reward(verification.status),
                 terminated=True,
                 truncated=False,
                 verification=verification,
                 reason="Verifier did not prove the selected transition equivalent.",
             )
+            self._record(task, observation, transition)
+            return transition
 
         benchmark = (
             self.performance_evaluator.evaluate(
@@ -147,9 +181,10 @@ class RewriteEnvironment:
 
         self._observation = next_observation
         self._done = terminated or truncated
-        return EnvironmentTransition(
+        transition = EnvironmentTransition(
             action=action,
             observation=next_observation,
+            proposed_sql=suggestion.rewritten_sql,
             reward=reward,
             terminated=terminated,
             truncated=truncated,
@@ -157,6 +192,8 @@ class RewriteEnvironment:
             benchmark=benchmark,
             reason=reason,
         )
+        self._record(task, observation, transition)
+        return transition
 
     @property
     def observation(self) -> EnvironmentObservation | None:
@@ -198,6 +235,15 @@ class RewriteEnvironment:
             actions=actions,
             metadata=task.metadata,
         )
+
+    def _record(
+        self,
+        task: EnvironmentTask,
+        before: EnvironmentObservation,
+        transition: EnvironmentTransition,
+    ) -> None:
+        if self.trajectory_recorder is not None:
+            self.trajectory_recorder.record(task, before, transition)
 
 
 def _verification_failure_reward(status: VerificationStatus) -> float:

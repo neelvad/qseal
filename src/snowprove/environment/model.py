@@ -44,6 +44,7 @@ class EnvironmentTransition(BaseModel):
 
     action: EnvironmentAction
     observation: EnvironmentObservation
+    proposed_sql: str
     reward: float
     terminated: bool
     truncated: bool

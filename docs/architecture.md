@@ -26,6 +26,7 @@ SQL text
 - `fixtures`: generates seeded DuckDB databases and reproducibility manifests.
 - `environment`: exposes framework-neutral rewrite episodes through `reset()`
   and `step()`.
+- `cache`: provides canonical content hashes and atomic filesystem storage.
 - `report`: renders human-readable CLI output.
 
 ## Rewrite Registry

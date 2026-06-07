@@ -35,6 +35,10 @@ transition = environment.step(observation.actions[0].action_id)
 5. Re-parses the next query and enumerates its next actions.
 6. Reports reward, termination, truncation, verification, and benchmark data.
 
+Optional cached verifier/evaluator wrappers and a JSONL recorder can be
+injected without changing the environment. See
+[`caching-and-trajectories.md`](caching-and-trajectories.md).
+
 The default verifier is Snowprove's builtin backend. A different verifier and
 performance evaluator can be injected through protocols.
 

@@ -123,6 +123,18 @@ Rewrite environment:
 - reward is the log speedup from current SQL to next SQL
 - unproven transitions terminate without advancing; maximum steps truncate
 
+Caching and trajectories:
+
+- canonical SHA-256 keys over sorted JSON inputs
+- atomic filesystem cache under caller-selected roots
+- cached verifier keys include SQL, dialect, constraints, backend, namespace,
+  and context
+- cached benchmark keys include SQL, evaluator settings, namespace, and fixture
+  context
+- generated fixture table fingerprints should identify benchmark data
+- JSONL trajectory records preserve state SQL, proposed SQL, actual next state,
+  oracle artifacts, rewards, and termination flags
+
 dbt workflows:
 
 - scans `models/**/*.sql`
@@ -277,11 +289,12 @@ Completed:
    space while preserving legacy CLI behavior.
 5. A framework-neutral environment provides verified `reset()` / `step()`
    episodes and optional incremental benchmark rewards.
+6. Content-addressed verifier/benchmark caches and JSONL trajectory artifacts
+   avoid repeated oracle work and preserve experiment data.
 
 Next:
 
-1. Cache solver and benchmark results and emit trajectory artifacts.
-2. Establish fixed-order, random, greedy, beam-search, and short exhaustive
+1. Establish fixed-order, random, greedy, beam-search, and short exhaustive
    baselines before training a learned policy.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least

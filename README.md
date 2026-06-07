@@ -82,6 +82,9 @@ For search or RL experiments, `snowprove.environment.RewriteEnvironment`
 provides a framework-neutral `reset(task)` / `step(action_id)` API. It
 enumerates structured rewrite actions, verifies every transition before
 advancing, and can attach incremental DuckDB log-speedup rewards.
+Filesystem-backed wrappers cache solver and benchmark results by canonical
+content hash, while an optional JSONL recorder persists auditable training
+trajectories.
 
 Useful options:
 
