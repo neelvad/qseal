@@ -1,0 +1,213 @@
+import json
+from pathlib import Path
+from shutil import copytree
+
+import pytest
+import yaml
+
+from snowprove.benchmark.model import (
+    BenchmarkEnvironment,
+    BenchmarkResult,
+    BenchmarkStatus,
+    QueryBenchmark,
+)
+from snowprove.corpora import bundled_corpus_path
+from snowprove.corpus import CorpusRunConfig, load_task_corpus, run_task_corpus
+
+
+def test_runs_selected_tasks_and_strategies_with_comparison_summary(
+    tmp_path: Path,
+) -> None:
+    corpus = _tiny_corpus(tmp_path)
+    report_path = tmp_path / "run" / "report.json"
+    config = CorpusRunConfig(
+        task_ids=("distinct-and-not-null",),
+        strategies=("fixed_order", "greedy", "beam", "exhaustive"),
+        beam_width=2,
+        max_nodes=20,
+    )
+
+    report = run_task_corpus(
+        corpus,
+        tmp_path / "run",
+        config=config,
+        performance_evaluator_factory=_evaluator_factory,
+        report_path=report_path,
+    )
+
+    assert report.artifact_type == "corpus_search_run"
+    assert report.corpus_fingerprint == corpus.fingerprint
+    assert len(report.tasks) == 1
+    task = report.tasks[0]
+    assert task.task_id == "distinct-and-not-null"
+    assert [result.strategy for result in task.results] == list(config.strategies)
+    assert all(result.status == "COMPLETED" for result in task.results)
+    assert all(result.search_result is not None for result in task.results)
+    assert all(
+        result.verification_calls.requests > 0 for result in task.results
+    )
+    assert all(result.benchmark_calls.requests > 0 for result in task.results)
+
+    summaries = {summary.strategy: summary for summary in report.strategy_summaries}
+    assert summaries["fixed_order"].completed_count == 1
+    assert summaries["fixed_order"].error_count == 0
+    assert summaries["fixed_order"].mean_cumulative_reward == pytest.approx(
+        2 * 0.6931471805599453
+    )
+    assert summaries["exhaustive"].total_explored_nodes > 0
+    assert summaries["exhaustive"].verification_cache_misses > 0
+
+    payload = json.loads(report_path.read_text())
+    assert payload["artifact_type"] == "corpus_search_run"
+    assert payload["tasks"][0]["task_id"] == "distinct-and-not-null"
+    assert payload["strategy_summaries"][0]["strategy"] == "fixed_order"
+
+
+def test_reuses_strategy_cache_on_repeated_run(tmp_path: Path) -> None:
+    corpus = _tiny_corpus(tmp_path)
+    config = CorpusRunConfig(
+        task_ids=("redundant-distinct-users",),
+        strategies=("fixed_order",),
+    )
+    output_dir = tmp_path / "run"
+
+    first = run_task_corpus(
+        corpus,
+        output_dir,
+        config=config,
+        performance_evaluator_factory=_evaluator_factory,
+    )
+    second = run_task_corpus(
+        corpus,
+        output_dir,
+        config=config,
+        performance_evaluator_factory=_evaluator_factory,
+    )
+
+    first_result = first.tasks[0].results[0]
+    second_result = second.tasks[0].results[0]
+    assert first_result.verification_calls.cache_misses == 1
+    assert first_result.benchmark_calls.cache_misses == 1
+    assert second_result.verification_calls.cache_misses == 0
+    assert second_result.benchmark_calls.cache_misses == 0
+    assert second_result.verification_calls.cache_hits == 1
+    assert second_result.benchmark_calls.cache_hits == 1
+
+
+def test_strategy_errors_are_recorded_without_aborting_report(tmp_path: Path) -> None:
+    corpus = _tiny_corpus(tmp_path)
+
+    report = run_task_corpus(
+        corpus,
+        tmp_path / "run",
+        config=CorpusRunConfig(
+            task_ids=("redundant-distinct-users",),
+            strategies=("fixed_order", "random"),
+        ),
+        performance_evaluator_factory=_failing_evaluator_factory,
+    )
+
+    assert [result.status for result in report.tasks[0].results] == [
+        "ERROR",
+        "ERROR",
+    ]
+    assert all(
+        "RuntimeError: benchmark failed" in (result.error or "")
+        for result in report.tasks[0].results
+    )
+    assert [summary.error_count for summary in report.strategy_summaries] == [1, 1]
+
+
+def test_rejects_unknown_task_selection(tmp_path: Path) -> None:
+    corpus = _tiny_corpus(tmp_path)
+
+    with pytest.raises(ValueError, match="Unknown corpus tasks: missing"):
+        run_task_corpus(
+            corpus,
+            tmp_path / "run",
+            config=CorpusRunConfig(task_ids=("missing",)),
+            performance_evaluator_factory=_evaluator_factory,
+        )
+
+
+def test_run_config_rejects_duplicate_strategies() -> None:
+    with pytest.raises(ValueError, match="Duplicate strategies"):
+        CorpusRunConfig(strategies=("greedy", "greedy"))
+
+
+def _tiny_corpus(tmp_path: Path):
+    copied_root = copytree(
+        bundled_corpus_path().parent,
+        tmp_path / "tiny-corpus",
+    )
+    manifest_path = copied_root / "corpus.yml"
+    payload = yaml.safe_load(manifest_path.read_text())
+    for fixture in payload["fixtures"]:
+        fixture["spec"].update(
+            {
+                "user_rows": 20,
+                "order_rows": 50,
+                "event_rows": 30,
+            }
+        )
+    manifest_path.write_text(yaml.safe_dump(payload, sort_keys=False))
+    return load_task_corpus(manifest_path)
+
+
+def _evaluator_factory(task, database_path, fixture_manifest):
+    del task, database_path, fixture_manifest
+    return _FixedPerformanceEvaluator(speedup=2.0)
+
+
+def _failing_evaluator_factory(task, database_path, fixture_manifest):
+    del task, database_path, fixture_manifest
+    return _FailingPerformanceEvaluator()
+
+
+class _FixedPerformanceEvaluator:
+    def __init__(self, speedup: float) -> None:
+        self.speedup = speedup
+
+    def cache_context(self):
+        return {"evaluator": "fixed", "speedup": self.speedup}
+
+    def evaluate(self, original_sql: str, rewritten_sql: str) -> BenchmarkResult:
+        environment = BenchmarkEnvironment(
+            duckdb_version="test",
+            python_version="test",
+            platform="test",
+            database_path="fixture.duckdb",
+            threads=1,
+            warmups=0,
+            repetitions=1,
+            timeout_seconds=1,
+        )
+        return BenchmarkResult(
+            status=BenchmarkStatus.COMPLETED,
+            original=QueryBenchmark(
+                status=BenchmarkStatus.COMPLETED,
+                sql=original_sql,
+                timings_ms=(self.speedup,),
+                median_ms=self.speedup,
+                row_count=1,
+            ),
+            rewritten=QueryBenchmark(
+                status=BenchmarkStatus.COMPLETED,
+                sql=rewritten_sql,
+                timings_ms=(1.0,),
+                median_ms=1.0,
+                row_count=1,
+            ),
+            environment=environment,
+            speedup=self.speedup,
+            row_counts_match=True,
+        )
+
+
+class _FailingPerformanceEvaluator:
+    def cache_context(self):
+        return {"evaluator": "failing"}
+
+    def evaluate(self, original_sql: str, rewritten_sql: str) -> BenchmarkResult:
+        del original_sql, rewritten_sql
+        raise RuntimeError("benchmark failed")

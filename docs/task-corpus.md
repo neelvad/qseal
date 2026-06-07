@@ -14,6 +14,29 @@ corpus = load_task_corpus(bundled_corpus_path())
 materialize_corpus_fixtures(corpus, Path("snowprove-corpus-data"))
 ```
 
+The corpus runner executes search baselines and writes a versioned comparison
+artifact:
+
+```bash
+uv run snowprove corpus run snowprove-runs/corpus
+```
+
+For a short smoke run:
+
+```bash
+uv run snowprove corpus run snowprove-runs/corpus-smoke \
+  --task distinct-and-not-null \
+  --strategy fixed_order \
+  --strategy greedy \
+  --warmups 0 \
+  --repetitions 1
+```
+
+Useful controls include `--random-seed`, `--beam-width`, `--max-nodes`,
+`--threads`, `--timeout`, `--manifest`, and `--report-file`. Fixture databases
+and content-addressed oracle caches are retained under the output directory, so
+repeated runs reuse both.
+
 The manifest separates named DuckDB fixture profiles from task definitions.
 Multiple tasks can therefore share one generated database.
 
@@ -55,8 +78,25 @@ The initial corpus contains five tasks:
 
 Two fixture profiles vary seed, selectivity, duplicates, nulls, and join skew.
 This is a format and runner foundation, not yet a statistically useful training
-set. The next milestone is a corpus runner that executes every search baseline
-and records reward, path, oracle calls, benchmark calls, and elapsed time.
+set.
+
+## Run Artifacts
+
+The `corpus_search_run` JSON artifact records:
+
+- complete per-task `SearchResult` paths
+- cumulative reward and explored nodes
+- verifier and benchmark requests, cache hits, and real cache misses
+- elapsed time and failure details for each task-strategy pair
+- aggregate completion, mean reward, explored-node, oracle-call, and elapsed
+  metrics by strategy
+- corpus/task fingerprints and Python, DuckDB, and platform versions
+
+Cache namespaces are isolated by task and strategy. Search branches within one
+strategy share cached oracle work, but a strategy does not receive artificially
+low miss counts because another strategy ran first. A failed strategy is
+recorded without aborting the remaining report; the CLI exits nonzero after
+writing the artifact if any strategy failed.
 
 ## Adding Tasks
 

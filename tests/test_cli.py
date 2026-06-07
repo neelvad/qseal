@@ -1,9 +1,12 @@
 import json
 from pathlib import Path
+from shutil import copytree
 
+import yaml
 from click.testing import CliRunner
 
 from snowprove.cli import main
+from snowprove.corpora import bundled_corpus_path
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -132,6 +135,53 @@ def test_fixtures_create_cli_writes_database_and_manifest(tmp_path) -> None:
     assert payload["tables"]["events"]["row_count"] == 200
     assert database.exists()
     assert json.loads(manifest.read_text()) == payload
+
+
+def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
+    corpus_root = copytree(bundled_corpus_path().parent, tmp_path / "corpus")
+    manifest_path = corpus_root / "corpus.yml"
+    payload = yaml.safe_load(manifest_path.read_text())
+    for fixture in payload["fixtures"]:
+        fixture["spec"].update(
+            {
+                "user_rows": 20,
+                "order_rows": 50,
+                "event_rows": 30,
+            }
+        )
+    manifest_path.write_text(yaml.safe_dump(payload, sort_keys=False))
+    output_dir = tmp_path / "run"
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "corpus",
+            "run",
+            str(output_dir),
+            "--manifest",
+            str(manifest_path),
+            "--task",
+            "redundant-distinct-users",
+            "--strategy",
+            "fixed_order",
+            "--warmups",
+            "0",
+            "--repetitions",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    report_path = output_dir / "corpus-run.json"
+    report = json.loads(report_path.read_text())
+    assert report["artifact_type"] == "corpus_search_run"
+    assert report["tasks"][0]["task_id"] == "redundant-distinct-users"
+    assert report["tasks"][0]["results"][0]["status"] == "COMPLETED"
+    assert report["strategy_summaries"][0]["strategy"] == "fixed_order"
+    assert (output_dir / "fixtures" / "standard-small.duckdb").is_file()
+    assert not (output_dir / "fixtures" / "low-skew-small.duckdb").exists()
 
 
 def test_suggest_cli_reports_unsupported_sql(tmp_path) -> None:

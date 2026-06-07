@@ -153,6 +153,10 @@ Task corpus:
 - task and corpus content fingerprints are independent of checkout paths
 - fixture materialization generates one DuckDB database per named profile
 - loader rejects duplicate IDs, unknown rules/references, and unsafe paths
+- `snowprove corpus run OUTPUT_DIR` executes selected tasks and strategies
+- run artifacts include paths, rewards, explored nodes, isolated cache metrics,
+  elapsed time, failures, and aggregate strategy summaries
+- repeated runs reuse fixture databases and content-addressed oracle caches
 
 dbt workflows:
 
@@ -314,13 +318,15 @@ Completed:
    baselines explore the verified rewrite environment.
 8. A versioned DuckDB corpus defines two seeded fixture profiles and five
    initial tasks with stable content fingerprints.
+9. A corpus runner compares all five search strategies and writes versioned
+   JSON reports with per-run and aggregate oracle/performance metrics.
 
 Next:
 
-1. Build a corpus runner that compares every search baseline on reward, solver
-   calls, benchmark calls, and wall-clock cost.
-2. Expand the corpus from five foundation tasks toward 50-200 systematic task
+1. Expand the corpus from five foundation tasks toward 50-200 systematic task
    variations.
+2. Run and inspect repeated baseline comparisons to calibrate benchmark noise,
+   task difficulty, and useful reward thresholds.
 3. Add a small learned action-ranking policy only after baseline measurements
    are reproducible.
 

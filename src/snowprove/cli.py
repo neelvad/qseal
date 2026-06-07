@@ -6,6 +6,8 @@ from rich.console import Console
 from snowprove.benchmark import BenchmarkStatus, benchmark_query_pair
 from snowprove.candidates.bundle import load_candidate_metadata
 from snowprove.constraints.loader import load_constraint_catalog
+from snowprove.corpora import bundled_corpus_path
+from snowprove.corpus import CorpusRunConfig, load_task_corpus, run_task_corpus
 from snowprove.dbt.project import DbtProjectDiscoveryError, discover_compiled_sql_path
 from snowprove.dbt.scan import scan_dbt_project
 from snowprove.dialects import DEFAULT_DIALECT, SUPPORTED_DIALECTS
@@ -53,6 +55,10 @@ FailOn = click.Choice(["none", "findings"], case_sensitive=False)
 CheckFailOn = click.Choice(["none", "unproven"], case_sensitive=False)
 VerifierChoice = click.Choice(["builtin", "external", "sqlsolver"], case_sensitive=False)
 DialectChoice = click.Choice(SUPPORTED_DIALECTS, case_sensitive=False)
+SearchStrategyChoice = click.Choice(
+    ["fixed_order", "random", "greedy", "beam", "exhaustive"],
+    case_sensitive=False,
+)
 
 
 @click.group()
@@ -73,6 +79,124 @@ def candidates_group() -> None:
 @main.group(name="fixtures")
 def fixtures_group() -> None:
     """Create reproducible benchmark data."""
+
+
+@main.group(name="corpus")
+def corpus_group() -> None:
+    """Run reproducible rewrite-search tasks."""
+
+
+@corpus_group.command(name="run")
+@click.argument("output_dir", type=click.Path(file_okay=False, path_type=Path))
+@click.option(
+    "--manifest",
+    "manifest_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Corpus manifest. Defaults to the bundled duckdb-v1 corpus.",
+)
+@click.option(
+    "--task",
+    "task_ids",
+    multiple=True,
+    help="Only run a task ID. Can be passed more than once.",
+)
+@click.option(
+    "--strategy",
+    "strategies",
+    multiple=True,
+    type=SearchStrategyChoice,
+    help="Only run a search strategy. Can be passed more than once.",
+)
+@click.option("--random-seed", type=int, default=42, show_default=True)
+@click.option("--beam-width", type=click.IntRange(min=1), default=4, show_default=True)
+@click.option("--max-nodes", type=click.IntRange(min=1), default=100, show_default=True)
+@click.option("--warmups", type=click.IntRange(min=0), default=1, show_default=True)
+@click.option("--repetitions", type=click.IntRange(min=1), default=3, show_default=True)
+@click.option(
+    "--timeout",
+    "timeout_seconds",
+    type=click.FloatRange(min=0, min_open=True),
+    default=30.0,
+    show_default=True,
+)
+@click.option("--threads", type=click.IntRange(min=1), default=1, show_default=True)
+@click.option(
+    "--report-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="JSON report path. Defaults to OUTPUT_DIR/corpus-run.json.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+)
+def corpus_run(
+    output_dir: Path,
+    manifest_path: Path | None,
+    task_ids: tuple[str, ...],
+    strategies: tuple[str, ...],
+    random_seed: int,
+    beam_width: int,
+    max_nodes: int,
+    warmups: int,
+    repetitions: int,
+    timeout_seconds: float,
+    threads: int,
+    report_file: Path | None,
+    output_format: str,
+) -> None:
+    """Execute search baselines over a task corpus."""
+    manifest_path = manifest_path or bundled_corpus_path()
+    report_file = report_file or output_dir / "corpus-run.json"
+    config_values = {
+        "task_ids": task_ids,
+        "random_seed": random_seed,
+        "beam_width": beam_width,
+        "max_nodes": max_nodes,
+        "warmups": warmups,
+        "repetitions": repetitions,
+        "timeout_seconds": timeout_seconds,
+        "threads": threads,
+    }
+    if strategies:
+        config_values["strategies"] = strategies
+
+    try:
+        report = run_task_corpus(
+            load_task_corpus(manifest_path),
+            output_dir,
+            config=CorpusRunConfig(**config_values),
+            report_path=report_file,
+        )
+    except ValueError as error:
+        raise click.ClickException(str(error)) from error
+
+    if output_format == "json":
+        click.echo(report.model_dump_json(indent=2))
+    else:
+        console.print(
+            f"Corpus: {report.corpus_id} v{report.corpus_version} "
+            f"({len(report.tasks)} tasks)"
+        )
+        for summary in report.strategy_summaries:
+            reward = (
+                f"{summary.mean_cumulative_reward:.6f}"
+                if summary.mean_cumulative_reward is not None
+                else "n/a"
+            )
+            console.print(
+                f"  {summary.strategy}: {summary.completed_count}/"
+                f"{summary.run_count} completed, mean reward {reward}, "
+                f"{summary.verification_cache_misses} verifier calls, "
+                f"{summary.benchmark_cache_misses} benchmark calls, "
+                f"{summary.total_elapsed_seconds:.3f}s"
+            )
+    click.echo(f"Report file written: {report_file}", err=True)
+
+    if any(summary.error_count for summary in report.strategy_summaries):
+        raise click.exceptions.Exit(1)
 
 
 @fixtures_group.command(name="create")

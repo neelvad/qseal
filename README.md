@@ -95,6 +95,13 @@ A bundled, versioned DuckDB task corpus provides seeded fixture profiles and
 five initial rewrite-search tasks. See
 [`docs/task-corpus.md`](docs/task-corpus.md).
 
+```bash
+uv run snowprove corpus run snowprove-runs/corpus \
+  --task distinct-and-not-null \
+  --strategy greedy \
+  --strategy beam
+```
+
 Useful options:
 
 ```bash
