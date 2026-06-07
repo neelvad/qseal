@@ -135,6 +135,15 @@ Caching and trajectories:
 - JSONL trajectory records preserve state SQL, proposed SQL, actual next state,
   oracle artifacts, rewards, and termination flags
 
+Search baselines:
+
+- fixed-order and seeded random forced rollouts
+- greedy best-improvement search
+- beam search with configurable width and SQL-state deduplication
+- breadth-first exhaustive search with a strict evaluated-node limit
+- immutable result artifacts containing paths, rewards, and search metadata
+- environment factories isolate branch state while allowing shared caches
+
 dbt workflows:
 
 - scans `models/**/*.sql`
@@ -291,11 +300,15 @@ Completed:
    episodes and optional incremental benchmark rewards.
 6. Content-addressed verifier/benchmark caches and JSONL trajectory artifacts
    avoid repeated oracle work and preserve experiment data.
+7. Fixed-order, seeded random, greedy, beam-search, and bounded exhaustive
+   baselines explore the verified rewrite environment.
 
 Next:
 
-1. Establish fixed-order, random, greedy, beam-search, and short exhaustive
-   baselines before training a learned policy.
+1. Build an initial 50-200 task DuckDB corpus and compare the search baselines
+   on reward, solver calls, benchmark calls, and wall-clock cost.
+2. Add a small learned action-ranking policy only after baseline measurements
+   are reproducible.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least
 five structured actions, solver-backed equivalence rewards, repeatable latency

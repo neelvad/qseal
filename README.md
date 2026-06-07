@@ -86,6 +86,11 @@ Filesystem-backed wrappers cache solver and benchmark results by canonical
 content hash, while an optional JSONL recorder persists auditable training
 trajectories.
 
+Fixed-order, seeded random, greedy, beam, and bounded exhaustive search
+baselines are available from `snowprove.search`. See
+[`docs/search-baselines.md`](docs/search-baselines.md) for their contracts and
+usage.
+
 Useful options:
 
 ```bash
