@@ -16,10 +16,12 @@ def test_loads_versioned_duckdb_corpus() -> None:
     corpus = load_task_corpus(CORPUS_PATH)
 
     assert corpus.manifest.corpus_id == "duckdb-foundations"
-    assert corpus.manifest.corpus_version == "1"
+    assert corpus.manifest.corpus_version == "2"
     assert corpus.manifest.dialect == "duckdb"
-    assert len(corpus.manifest.fixtures) == 2
-    assert [task.definition.task_id for task in corpus.tasks] == [
+    assert len(corpus.manifest.fixtures) == 4
+    assert len(corpus.manifest.task_families) == 5
+    assert len(corpus.tasks) == 25
+    assert [task.definition.task_id for task in corpus.tasks[:5]] == [
         "redundant-distinct-users",
         "redundant-not-null-user-id",
         "unused-left-join-users",
@@ -33,12 +35,31 @@ def test_loads_versioned_duckdb_corpus() -> None:
     assert task.environment_task.max_steps == 4
     assert task.environment_task.metadata == {
         "corpus_id": "duckdb-foundations",
-        "corpus_version": "1",
+        "corpus_version": "2",
         "fixture_id": "standard-small",
         "tags": ["distinct", "filter", "multi-action", "order-sensitive"],
     }
     assert task.fixture.spec.seed == 42
     assert len(task.fingerprint) == 64
+
+    generated = corpus.task("distinct-orders-duplicate-heavy-small")
+    assert generated.definition.family_id == "distinct"
+    assert generated.definition.variant_id == "orders"
+    assert generated.environment_task.metadata == {
+        "corpus_id": "duckdb-foundations",
+        "corpus_version": "2",
+        "fixture_id": "duplicate-heavy-small",
+        "tags": [
+            "distinct",
+            "uniqueness",
+            "single-action",
+            "table:orders",
+            "fixture:duplicate-heavy-small",
+            "generated",
+        ],
+        "family_id": "distinct",
+        "variant_id": "orders",
+    }
 
 
 def test_bundled_corpus_path_rejects_unknown_name() -> None:
@@ -89,6 +110,8 @@ def test_materializes_each_named_fixture_once(tmp_path: Path) -> None:
     ]
     for task in payload["tasks"]:
         task["fixture_id"] = "tiny"
+    for family in payload["task_families"]:
+        family["fixture_ids"] = ["tiny"]
     manifest_path.write_text(yaml.safe_dump(payload, sort_keys=False))
     corpus = load_task_corpus(manifest_path)
 
@@ -152,6 +175,19 @@ def test_rejects_duplicate_task_ids(tmp_path: Path) -> None:
     manifest_path.write_text(yaml.safe_dump(payload, sort_keys=False))
 
     with pytest.raises(ValueError, match="Duplicate task IDs"):
+        load_task_corpus(manifest_path)
+
+
+def test_rejects_expanded_task_id_collision(tmp_path: Path) -> None:
+    copied_root = copytree(CORPUS_PATH.parent, tmp_path / "expanded-collision")
+    manifest_path = copied_root / "corpus.yml"
+    payload = yaml.safe_load(manifest_path.read_text())
+    payload["tasks"][0]["task_id"] = (
+        "distinct-users-active-heavy-small"
+    )
+    manifest_path.write_text(yaml.safe_dump(payload, sort_keys=False))
+
+    with pytest.raises(ValueError, match="Expanded corpus contains duplicate task IDs"):
         load_task_corpus(manifest_path)
 
 

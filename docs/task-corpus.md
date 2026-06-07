@@ -66,9 +66,9 @@ The corpus fingerprint includes the manifest and ordered task fingerprints.
 Checkout paths do not affect either fingerprint. These IDs should be included
 in benchmark caches, trajectory records, and comparison reports.
 
-## Bundled v1 Tasks
+## Bundled duckdb-v1 Corpus
 
-The initial corpus contains five tasks:
+The bundled corpus contains five hand-written anchor tasks:
 
 - redundant `DISTINCT` removal
 - redundant non-null filter removal
@@ -76,8 +76,18 @@ The initial corpus contains five tasks:
 - `JOIN` plus `DISTINCT` to `EXISTS`
 - a multi-action `DISTINCT` plus non-null-filter task
 
-Two fixture profiles vary seed, selectivity, duplicates, nulls, and join skew.
-This is a format and runner foundation, not yet a statistically useful training
+It also expands five task families across query variants and contrasting
+fixture profiles, producing 25 concrete tasks total. The generated families
+cover:
+
+- redundant `DISTINCT`
+- redundant non-null filters
+- unused `LEFT JOIN`
+- `JOIN` plus `DISTINCT` to `EXISTS`
+- multi-action `DISTINCT` plus non-null-filter cases
+
+Four fixture profiles vary seed, selectivity, duplicates, nulls, and join skew.
+This is still a small foundation set, not yet a statistically useful training
 set.
 
 ## Run Artifacts

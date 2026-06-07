@@ -1,7 +1,7 @@
 schema_version: 1
 artifact_type: rewrite_task_corpus
 corpus_id: duckdb-foundations
-corpus_version: "1"
+corpus_version: "2"
 dialect: duckdb
 
 fixtures:
@@ -27,6 +27,28 @@ fixtures:
       duplicate_fraction: 0.1
       skew_fraction: 0.1
       segment_count: 5
+  - fixture_id: active-heavy-small
+    spec:
+      seed: 2718
+      user_rows: 10000
+      order_rows: 100000
+      event_rows: 50000
+      active_fraction: 0.9
+      null_fraction: 0.01
+      duplicate_fraction: 0.05
+      skew_fraction: 0.5
+      segment_count: 4
+  - fixture_id: duplicate-heavy-small
+    spec:
+      seed: 1618
+      user_rows: 10000
+      order_rows: 100000
+      event_rows: 50000
+      active_fraction: 0.1
+      null_fraction: 0.3
+      duplicate_fraction: 0.8
+      skew_fraction: 0.95
+      segment_count: 20
 
 tasks:
   - task_id: redundant-distinct-users
@@ -104,3 +126,130 @@ tasks:
       - order-sensitive
     expected_verifiers:
       - builtin
+
+task_families:
+  - family_id: distinct
+    constraints_path: schema.yml
+    fixture_ids:
+      - active-heavy-small
+      - duplicate-heavy-small
+    max_steps: 2
+    enabled_rules:
+      - remove_redundant_distinct
+    tags:
+      - distinct
+      - uniqueness
+      - single-action
+    expected_verifiers:
+      - builtin
+      - sqlsolver
+    variants:
+      - variant_id: users
+        query_path: queries/redundant-distinct-users.sql
+        tags:
+          - table:users
+      - variant_id: orders
+        query_path: queries/redundant-distinct-orders.sql
+        tags:
+          - table:orders
+
+  - family_id: not-null
+    constraints_path: schema.yml
+    fixture_ids:
+      - active-heavy-small
+      - duplicate-heavy-small
+    max_steps: 2
+    enabled_rules:
+      - remove_redundant_not_null_filter
+    tags:
+      - filter
+      - nullability
+      - single-action
+    expected_verifiers:
+      - builtin
+    variants:
+      - variant_id: users
+        query_path: queries/redundant-not-null-user-id.sql
+        tags:
+          - table:users
+      - variant_id: orders
+        query_path: queries/redundant-not-null-order-id.sql
+        tags:
+          - table:orders
+
+  - family_id: unused-left-join
+    constraints_path: schema.yml
+    fixture_ids:
+      - active-heavy-small
+      - duplicate-heavy-small
+    max_steps: 2
+    enabled_rules:
+      - remove_unused_left_join
+    tags:
+      - join
+      - uniqueness
+      - single-action
+    expected_verifiers:
+      - builtin
+      - sqlsolver
+    variants:
+      - variant_id: orders-users
+        query_path: queries/unused-left-join-users.sql
+        tags:
+          - table:orders
+      - variant_id: events-users
+        query_path: queries/unused-left-join-events-users.sql
+        tags:
+          - table:events
+
+  - family_id: join-distinct-exists
+    constraints_path: schema.yml
+    fixture_ids:
+      - active-heavy-small
+      - duplicate-heavy-small
+    max_steps: 2
+    enabled_rules:
+      - rewrite_join_distinct_to_exists
+    tags:
+      - join
+      - distinct
+      - exists
+      - single-action
+    expected_verifiers:
+      - builtin
+      - sqlsolver
+    variants:
+      - variant_id: orders
+        query_path: queries/join-distinct-to-exists.sql
+        tags:
+          - table:orders
+      - variant_id: events
+        query_path: queries/join-distinct-events-to-exists.sql
+        tags:
+          - table:events
+
+  - family_id: distinct-not-null
+    constraints_path: schema.yml
+    fixture_ids:
+      - active-heavy-small
+      - duplicate-heavy-small
+    max_steps: 4
+    enabled_rules:
+      - remove_redundant_distinct
+      - remove_redundant_not_null_filter
+    tags:
+      - distinct
+      - filter
+      - multi-action
+      - order-sensitive
+    expected_verifiers:
+      - builtin
+    variants:
+      - variant_id: users
+        query_path: queries/distinct-and-not-null.sql
+        tags:
+          - table:users
+      - variant_id: orders
+        query_path: queries/distinct-and-not-null-orders.sql
+        tags:
+          - table:orders

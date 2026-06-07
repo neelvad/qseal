@@ -148,7 +148,8 @@ Task corpus:
 
 - bundled `duckdb-v1` corpus installed with the package
 - versioned manifest with named fixture profiles and task definitions
-- five initial tasks covering single-action and multi-action rewrite cases
+- five hand-written anchors plus twenty generated family tasks
+- task families expand query variants across selected fixture profiles
 - each task resolves to an `EnvironmentTask` with corpus provenance
 - task and corpus content fingerprints are independent of checkout paths
 - fixture materialization generates one DuckDB database per named profile
@@ -316,14 +317,14 @@ Completed:
    avoid repeated oracle work and preserve experiment data.
 7. Fixed-order, seeded random, greedy, beam-search, and bounded exhaustive
    baselines explore the verified rewrite environment.
-8. A versioned DuckDB corpus defines two seeded fixture profiles and five
-   initial tasks with stable content fingerprints.
+8. A versioned DuckDB corpus defines four seeded fixture profiles and 25
+   concrete tasks with stable content fingerprints.
 9. A corpus runner compares all five search strategies and writes versioned
    JSON reports with per-run and aggregate oracle/performance metrics.
 
 Next:
 
-1. Expand the corpus from five foundation tasks toward 50-200 systematic task
+1. Expand the corpus from 25 foundation tasks toward 50-200 systematic task
    variations.
 2. Run and inspect repeated baseline comparisons to calibrate benchmark noise,
    task difficulty, and useful reward thresholds.

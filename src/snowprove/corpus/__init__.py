@@ -4,6 +4,8 @@ from snowprove.corpus.model import (
     CorpusFixture,
     CorpusManifest,
     CorpusTaskDefinition,
+    CorpusTaskFamily,
+    CorpusTaskVariant,
     LoadedCorpusTask,
     LoadedTaskCorpus,
 )
@@ -24,6 +26,8 @@ __all__ = [
     "CorpusRunReport",
     "CorpusTaskRun",
     "CorpusTaskDefinition",
+    "CorpusTaskFamily",
+    "CorpusTaskVariant",
     "LoadedCorpusTask",
     "LoadedTaskCorpus",
     "OracleCallMetrics",
