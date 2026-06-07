@@ -144,6 +144,16 @@ Search baselines:
 - immutable result artifacts containing paths, rewards, and search metadata
 - environment factories isolate branch state while allowing shared caches
 
+Task corpus:
+
+- bundled `duckdb-v1` corpus installed with the package
+- versioned manifest with named fixture profiles and task definitions
+- five initial tasks covering single-action and multi-action rewrite cases
+- each task resolves to an `EnvironmentTask` with corpus provenance
+- task and corpus content fingerprints are independent of checkout paths
+- fixture materialization generates one DuckDB database per named profile
+- loader rejects duplicate IDs, unknown rules/references, and unsafe paths
+
 dbt workflows:
 
 - scans `models/**/*.sql`
@@ -302,12 +312,16 @@ Completed:
    avoid repeated oracle work and preserve experiment data.
 7. Fixed-order, seeded random, greedy, beam-search, and bounded exhaustive
    baselines explore the verified rewrite environment.
+8. A versioned DuckDB corpus defines two seeded fixture profiles and five
+   initial tasks with stable content fingerprints.
 
 Next:
 
-1. Build an initial 50-200 task DuckDB corpus and compare the search baselines
-   on reward, solver calls, benchmark calls, and wall-clock cost.
-2. Add a small learned action-ranking policy only after baseline measurements
+1. Build a corpus runner that compares every search baseline on reward, solver
+   calls, benchmark calls, and wall-clock cost.
+2. Expand the corpus from five foundation tasks toward 50-200 systematic task
+   variations.
+3. Add a small learned action-ranking policy only after baseline measurements
    are reproducible.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least

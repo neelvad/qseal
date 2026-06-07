@@ -1,0 +1,106 @@
+schema_version: 1
+artifact_type: rewrite_task_corpus
+corpus_id: duckdb-foundations
+corpus_version: "1"
+dialect: duckdb
+
+fixtures:
+  - fixture_id: standard-small
+    spec:
+      seed: 42
+      user_rows: 10000
+      order_rows: 100000
+      event_rows: 50000
+      active_fraction: 0.2
+      null_fraction: 0.1
+      duplicate_fraction: 0.25
+      skew_fraction: 0.8
+      segment_count: 10
+  - fixture_id: low-skew-small
+    spec:
+      seed: 314
+      user_rows: 10000
+      order_rows: 100000
+      event_rows: 50000
+      active_fraction: 0.5
+      null_fraction: 0.05
+      duplicate_fraction: 0.1
+      skew_fraction: 0.1
+      segment_count: 5
+
+tasks:
+  - task_id: redundant-distinct-users
+    query_path: queries/redundant-distinct-users.sql
+    constraints_path: schema.yml
+    fixture_id: standard-small
+    max_steps: 2
+    enabled_rules:
+      - remove_redundant_distinct
+    tags:
+      - distinct
+      - uniqueness
+      - single-action
+    expected_verifiers:
+      - builtin
+      - sqlsolver
+
+  - task_id: redundant-not-null-user-id
+    query_path: queries/redundant-not-null-user-id.sql
+    constraints_path: schema.yml
+    fixture_id: standard-small
+    max_steps: 2
+    enabled_rules:
+      - remove_redundant_not_null_filter
+    tags:
+      - filter
+      - nullability
+      - single-action
+    expected_verifiers:
+      - builtin
+
+  - task_id: unused-left-join-users
+    query_path: queries/unused-left-join-users.sql
+    constraints_path: schema.yml
+    fixture_id: standard-small
+    max_steps: 2
+    enabled_rules:
+      - remove_unused_left_join
+    tags:
+      - join
+      - uniqueness
+      - single-action
+    expected_verifiers:
+      - builtin
+      - sqlsolver
+
+  - task_id: join-distinct-to-exists
+    query_path: queries/join-distinct-to-exists.sql
+    constraints_path: schema.yml
+    fixture_id: low-skew-small
+    max_steps: 2
+    enabled_rules:
+      - rewrite_join_distinct_to_exists
+    tags:
+      - join
+      - distinct
+      - exists
+      - single-action
+    expected_verifiers:
+      - builtin
+      - sqlsolver
+
+  - task_id: distinct-and-not-null
+    query_path: queries/distinct-and-not-null.sql
+    constraints_path: schema.yml
+    fixture_id: standard-small
+    max_steps: 4
+    enabled_rules:
+      - remove_redundant_distinct
+      - remove_redundant_not_null_filter
+    tags:
+      - distinct
+      - filter
+      - multi-action
+      - order-sensitive
+    expected_verifiers:
+      - builtin

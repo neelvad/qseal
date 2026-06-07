@@ -1,0 +1,31 @@
+tables:
+  users:
+    columns:
+      user_id:
+        nullable: false
+      status:
+        nullable: false
+      segment_id:
+        nullable: false
+    unique:
+      - [user_id]
+  orders:
+    columns:
+      order_id:
+        nullable: false
+      user_id:
+        nullable: false
+      amount_cents:
+        nullable: false
+    unique:
+      - [order_id]
+  events:
+    columns:
+      event_id:
+        nullable: false
+      natural_key:
+        nullable: false
+      user_id:
+        nullable: false
+    unique:
+      - [event_id]

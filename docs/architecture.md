@@ -28,6 +28,9 @@ SQL text
   and `step()`.
 - `search`: explores environment actions with fixed-order, seeded random,
   greedy, beam, and bounded exhaustive baselines.
+- `corpus`: validates and loads versioned rewrite tasks and materializes their
+  named DuckDB fixture profiles.
+- `corpora`: stores task corpus data shipped in the Python package.
 - `cache`: provides canonical content hashes and atomic filesystem storage.
 - `report`: renders human-readable CLI output.
 
