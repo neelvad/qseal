@@ -16,6 +16,7 @@ from snowprove.policy import (
     evaluate_baseline_policy,
     inspect_baseline_policy,
     train_baseline_policy,
+    train_linear_policy,
 )
 from snowprove.policy.baseline import (
     PolicyHoldoutEvaluation,
@@ -131,6 +132,54 @@ def test_baseline_policy_features_include_same_rule_action_context(tmp_path) -> 
         stats["rule_target_index:remove_redundant_not_null_filter:1"].win_rate
         == 1.0
     )
+
+
+def test_linear_policy_trains_and_evaluates_choice_states(tmp_path) -> None:
+    corpus = load_task_corpus(bundled_corpus_path())
+    task = corpus.task("double-not-null-events-standard-medium")
+    trajectory_path = tmp_path / "trajectories.jsonl"
+    first_predicate = "remove_redundant_not_null_filter::predicate:0"
+    second_predicate = "remove_redundant_not_null_filter::predicate:1"
+    export_corpus_trajectories(
+        _report(
+            corpus,
+            task.definition.task_id,
+            task.fingerprint,
+            task.fixture.fixture_id,
+            task.definition.enabled_rules,
+            task.definition.tags,
+            task.environment_task.sql,
+            first_predicate,
+            second_predicate,
+            first_rewrite_sql=(
+                "SELECT event_id, user_id\n"
+                "FROM events\n"
+                "WHERE user_id IS NOT NULL;"
+            ),
+            second_rewrite_sql=(
+                "SELECT event_id, user_id\n"
+                "FROM events\n"
+                "WHERE event_id IS NOT NULL;"
+            ),
+            first_reward=0.1,
+            second_reward=0.3,
+        ),
+        corpus,
+        trajectory_path,
+    )
+
+    model = train_linear_policy(trajectory_path, epochs=3)
+    evaluation = evaluate_baseline_policy(trajectory_path, model)
+    inspection = inspect_baseline_policy(trajectory_path, model, mode="all")
+
+    assert model.artifact_type == "linear_policy_model"
+    assert model.model_type == "linear_action_ranker"
+    assert model.choice_state_count == 1
+    assert model.update_count >= 1
+    assert model.feature_weights
+    assert evaluation.correct_count == 1
+    assert evaluation.accuracy == 1.0
+    assert inspection.rows[0].predicted_action_id == second_predicate
 
 
 def test_baseline_policy_filters_train_and_evaluation_splits(tmp_path) -> None:

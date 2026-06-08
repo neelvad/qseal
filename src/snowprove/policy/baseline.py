@@ -35,6 +35,13 @@ class FeatureStat(BaseModel):
     win_rate: float
 
 
+class FeatureWeight(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    feature: str
+    weight: float
+
+
 class PolicyActionContext(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -57,6 +64,28 @@ class BaselinePolicyModel(BaseModel):
     labeled_state_count: int
     feature_stats: tuple[FeatureStat, ...]
     default_score: float
+
+
+class LinearPolicyModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    schema_version: Literal[1] = 1
+    artifact_type: Literal["linear_policy_model"] = "linear_policy_model"
+    model_type: Literal["linear_action_ranker"] = "linear_action_ranker"
+    generated_at: datetime
+    source_trajectories: str | None = None
+    data_filter: PolicyDataFilter = Field(default_factory=PolicyDataFilter)
+    state_count: int
+    labeled_state_count: int
+    choice_state_count: int
+    epochs: int = Field(ge=1)
+    learning_rate: float = Field(gt=0)
+    update_count: int = Field(ge=0)
+    feature_weights: tuple[FeatureWeight, ...]
+    default_score: float = 0.0
+
+
+type PolicyModel = BaselinePolicyModel | LinearPolicyModel
 
 
 class RuleAccuracy(BaseModel):
@@ -207,9 +236,68 @@ def train_baseline_policy(
     )
 
 
+def train_linear_policy(
+    trajectory_path: Path,
+    *,
+    source_trajectories: str | None = None,
+    data_filter: PolicyDataFilter | None = None,
+    epochs: int = 20,
+    learning_rate: float = 1.0,
+) -> LinearPolicyModel:
+    if epochs < 1:
+        raise ValueError("epochs must be one or greater.")
+    if learning_rate <= 0:
+        raise ValueError("learning_rate must be greater than zero.")
+
+    data_filter = data_filter or PolicyDataFilter()
+    records = load_corpus_trajectory_records(trajectory_path)
+    examples = _filter_examples(_state_examples(records), data_filter)
+    labeled = [example for example in examples if example.oracle_action_id is not None]
+    choice_examples = [
+        example for example in labeled if len(example.available_action_ids) >= 2
+    ]
+    weights: dict[str, float] = {}
+    update_count = 0
+
+    for _ in range(epochs):
+        for example in choice_examples:
+            assert example.oracle_action_id is not None
+            non_oracle_actions = tuple(
+                action_id for action_id in example.available_action_ids
+                if action_id != example.oracle_action_id
+            )
+            if not non_oracle_actions:
+                continue
+            reward_span = _reward_span(example)
+            for action_id in non_oracle_actions:
+                scale = _preference_scale(example, action_id, reward_span)
+                for feature in _features(example, example.oracle_action_id):
+                    weights[feature] = weights.get(feature, 0.0) + learning_rate * scale
+                for feature in _features(example, action_id):
+                    weights[feature] = weights.get(feature, 0.0) - learning_rate * scale
+                update_count += 1
+
+    return LinearPolicyModel(
+        generated_at=datetime.now(UTC),
+        source_trajectories=source_trajectories,
+        data_filter=data_filter,
+        state_count=len(examples),
+        labeled_state_count=len(labeled),
+        choice_state_count=len(choice_examples),
+        epochs=epochs,
+        learning_rate=learning_rate,
+        update_count=update_count,
+        feature_weights=tuple(
+            FeatureWeight(feature=feature, weight=weight)
+            for feature, weight in sorted(weights.items())
+            if weight != 0
+        ),
+    )
+
+
 def evaluate_baseline_policy(
     trajectory_path: Path,
-    model: BaselinePolicyModel,
+    model: PolicyModel,
     *,
     source_trajectories: str | None = None,
     model_path: str | None = None,
@@ -227,7 +315,6 @@ def evaluate_baseline_policy(
         )
         if example.oracle_action_id is not None
     ]
-    scores = {stat.feature: stat.win_rate for stat in model.feature_stats}
     correct = 0
     acceptable = 0
     predicted = 0
@@ -235,7 +322,7 @@ def evaluate_baseline_policy(
     by_rule: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
 
     for example in examples:
-        prediction = _predict(example, scores, model.default_score)
+        prediction = _predict_policy(example, model)
         if prediction is None:
             continue
         predicted += 1
@@ -289,7 +376,7 @@ def evaluate_baseline_policy(
 
 def inspect_baseline_policy(
     trajectory_path: Path,
-    model: BaselinePolicyModel,
+    model: PolicyModel,
     *,
     source_trajectories: str | None = None,
     model_path: str | None = None,
@@ -311,14 +398,13 @@ def inspect_baseline_policy(
         )
         if example.oracle_action_id is not None
     ]
-    scores = {stat.feature: stat.win_rate for stat in model.feature_stats}
     rows = []
     predicted = 0
     miss_count = 0
     unacceptable_count = 0
 
     for example in examples:
-        prediction = _predict(example, scores, model.default_score)
+        prediction = _predict_policy(example, model)
         if prediction is None:
             continue
         predicted += 1
@@ -356,7 +442,7 @@ def inspect_baseline_policy(
                 oracle_suffix_reward=oracle_reward,
                 predicted_suffix_reward=predicted_reward,
                 action_scores={
-                    action_id: _score(example, action_id, scores, model.default_score)
+                    action_id: _score_policy(example, action_id, model)
                     for action_id in example.available_action_ids
                 },
             )
@@ -378,34 +464,61 @@ def inspect_baseline_policy(
 
 
 def score_baseline_action(
-    model: BaselinePolicyModel,
+    model: PolicyModel,
     context: PolicyActionContext,
     action_id: str,
 ) -> float:
-    scores = {stat.feature: stat.win_rate for stat in model.feature_stats}
-    values = [
-        scores[feature]
-        for feature in _feature_values(
-            fixture_id=context.fixture_id,
-            tags=context.tags,
-            step_index=context.step_index,
-            action_id=action_id,
-            available_action_ids=context.available_action_ids,
-        )
-        if feature in scores
-    ]
-    if not values:
-        return model.default_score
-    return sum(values) / len(values)
+    return score_policy_action(model, context, action_id)
 
 
-def write_baseline_policy(model: BaselinePolicyModel, path: Path) -> None:
+def score_policy_action(
+    model: PolicyModel,
+    context: PolicyActionContext,
+    action_id: str,
+) -> float:
+    features = _feature_values(
+        fixture_id=context.fixture_id,
+        tags=context.tags,
+        step_index=context.step_index,
+        action_id=action_id,
+        available_action_ids=context.available_action_ids,
+    )
+    return _score_features(model, features)
+
+
+def _score_features(model: PolicyModel, features: tuple[str, ...]) -> float:
+    if isinstance(model, BaselinePolicyModel):
+        scores = {stat.feature: stat.win_rate for stat in model.feature_stats}
+        values = [scores[feature] for feature in features if feature in scores]
+        if not values:
+            return model.default_score
+        return sum(values) / len(values)
+
+    weights = {item.feature: item.weight for item in model.feature_weights}
+    return sum(weights.get(feature, 0.0) for feature in features) + model.default_score
+
+
+def write_baseline_policy(model: PolicyModel, path: Path) -> None:
+    write_policy_model(model, path)
+
+
+def write_policy_model(model: PolicyModel, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(model.model_dump_json(indent=2))
 
 
-def load_baseline_policy(path: Path) -> BaselinePolicyModel:
-    return BaselinePolicyModel.model_validate_json(path.read_text())
+def load_baseline_policy(path: Path) -> PolicyModel:
+    return load_policy_model(path)
+
+
+def load_policy_model(path: Path) -> PolicyModel:
+    payload = json.loads(path.read_text())
+    artifact_type = payload.get("artifact_type")
+    if artifact_type == "baseline_policy_model":
+        return BaselinePolicyModel.model_validate(payload)
+    if artifact_type == "linear_policy_model":
+        return LinearPolicyModel.model_validate(payload)
+    raise ValueError(f"Unknown policy model artifact_type: {artifact_type}.")
 
 
 def render_baseline_policy_training(model: BaselinePolicyModel) -> str:
@@ -420,6 +533,21 @@ def render_baseline_policy_training(model: BaselinePolicyModel) -> str:
         ]
     )
 
+
+def render_linear_policy_training(model: LinearPolicyModel) -> str:
+    return "\n".join(
+        [
+            f"Model: {model.model_type}",
+            f"States: {model.state_count}",
+            f"Labeled states: {model.labeled_state_count}",
+            f"Choice states: {model.choice_state_count}",
+            f"Epochs: {model.epochs}",
+            f"Learning rate: {model.learning_rate:.6f}",
+            f"Updates: {model.update_count}",
+            f"Feature weights: {len(model.feature_weights)}",
+            f"Filter: {_render_filter(model.data_filter)}",
+        ]
+    )
 
 def render_baseline_policy_evaluation(evaluation: BaselinePolicyEvaluation) -> str:
     accuracy = "n/a" if evaluation.accuracy is None else f"{evaluation.accuracy:.4f}"
@@ -595,36 +723,57 @@ def _matches_filter(example: _StateExample, data_filter: PolicyDataFilter) -> bo
     return not tags.intersection(data_filter.exclude_tags)
 
 
-def _predict(
-    example: _StateExample,
-    scores: dict[str, float],
-    default_score: float,
-) -> str | None:
+def _predict_policy(example: _StateExample, model: PolicyModel) -> str | None:
     if not example.available_action_ids:
         return None
     return sorted(
         example.available_action_ids,
         key=lambda action_id: (
-            -_score(example, action_id, scores, default_score),
+            -_score_policy(example, action_id, model),
             action_id,
         ),
     )[0]
 
 
-def _score(
+def _score_policy(
     example: _StateExample,
     action_id: str,
-    scores: dict[str, float],
+    model: PolicyModel,
+) -> float:
+    return _score_features(model, _features(example, action_id))
+
+
+def _score_linear_features(
+    features: tuple[str, ...],
+    weights: dict[str, float],
     default_score: float,
 ) -> float:
-    values = [
-        scores[feature]
-        for feature in _features(example, action_id)
-        if feature in scores
+    return sum(weights.get(feature, 0.0) for feature in features) + default_score
+
+
+def _reward_span(example: _StateExample) -> float:
+    rewards = [
+        reward
+        for action_id, reward in example.observed_suffix_rewards.items()
+        if action_id in example.available_action_ids
     ]
-    if not values:
-        return default_score
-    return sum(values) / len(values)
+    if not rewards:
+        return 0.0
+    return max(rewards) - min(rewards)
+
+
+def _preference_scale(
+    example: _StateExample,
+    action_id: str,
+    reward_span: float,
+) -> float:
+    if reward_span <= 0:
+        return 1.0
+    oracle_reward = example.observed_suffix_rewards.get(example.oracle_action_id or "")
+    action_reward = example.observed_suffix_rewards.get(action_id)
+    if oracle_reward is None or action_reward is None:
+        return 1.0
+    return max(0.0, (oracle_reward - action_reward) / reward_span)
 
 
 def _inspection_sort_key(row: BaselinePolicyInspectionRow) -> tuple[int, float, str, int]:

@@ -35,12 +35,16 @@ from snowprove.policy import (
     evaluate_baseline_policy,
     inspect_baseline_policy,
     load_baseline_policy,
+    load_policy_model,
     render_baseline_policy_evaluation,
     render_baseline_policy_inspection,
     render_baseline_policy_training,
+    render_linear_policy_training,
     render_policy_holdout_evaluation,
     train_baseline_policy,
+    train_linear_policy,
     write_baseline_policy,
+    write_policy_model,
 )
 from snowprove.report.json import (
     render_candidate_generation_json,
@@ -239,7 +243,7 @@ def corpus_run(
     }
     if policy_model_path is not None:
         config_values["policy_model_path"] = str(policy_model_path)
-        config_values["policy_model"] = load_baseline_policy(policy_model_path)
+        config_values["policy_model"] = load_policy_model(policy_model_path)
     if strategies:
         config_values["strategies"] = strategies
 
@@ -400,7 +404,7 @@ def corpus_repeat(
     }
     if policy_model_path is not None:
         config_values["policy_model_path"] = str(policy_model_path)
-        config_values["policy_model"] = load_baseline_policy(policy_model_path)
+        config_values["policy_model"] = load_policy_model(policy_model_path)
     if strategies:
         config_values["strategies"] = strategies
 
@@ -674,6 +678,74 @@ def policy_train_baseline(
     click.echo(f"Model file written: {model_file}", err=True)
 
 
+@policy_group.command(name="train-ranker")
+@click.argument(
+    "trajectory_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--model-file",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the linear policy model JSON artifact to this file.",
+)
+@click.option("--include-task", "include_tasks", multiple=True)
+@click.option("--exclude-task", "exclude_tasks", multiple=True)
+@click.option("--include-fixture", "include_fixtures", multiple=True)
+@click.option("--exclude-fixture", "exclude_fixtures", multiple=True)
+@click.option("--include-tag", "include_tags", multiple=True)
+@click.option("--exclude-tag", "exclude_tags", multiple=True)
+@click.option("--epochs", type=click.IntRange(min=1), default=20, show_default=True)
+@click.option(
+    "--learning-rate",
+    type=click.FloatRange(min=0, min_open=True),
+    default=1.0,
+    show_default=True,
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+)
+def policy_train_ranker(
+    trajectory_path: Path,
+    model_file: Path,
+    include_tasks: tuple[str, ...],
+    exclude_tasks: tuple[str, ...],
+    include_fixtures: tuple[str, ...],
+    exclude_fixtures: tuple[str, ...],
+    include_tags: tuple[str, ...],
+    exclude_tags: tuple[str, ...],
+    epochs: int,
+    learning_rate: float,
+    output_format: str,
+) -> None:
+    """Train a small linear action ranker from trajectory oracle labels."""
+    model = train_linear_policy(
+        trajectory_path,
+        source_trajectories=str(trajectory_path),
+        data_filter=PolicyDataFilter(
+            include_tasks=include_tasks,
+            exclude_tasks=exclude_tasks,
+            include_fixtures=include_fixtures,
+            exclude_fixtures=exclude_fixtures,
+            include_tags=include_tags,
+            exclude_tags=exclude_tags,
+        ),
+        epochs=epochs,
+        learning_rate=learning_rate,
+    )
+    write_policy_model(model, model_file)
+
+    if output_format == "json":
+        click.echo(model.model_dump_json(indent=2))
+    else:
+        click.echo(render_linear_policy_training(model))
+    click.echo(f"Model file written: {model_file}", err=True)
+
+
 @policy_group.command(name="evaluate-baseline")
 @click.argument(
     "trajectory_path",
@@ -858,6 +930,20 @@ def policy_inspect_baseline(
 @click.option("--include-task", "include_tasks", multiple=True)
 @click.option("--include-fixture", "include_fixtures", multiple=True)
 @click.option("--include-tag", "include_tags", multiple=True)
+@click.option(
+    "--policy-kind",
+    type=click.Choice(("baseline", "ranker")),
+    default="baseline",
+    show_default=True,
+    help="Policy model family trained for policy_baseline_abstain.",
+)
+@click.option("--epochs", type=click.IntRange(min=1), default=20, show_default=True)
+@click.option(
+    "--learning-rate",
+    type=click.FloatRange(min=0, min_open=True),
+    default=1.0,
+    show_default=True,
+)
 @click.option("--reward-margin", type=click.FloatRange(min=0), default=0.05, show_default=True)
 @click.option(
     "--label-margin",
@@ -904,6 +990,9 @@ def policy_holdout_evaluate(
     include_tasks: tuple[str, ...],
     include_fixtures: tuple[str, ...],
     include_tags: tuple[str, ...],
+    policy_kind: str,
+    epochs: int,
+    learning_rate: float,
     reward_margin: float,
     label_margin: float | None,
     reward_model: str,
@@ -945,12 +1034,21 @@ def policy_holdout_evaluate(
     corpus_report_path = output_dir / "corpus-run" / "corpus-run.json"
     holdout_report_path = output_dir / "holdout-evaluation.json"
 
-    model = train_baseline_policy(
-        trajectory_path,
-        source_trajectories=str(trajectory_path),
-        data_filter=train_filter,
-    )
-    write_baseline_policy(model, model_path)
+    if policy_kind == "ranker":
+        model = train_linear_policy(
+            trajectory_path,
+            source_trajectories=str(trajectory_path),
+            data_filter=train_filter,
+            epochs=epochs,
+            learning_rate=learning_rate,
+        )
+    else:
+        model = train_baseline_policy(
+            trajectory_path,
+            source_trajectories=str(trajectory_path),
+            data_filter=train_filter,
+        )
+    write_policy_model(model, model_path)
     offline_evaluation = evaluate_baseline_policy(
         trajectory_path,
         model,

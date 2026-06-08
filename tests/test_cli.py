@@ -265,6 +265,30 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert model["labeled_state_count"] == 1
     assert model["data_filter"]["exclude_fixtures"] == ["missing-fixture"]
 
+    ranker_path = tmp_path / "ranker.json"
+    trained_ranker = CliRunner().invoke(
+        main,
+        [
+            "policy",
+            "train-ranker",
+            str(trajectories_path),
+            "--model-file",
+            str(ranker_path),
+            "--epochs",
+            "3",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert trained_ranker.exit_code == 0, trained_ranker.output
+    ranker = json.loads(ranker_path.read_text())
+    assert ranker["artifact_type"] == "linear_policy_model"
+    assert ranker["model_type"] == "linear_action_ranker"
+    assert ranker["state_count"] == 1
+    assert ranker["choice_state_count"] == 0
+    assert "Model file written" in trained_ranker.stderr
+
     evaluation_path = tmp_path / "policy-eval.json"
     evaluated = CliRunner().invoke(
         main,

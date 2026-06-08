@@ -173,14 +173,20 @@ Policy workflows:
   writes labeled trajectory rows from corpus search reports
 - `snowprove policy train-baseline trajectories.jsonl --model-file policy.json`
   trains the current feature-mean action ranker
+- `snowprove policy train-ranker trajectories.jsonl --model-file ranker.json`
+  trains a dependency-free linear pairwise action ranker over the same sparse
+  action/context features
 - `snowprove policy evaluate-baseline trajectories.jsonl --model-file
-  policy.json` reports aggregate offline accuracy and reward gaps
+  policy.json` reports aggregate offline accuracy and reward gaps for either
+  policy model family
 - `snowprove policy inspect-baseline trajectories.jsonl --model-file
   policy.json` reports per-state predictions, misses, unacceptable rows, action
   scores, reward gaps, and state SQL
 - `snowprove policy holdout-evaluate trajectories.jsonl OUT --include-fixture
   standard-medium` trains excluding a held-out split, evaluates offline labels,
-  and compares greedy against policy-abstain on held-out corpus tasks
+  and compares greedy against policy-abstain on held-out corpus tasks. Pass
+  `--policy-kind ranker` to use the linear ranker instead of the feature-mean
+  baseline.
 
 dbt workflows:
 
@@ -586,13 +592,35 @@ Completed:
     oracle prefers removing the redundant non-null filter or predicate 1 first.
     This suggests corpus examples alone are not enough for the current
     averaging scorer; a small supervised ranker is now better justified.
+54. A dependency-free linear pairwise action ranker is available via
+    `snowprove policy train-ranker`. It trains on choice states only and stores
+    a `linear_policy_model` artifact with sparse feature weights. Generic
+    policy loading/scoring now lets `corpus run`, `corpus repeat`,
+    `evaluate-baseline`, `inspect-baseline`, and `holdout-evaluate` consume
+    either the feature-mean baseline or the linear ranker.
+55. Rerunning the v6 multi-action holdout with `--policy-kind ranker` at
+    `/tmp/snowprove-policy-120-holdout-multiaction-ranker-pairwise-20260608`
+    trained on 95 states, including 18 choice states, and made 360 pairwise
+    preference updates. It tied greedy search at reward 0.081031 and 43 wins
+    while using 69 oracle calls versus greedy's 97. Offline exact/adjusted
+    accuracy stayed at 84/90 (0.9333). Inspecting misses showed the ranker had
+    learned strong preferences from the choice-calibration families, but those
+    preferences conflict with several held-out multi-action trajectory labels.
+56. Rerunning the standard-medium holdout with `--policy-kind ranker` at
+    `/tmp/snowprove-policy-120-holdout-standard-medium-ranker-pairwise-20260608`
+    reached 43/44 offline exact/adjusted accuracy (0.9773), tied greedy search
+    at reward 0.085675 and 28 wins, and used 42 oracle calls versus greedy's
+    54. This is a better search result than the first ranker attempt, but the
+    multi-action split still exposes label/data conflict rather than pure model
+    capacity limits.
 
 Next:
 
-1. Consider replacing the feature-mean scorer with a small supervised ranker
-   that can handle sparse/unseen context better than averaging win rates.
-2. Use the v6 choice-calibration families as training data for that ranker and
-   compare against the current feature-mean baseline on the same holdouts.
+1. Inspect label disagreement between choice-calibration tasks and
+   multi-action tasks, especially `DISTINCT + IS NOT NULL` and predicate-0 vs
+   predicate-1 ordering.
+2. Consider margin-filtered ranker training so near-tie or noisy trajectory
+   labels do not dominate learned preferences.
 3. Keep using `policy inspect-baseline` after each experiment to distinguish
    harmless near-ties from real search-reward regressions.
 

@@ -401,10 +401,10 @@ def _policy_scorer(
     task: LoadedCorpusTask,
     model: Any,
 ) -> Callable[[EnvironmentObservation, str], float]:
-    from snowprove.policy import PolicyActionContext, score_baseline_action
+    from snowprove.policy import PolicyActionContext, score_policy_action
 
     def score(observation: EnvironmentObservation, action_id: str) -> float:
-        return score_baseline_action(
+        return score_policy_action(
             model,
             PolicyActionContext(
                 fixture_id=task.fixture.fixture_id,
