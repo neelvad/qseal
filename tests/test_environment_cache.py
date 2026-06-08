@@ -111,6 +111,101 @@ def test_cached_query_benchmark_is_keyed_by_sql_state(tmp_path) -> None:
     assert len(tuple((tmp_path / "cache" / "query_benchmark").rglob("*.json"))) == 1
 
 
+def test_interleaved_query_benchmarks_anchor_new_state_to_cached_neighbor(
+    tmp_path,
+) -> None:
+    original_sql = "SELECT DISTINCT user_id FROM users"
+    intermediate_sql = "SELECT user_id FROM users"
+    final_sql = "SELECT user_id FROM active_users"
+    delegate = _DriftingInterleavedPerformanceEvaluator(
+        {
+            original_sql: 4.0,
+            intermediate_sql: 2.0,
+            final_sql: 1.0,
+        },
+        session_scales=[10.0, 0.5],
+    )
+    evaluator = CachedPerformanceEvaluator(
+        delegate,
+        JsonFileCache(tmp_path / "cache"),
+        namespace="test-interleaved-anchor-v1",
+    )
+
+    original, intermediate = evaluator.evaluate_query_pair(
+        original_sql,
+        intermediate_sql,
+    )
+    cached_intermediate, final = evaluator.evaluate_query_pair(
+        intermediate_sql,
+        final_sql,
+    )
+
+    assert original.query.median_ms == 40.0
+    assert intermediate.query.median_ms == 20.0
+    assert cached_intermediate == intermediate
+    assert final.query.median_ms == 10.0
+    assert final.inputs["measurement_mode"] == "interleaved_anchored"
+    assert final.inputs["anchor_sql"] == intermediate_sql
+    assert delegate.pair_calls == [
+        (original_sql, intermediate_sql),
+        (intermediate_sql, final_sql),
+    ]
+    assert evaluator.misses == 3
+    assert evaluator.hits == 1
+    assert len(tuple((tmp_path / "cache" / "query_benchmark").rglob("*.json"))) == 3
+
+
+def test_interleaved_measurements_do_not_reuse_independent_state_cache(
+    tmp_path,
+) -> None:
+    cache = JsonFileCache(tmp_path / "cache")
+    namespace = "test-measurement-strategy-version-v1"
+    independent = CachedPerformanceEvaluator(
+        _StatePerformanceEvaluator({"SELECT 1": 1.0}),
+        cache,
+        namespace=namespace,
+    )
+    interleaved_delegate = _DriftingInterleavedPerformanceEvaluator(
+        {"SELECT 1": 1.0, "SELECT 2": 0.5},
+        session_scales=[1.0],
+    )
+    interleaved = CachedPerformanceEvaluator(
+        interleaved_delegate,
+        cache,
+        namespace=namespace,
+    )
+
+    independent.evaluate_query("SELECT 1")
+    interleaved.evaluate_query_pair("SELECT 1", "SELECT 2")
+
+    assert interleaved_delegate.pair_calls == [("SELECT 1", "SELECT 2")]
+    assert len(tuple((tmp_path / "cache" / "query_benchmark").rglob("*.json"))) == 3
+
+
+def test_interleaved_anchor_propagates_low_timing_confidence(tmp_path) -> None:
+    delegate = _DriftingInterleavedPerformanceEvaluator(
+        {
+            "SELECT 1": 2.0,
+            "SELECT 2": 1.0,
+            "SELECT 3": 0.5,
+        },
+        session_scales=[1.0, 1.0],
+        low_confidence_sessions={0},
+    )
+    evaluator = CachedPerformanceEvaluator(
+        delegate,
+        JsonFileCache(tmp_path / "cache"),
+        namespace="test-interleaved-confidence-v1",
+    )
+
+    _, intermediate = evaluator.evaluate_query_pair("SELECT 1", "SELECT 2")
+    _, final = evaluator.evaluate_query_pair("SELECT 2", "SELECT 3")
+
+    assert intermediate.timing_confident is False
+    assert final.timing_confident is False
+    assert final.confidence_reason == "Low confidence for testing."
+
+
 def test_absolute_state_rewards_are_path_invariant(tmp_path) -> None:
     task = EnvironmentTask(
         task_id="path-invariant",
@@ -370,4 +465,76 @@ class _StatePerformanceEvaluator:
                 row_count=1,
             ),
             environment=environment,
+        )
+
+
+class _DriftingInterleavedPerformanceEvaluator:
+    supports_query_benchmark = True
+    supports_interleaved_query_benchmark = True
+
+    def __init__(
+        self,
+        runtimes: dict[str, float],
+        *,
+        session_scales: list[float],
+        low_confidence_sessions: set[int] | None = None,
+    ) -> None:
+        self.runtimes = runtimes
+        self.session_scales = session_scales
+        self.low_confidence_sessions = low_confidence_sessions or set()
+        self.pair_calls: list[tuple[str, str]] = []
+
+    def cache_context(self):
+        return {"evaluator": "drifting-interleaved", "runtimes": self.runtimes}
+
+    def evaluate_query_pair(
+        self,
+        original_sql: str,
+        rewritten_sql: str,
+    ) -> tuple[QueryBenchmarkResult, QueryBenchmarkResult]:
+        self.pair_calls.append((original_sql, rewritten_sql))
+        session_index = len(self.pair_calls) - 1
+        scale = self.session_scales[session_index]
+        timing_confident = session_index not in self.low_confidence_sessions
+        return (
+            self._result(original_sql, scale, timing_confident),
+            self._result(rewritten_sql, scale, timing_confident),
+        )
+
+    def _result(
+        self,
+        sql: str,
+        scale: float,
+        timing_confident: bool,
+    ) -> QueryBenchmarkResult:
+        runtime = self.runtimes[sql] * scale
+        environment = BenchmarkEnvironment(
+            duckdb_version="test",
+            python_version="test",
+            platform="test",
+            database_path="fixture.duckdb",
+            threads=1,
+            warmups=0,
+            repetitions=1,
+            timeout_seconds=1,
+        )
+        return QueryBenchmarkResult(
+            status=BenchmarkStatus.COMPLETED,
+            query=QueryBenchmark(
+                status=BenchmarkStatus.COMPLETED,
+                sql=sql,
+                timings_ms=(runtime,),
+                batch_timings_ms=(runtime,),
+                median_ms=runtime,
+                median_absolute_deviation_ms=0,
+                min_ms=runtime,
+                max_ms=runtime,
+                row_count=1,
+            ),
+            environment=environment,
+            timing_confident=timing_confident,
+            confidence_reason=(
+                None if timing_confident else "Low confidence for testing."
+            ),
+            inputs={"measurement_mode": "interleaved_pair"},
         )

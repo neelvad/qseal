@@ -12,6 +12,7 @@ from snowprove.benchmark import (
     benchmark_query,
     benchmark_query_pair,
 )
+from snowprove.benchmark.model import QueryBenchmark
 from snowprove.environment.model import (
     EnvironmentAction,
     EnvironmentObservation,
@@ -32,8 +33,16 @@ from snowprove.verifier.backends.base import VerifierBackend
 
 class PerformanceEvaluator(Protocol):
     supports_query_benchmark: bool = False
+    supports_interleaved_query_benchmark: bool = False
 
     def evaluate_query(self, sql: str) -> QueryBenchmarkResult:
+        pass
+
+    def evaluate_query_pair(
+        self,
+        original_sql: str,
+        rewritten_sql: str,
+    ) -> tuple[QueryBenchmarkResult, QueryBenchmarkResult]:
         pass
 
     def evaluate(self, original_sql: str, rewritten_sql: str) -> BenchmarkResult:
@@ -72,6 +81,7 @@ class DuckDbPerformanceEvaluator:
         self.fixture_fingerprint = fixture_fingerprint
         self.minimum_duration_ms = minimum_duration_ms
         self.supports_query_benchmark = True
+        self.supports_interleaved_query_benchmark = True
 
     def evaluate_query(self, sql: str) -> QueryBenchmarkResult:
         return benchmark_query(
@@ -96,6 +106,17 @@ class DuckDbPerformanceEvaluator:
             timeout_seconds=self.timeout_seconds,
             threads=self.threads,
             minimum_duration_ms=self.minimum_duration_ms,
+        )
+
+    def evaluate_query_pair(
+        self,
+        original_sql: str,
+        rewritten_sql: str,
+    ) -> tuple[QueryBenchmarkResult, QueryBenchmarkResult]:
+        result = self.evaluate(original_sql, rewritten_sql)
+        return (
+            _query_result_from_pair(result, result.original),
+            _query_result_from_pair(result, result.rewritten),
         )
 
     def cache_context(self) -> dict[str, Any]:
@@ -296,10 +317,31 @@ def _evaluate_performance(
             raise ValueError(
                 "The selected performance evaluator does not support state rewards."
             )
-        original = evaluator.evaluate_query(original_sql)
-        rewritten = evaluator.evaluate_query(rewritten_sql)
+        if getattr(evaluator, "supports_interleaved_query_benchmark", False):
+            original, rewritten = evaluator.evaluate_query_pair(
+                original_sql,
+                rewritten_sql,
+            )
+        else:
+            original = evaluator.evaluate_query(original_sql)
+            rewritten = evaluator.evaluate_query(rewritten_sql)
         return _benchmark_result_from_query_states(original, rewritten)
     return evaluator.evaluate(original_sql, rewritten_sql)
+
+
+def _query_result_from_pair(
+    result: BenchmarkResult,
+    query: QueryBenchmark,
+) -> QueryBenchmarkResult:
+    return QueryBenchmarkResult(
+        status=query.status,
+        query=query,
+        environment=result.environment,
+        timing_confident=result.timing_confident,
+        confidence_reason=result.confidence_reason,
+        reason=query.error or result.reason,
+        inputs={"measurement_mode": "interleaved_pair"},
+    )
 
 
 def _benchmark_result_from_query_states(

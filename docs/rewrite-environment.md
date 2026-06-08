@@ -61,9 +61,14 @@ without performance data also receive zero.
 each rewrite edge. `reward_model="state"` measures each distinct SQL state once
 through the content-addressed cache and derives edge rewards from the two state
 runtimes. State rewards eliminate order-dependent cumulative rewards for paths
-that reach the same final SQL, at the cost of noisier independent timing. State
-mode fails explicitly if the configured evaluator cannot benchmark individual
-queries.
+that reach the same final SQL.
+
+DuckDB state measurements are interleaved in related pairs. When one state is
+already cached, Snowprove uses it as an anchor: the new state's paired timing is
+normalized onto the cached state's timing scale before the new state is stored.
+This reduces session-to-session drift while preserving one stable cache entry
+per SQL state. State mode fails explicitly if the configured evaluator cannot
+benchmark individual queries.
 
 `NOT_EQUIVALENT` receives `-1`; other unproven results receive `-0.25` and
 terminate the episode without advancing state.

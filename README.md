@@ -126,7 +126,9 @@ uv run snowprove corpus aggregate \
 ```
 
 Corpus strategies share task-level verifier and benchmark results, ensuring
-identical SQL transitions receive identical rewards within a run.
+identical SQL transitions receive identical rewards within a run. State reward
+mode interleaves related DuckDB measurements and anchors each new SQL state to
+a cached neighbor before storing it.
 
 Useful options:
 

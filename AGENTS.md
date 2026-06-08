@@ -363,11 +363,18 @@ Completed:
     batches produced 21 unstable tasks, while 20 ms produced 5, compared with
     3 under the default 5 ms paired transition model. Transition remains the
     default; state experiments should currently use at least 20 ms batches.
+21. State benchmarking now measures related SQL states in interleaved pairs.
+    New states are normalized to a cached neighboring state before receiving
+    their own content-addressed cache entry. A three-run, 53-task, 20 ms
+    experiment reduced state instability from 5 tasks to 2 with zero winner
+    changes. A controlled five-run comparison still found transition rewards
+    about 2-3x less variable, so transition remains the default.
 
 Next:
 
-1. Improve absolute-state measurement variance, likely by measuring related
-   states in an interleaved session while retaining per-state cache identities.
+1. Investigate endpoint-aware search scoring for state rewards. Remaining path
+   changes occur when a near-neutral intermediate edge crosses the reward
+   margin even though completed-path rewards telescope consistently.
 2. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.
 3. Add a small learned action-ranking policy only after baseline measurements

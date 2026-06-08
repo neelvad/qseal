@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from snowprove.benchmark.model import BenchmarkResult, QueryBenchmarkResult
+from snowprove.benchmark.model import (
+    BenchmarkResult,
+    BenchmarkStatus,
+    QueryBenchmark,
+    QueryBenchmarkResult,
+)
 from snowprove.cache import JsonFileCache, content_hash
 from snowprove.constraints.model import ConstraintCatalog
 from snowprove.dialects import DEFAULT_DIALECT, SqlDialect
@@ -81,26 +86,18 @@ class CachedPerformanceEvaluator:
             "supports_query_benchmark",
             False,
         )
+        self.supports_interleaved_query_benchmark = getattr(
+            evaluator,
+            "supports_interleaved_query_benchmark",
+            False,
+        )
         self.hits = 0
         self.misses = 0
 
     def evaluate_query(self, sql: str) -> QueryBenchmarkResult:
         if not self.supports_query_benchmark:
             raise RuntimeError("Wrapped evaluator does not support query benchmarks.")
-        evaluator_context = (
-            self.evaluator.cache_context()
-            if hasattr(self.evaluator, "cache_context")
-            else {}
-        )
-        key = content_hash(
-            {
-                "kind": "query_benchmark",
-                "namespace": self.namespace,
-                "context": self.context,
-                "evaluator": evaluator_context,
-                "sql": sql.strip(),
-            }
-        )
+        key = self._query_key(sql)
         cached = self.cache.load("query_benchmark", key, QueryBenchmarkResult)
         if cached is not None:
             self.hits += 1
@@ -110,6 +107,71 @@ class CachedPerformanceEvaluator:
         result = self.evaluator.evaluate_query(sql)
         self.cache.store("query_benchmark", key, result)
         return result
+
+    def evaluate_query_pair(
+        self,
+        original_sql: str,
+        rewritten_sql: str,
+    ) -> tuple[QueryBenchmarkResult, QueryBenchmarkResult]:
+        if not self.supports_interleaved_query_benchmark:
+            return (
+                self.evaluate_query(original_sql),
+                self.evaluate_query(rewritten_sql),
+            )
+
+        original_key = self._query_key(original_sql)
+        rewritten_key = self._query_key(rewritten_sql)
+        if original_key == rewritten_key:
+            result = self.evaluate_query(original_sql)
+            return result, result
+
+        original = self.cache.load(
+            "query_benchmark",
+            original_key,
+            QueryBenchmarkResult,
+        )
+        rewritten = self.cache.load(
+            "query_benchmark",
+            rewritten_key,
+            QueryBenchmarkResult,
+        )
+        original_was_cached = original is not None
+        rewritten_was_cached = rewritten is not None
+        self.hits += int(original_was_cached) + int(rewritten_was_cached)
+        self.misses += int(not original_was_cached) + int(not rewritten_was_cached)
+        if original is not None and rewritten is not None:
+            return (
+                QueryBenchmarkResult.model_validate(original),
+                QueryBenchmarkResult.model_validate(rewritten),
+            )
+
+        measured_original, measured_rewritten = self.evaluator.evaluate_query_pair(
+            original_sql,
+            rewritten_sql,
+        )
+        if original is not None:
+            original = QueryBenchmarkResult.model_validate(original)
+            rewritten = _normalize_query_result(
+                measured_rewritten,
+                measured_anchor=measured_original,
+                cached_anchor=original,
+            )
+        elif rewritten is not None:
+            rewritten = QueryBenchmarkResult.model_validate(rewritten)
+            original = _normalize_query_result(
+                measured_original,
+                measured_anchor=measured_rewritten,
+                cached_anchor=rewritten,
+            )
+        else:
+            original = measured_original
+            rewritten = measured_rewritten
+
+        if not original_was_cached:
+            self.cache.store("query_benchmark", original_key, original)
+        if not rewritten_was_cached:
+            self.cache.store("query_benchmark", rewritten_key, rewritten)
+        return original, rewritten
 
     def evaluate(self, original_sql: str, rewritten_sql: str) -> BenchmarkResult:
         evaluator_context = (
@@ -136,3 +198,91 @@ class CachedPerformanceEvaluator:
         result = self.evaluator.evaluate(original_sql, rewritten_sql)
         self.cache.store("benchmark", key, result)
         return result
+
+    def _query_key(self, sql: str) -> str:
+        evaluator_context = (
+            self.evaluator.cache_context()
+            if hasattr(self.evaluator, "cache_context")
+            else {}
+        )
+        return content_hash(
+            {
+                "kind": "query_benchmark",
+                "namespace": self.namespace,
+                "context": self.context,
+                "evaluator": evaluator_context,
+                "measurement_strategy": (
+                    "interleaved-anchored-v1"
+                    if self.supports_interleaved_query_benchmark
+                    else "independent-v1"
+                ),
+                "sql": sql.strip(),
+            }
+        )
+
+
+def _normalize_query_result(
+    result: QueryBenchmarkResult,
+    *,
+    measured_anchor: QueryBenchmarkResult,
+    cached_anchor: QueryBenchmarkResult,
+) -> QueryBenchmarkResult:
+    measured_median = measured_anchor.query.median_ms
+    cached_median = cached_anchor.query.median_ms
+    if (
+        result.status != BenchmarkStatus.COMPLETED
+        or measured_anchor.status != BenchmarkStatus.COMPLETED
+        or cached_anchor.status != BenchmarkStatus.COMPLETED
+        or measured_median is None
+        or measured_median <= 0
+        or cached_median is None
+        or cached_median <= 0
+    ):
+        return result
+
+    factor = cached_median / measured_median
+    query = result.query
+    timing_confident = (
+        result.timing_confident
+        and measured_anchor.timing_confident
+        and cached_anchor.timing_confident
+    )
+    confidence_reason = (
+        result.confidence_reason
+        or measured_anchor.confidence_reason
+        or cached_anchor.confidence_reason
+    )
+    normalized_query = QueryBenchmark(
+        status=query.status,
+        sql=query.sql,
+        timings_ms=tuple(value * factor for value in query.timings_ms),
+        batch_timings_ms=tuple(value * factor for value in query.batch_timings_ms),
+        executions_per_sample=query.executions_per_sample,
+        median_ms=_scale(query.median_ms, factor),
+        median_absolute_deviation_ms=_scale(
+            query.median_absolute_deviation_ms,
+            factor,
+        ),
+        min_ms=_scale(query.min_ms, factor),
+        max_ms=_scale(query.max_ms, factor),
+        row_count=query.row_count,
+        explain=query.explain,
+        error=query.error,
+    )
+    return result.model_copy(
+        update={
+            "query": normalized_query,
+            "timing_confident": timing_confident,
+            "confidence_reason": confidence_reason,
+            "inputs": {
+                **result.inputs,
+                "measurement_mode": "interleaved_anchored",
+                "anchor_sql": cached_anchor.query.sql,
+                "normalization_factor": repr(factor),
+            },
+        }
+    )
+
+
+def _scale(value: float | None, factor: float) -> float | None:
+    return value * factor if value is not None else None

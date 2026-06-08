@@ -63,7 +63,10 @@ external cache files for newly generated reports.
 
 Corpus run configuration records `reward_model`. Transition mode caches
 verified SQL pairs under `benchmark`; state mode caches each distinct SQL text
-under `query_benchmark`.
+under `query_benchmark`. State-cache `inputs.measurement_mode` distinguishes an
+initial `interleaved_pair` measurement from an `interleaved_anchored`
+measurement. Anchored entries also record `anchor_sql` and the applied
+`normalization_factor`.
 
 ## `verification`
 

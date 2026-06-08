@@ -81,10 +81,14 @@ uv run snowprove corpus repeat snowprove-runs/corpus-state \
 ```
 
 State rewards telescope consistently, so completed paths reaching the same
-final SQL receive the same cumulative reward within a run. Independent state
-measurements are noisier than paired timings, however. Current experiments
-support keeping transition rewards as the default and using at least 20 ms
-batches for state-reward analysis.
+final SQL receive the same cumulative reward within a run. Related DuckDB
+states are measured interleaved. Newly discovered states are normalized against
+an already cached neighboring state before being written to the state cache.
+
+State measurements remain somewhat noisier and require more benchmark requests
+than direct transition timings. Current experiments support keeping transition
+rewards as the default and using at least 20 ms batches for state-reward
+analysis.
 
 For repeated independent measurements and an automatic stability aggregate:
 
