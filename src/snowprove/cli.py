@@ -703,6 +703,13 @@ def policy_train_baseline(
     show_default=True,
 )
 @click.option(
+    "--training-margin",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Skip ranker training preferences whose known reward gap is below this margin.",
+)
+@click.option(
     "--format",
     "output_format",
     type=OutputFormat,
@@ -720,6 +727,7 @@ def policy_train_ranker(
     exclude_tags: tuple[str, ...],
     epochs: int,
     learning_rate: float,
+    training_margin: float,
     output_format: str,
 ) -> None:
     """Train a small linear action ranker from trajectory oracle labels."""
@@ -736,6 +744,7 @@ def policy_train_ranker(
         ),
         epochs=epochs,
         learning_rate=learning_rate,
+        training_margin=training_margin,
     )
     write_policy_model(model, model_file)
 
@@ -944,6 +953,13 @@ def policy_inspect_baseline(
     default=1.0,
     show_default=True,
 )
+@click.option(
+    "--training-margin",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Skip ranker training preferences whose known reward gap is below this margin.",
+)
 @click.option("--reward-margin", type=click.FloatRange(min=0), default=0.05, show_default=True)
 @click.option(
     "--label-margin",
@@ -993,6 +1009,7 @@ def policy_holdout_evaluate(
     policy_kind: str,
     epochs: int,
     learning_rate: float,
+    training_margin: float,
     reward_margin: float,
     label_margin: float | None,
     reward_model: str,
@@ -1041,6 +1058,7 @@ def policy_holdout_evaluate(
             data_filter=train_filter,
             epochs=epochs,
             learning_rate=learning_rate,
+            training_margin=training_margin,
         )
     else:
         model = train_baseline_policy(

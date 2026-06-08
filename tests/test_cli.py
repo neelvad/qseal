@@ -276,6 +276,8 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
             str(ranker_path),
             "--epochs",
             "3",
+            "--training-margin",
+            "0.2",
             "--format",
             "json",
         ],
@@ -287,6 +289,7 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert ranker["model_type"] == "linear_action_ranker"
     assert ranker["state_count"] == 1
     assert ranker["choice_state_count"] == 0
+    assert ranker["training_margin"] == 0.2
     assert "Model file written" in trained_ranker.stderr
 
     evaluation_path = tmp_path / "policy-eval.json"

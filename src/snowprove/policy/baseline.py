@@ -80,7 +80,9 @@ class LinearPolicyModel(BaseModel):
     choice_state_count: int
     epochs: int = Field(ge=1)
     learning_rate: float = Field(gt=0)
+    training_margin: float = Field(default=0.0, ge=0)
     update_count: int = Field(ge=0)
+    skipped_preference_count: int = Field(default=0, ge=0)
     feature_weights: tuple[FeatureWeight, ...]
     default_score: float = 0.0
 
@@ -243,11 +245,14 @@ def train_linear_policy(
     data_filter: PolicyDataFilter | None = None,
     epochs: int = 20,
     learning_rate: float = 1.0,
+    training_margin: float = 0.0,
 ) -> LinearPolicyModel:
     if epochs < 1:
         raise ValueError("epochs must be one or greater.")
     if learning_rate <= 0:
         raise ValueError("learning_rate must be greater than zero.")
+    if training_margin < 0:
+        raise ValueError("training_margin must be zero or greater.")
 
     data_filter = data_filter or PolicyDataFilter()
     records = load_corpus_trajectory_records(trajectory_path)
@@ -258,6 +263,7 @@ def train_linear_policy(
     ]
     weights: dict[str, float] = {}
     update_count = 0
+    skipped_preference_count = 0
 
     for _ in range(epochs):
         for example in choice_examples:
@@ -270,6 +276,9 @@ def train_linear_policy(
                 continue
             reward_span = _reward_span(example)
             for action_id in non_oracle_actions:
+                if _known_reward_gap(example, action_id) < training_margin:
+                    skipped_preference_count += 1
+                    continue
                 scale = _preference_scale(example, action_id, reward_span)
                 for feature in _features(example, example.oracle_action_id):
                     weights[feature] = weights.get(feature, 0.0) + learning_rate * scale
@@ -286,7 +295,9 @@ def train_linear_policy(
         choice_state_count=len(choice_examples),
         epochs=epochs,
         learning_rate=learning_rate,
+        training_margin=training_margin,
         update_count=update_count,
+        skipped_preference_count=skipped_preference_count,
         feature_weights=tuple(
             FeatureWeight(feature=feature, weight=weight)
             for feature, weight in sorted(weights.items())
@@ -543,7 +554,9 @@ def render_linear_policy_training(model: LinearPolicyModel) -> str:
             f"Choice states: {model.choice_state_count}",
             f"Epochs: {model.epochs}",
             f"Learning rate: {model.learning_rate:.6f}",
+            f"Training margin: {model.training_margin:.6f}",
             f"Updates: {model.update_count}",
+            f"Skipped preferences: {model.skipped_preference_count}",
             f"Feature weights: {len(model.feature_weights)}",
             f"Filter: {_render_filter(model.data_filter)}",
         ]
@@ -774,6 +787,14 @@ def _preference_scale(
     if oracle_reward is None or action_reward is None:
         return 1.0
     return max(0.0, (oracle_reward - action_reward) / reward_span)
+
+
+def _known_reward_gap(example: _StateExample, action_id: str) -> float:
+    oracle_reward = example.observed_suffix_rewards.get(example.oracle_action_id or "")
+    action_reward = example.observed_suffix_rewards.get(action_id)
+    if oracle_reward is None or action_reward is None:
+        return float("inf")
+    return oracle_reward - action_reward
 
 
 def _inspection_sort_key(row: BaselinePolicyInspectionRow) -> tuple[int, float, str, int]:

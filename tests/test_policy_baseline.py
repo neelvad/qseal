@@ -169,17 +169,28 @@ def test_linear_policy_trains_and_evaluates_choice_states(tmp_path) -> None:
     )
 
     model = train_linear_policy(trajectory_path, epochs=3)
+    filtered_model = train_linear_policy(
+        trajectory_path,
+        epochs=3,
+        training_margin=0.25,
+    )
     evaluation = evaluate_baseline_policy(trajectory_path, model)
     inspection = inspect_baseline_policy(trajectory_path, model, mode="all")
 
     assert model.artifact_type == "linear_policy_model"
     assert model.model_type == "linear_action_ranker"
     assert model.choice_state_count == 1
+    assert model.training_margin == 0.0
     assert model.update_count >= 1
+    assert model.skipped_preference_count == 0
     assert model.feature_weights
     assert evaluation.correct_count == 1
     assert evaluation.accuracy == 1.0
     assert inspection.rows[0].predicted_action_id == second_predicate
+    assert filtered_model.training_margin == 0.25
+    assert filtered_model.update_count == 0
+    assert filtered_model.skipped_preference_count == 3
+    assert filtered_model.feature_weights == ()
 
 
 def test_baseline_policy_filters_train_and_evaluation_splits(tmp_path) -> None:

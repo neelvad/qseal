@@ -175,7 +175,8 @@ Policy workflows:
   trains the current feature-mean action ranker
 - `snowprove policy train-ranker trajectories.jsonl --model-file ranker.json`
   trains a dependency-free linear pairwise action ranker over the same sparse
-  action/context features
+  action/context features. Pass `--training-margin X` to skip pairwise
+  preferences with known reward gaps below `X`.
 - `snowprove policy evaluate-baseline trajectories.jsonl --model-file
   policy.json` reports aggregate offline accuracy and reward gaps for either
   policy model family
@@ -613,14 +614,31 @@ Completed:
     54. This is a better search result than the first ranker attempt, but the
     multi-action split still exposes label/data conflict rather than pure model
     capacity limits.
+57. The linear ranker now supports margin-filtered training. `train-ranker`
+    and `holdout-evaluate --policy-kind ranker` accept `--training-margin`.
+    Preferences with known oracle-vs-alternative reward gaps below the margin
+    are skipped; unknown reward gaps are retained. The model artifact records
+    `training_margin` and `skipped_preference_count`.
+58. Rerunning the v6 multi-action holdout with ranker training margins showed
+    that 0.02, 0.05, and 0.10 skipped zero preferences in the current training
+    split. Offline exact/adjusted accuracy stayed 84/90. A 0.10 run at
+    `/tmp/snowprove-policy-120-holdout-multiaction-ranker-margin010-20260608`
+    tied greedy search at reward 0.094938 and 43 wins while using 69 oracle
+    calls versus greedy's 97. A 0.05 run lost one search win. This means the
+    current label conflict is not coming from tiny known training gaps.
+59. Rerunning the standard-medium holdout with ranker `--training-margin 0.05`
+    at `/tmp/snowprove-policy-120-holdout-standard-medium-ranker-margin005-20260608`
+    kept 43/44 offline exact/adjusted accuracy and tied greedy search at
+    reward 0.085962 and 28 wins while using 44 oracle calls versus greedy's 56.
 
 Next:
 
 1. Inspect label disagreement between choice-calibration tasks and
    multi-action tasks, especially `DISTINCT + IS NOT NULL` and predicate-0 vs
    predicate-1 ordering.
-2. Consider margin-filtered ranker training so near-tie or noisy trajectory
-   labels do not dominate learned preferences.
+2. Add a label-disagreement inspection helper that compares train-split choice
+   preferences against held-out misses by action set, rule pair, table tag, and
+   fixture.
 3. Keep using `policy inspect-baseline` after each experiment to distinguish
    harmless near-ties from real search-reward regressions.
 
