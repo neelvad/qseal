@@ -26,7 +26,12 @@ def create_environment() -> RewriteEnvironment:
     )
 
 
-result = beam_search(task, create_environment, beam_width=4)
+result = beam_search(
+    task,
+    create_environment,
+    beam_width=4,
+    reward_margin=0.05,
+)
 ```
 
 Fresh environments isolate mutable episode state. Shared cached verifier and
@@ -43,6 +48,11 @@ They can therefore conclude that no rewrite is better when all explored
 transitions have negative reward. Fixed-order and random are forced-rollout
 baselines. Greedy stops early when its best immediate candidate does not
 increase cumulative reward.
+
+`reward_margin` sets the minimum cumulative reward improvement required to
+prefer a longer or more complex path. Rewards remain unmodified in artifacts;
+the margin only affects search decisions. Fixed-order and random record the
+margin for provenance but remain forced-rollout baselines.
 
 Exhaustive search's `max_nodes` bounds evaluated child nodes, including solver
 and benchmark calls. It is intended only for short episodes and small action

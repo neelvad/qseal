@@ -33,9 +33,22 @@ uv run snowprove corpus run snowprove-runs/corpus-smoke \
 ```
 
 Useful controls include `--random-seed`, `--beam-width`, `--max-nodes`,
-`--threads`, `--timeout`, `--manifest`, and `--report-file`. Fixture databases
-and content-addressed oracle caches are retained under the output directory, so
-repeated runs reuse both.
+`--reward-margin`, `--threads`, `--timeout`, `--manifest`, and `--report-file`.
+Fixture databases and content-addressed oracle caches are retained under the
+output directory, so repeated runs reuse both.
+
+Use `--reward-margin` to require a meaningful cumulative improvement before
+greedy, beam, or exhaustive search prefers a longer path:
+
+```bash
+uv run snowprove corpus run snowprove-runs/corpus-margin \
+  --reward-margin 0.05 \
+  --warmups 2 \
+  --repetitions 5
+```
+
+The measured rewards remain unchanged in artifacts. The margin only changes
+search selection. Fixed-order and random remain forced-rollout baselines.
 
 The manifest separates named DuckDB fixture profiles from task definitions.
 Multiple tasks can therefore share one generated database.
@@ -140,6 +153,9 @@ sequences. Reward disagreement means the best and worst completed rewards
 differ by more than `--neutral-threshold`, which defaults to `0.01`. A task is
 marked trivial when every completed strategy selects the same path and rewards
 remain within that threshold.
+
+When a run uses `--reward-margin`, summaries use at least that value as their
+effective neutral threshold so reported winners match the search policy.
 
 ## Aggregating Repeated Runs
 

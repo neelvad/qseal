@@ -160,6 +160,8 @@ Task corpus:
 - repeated runs reuse fixture databases and content-addressed oracle caches
 - strategies share one task-level oracle result for each unique SQL transition,
   while per-strategy metrics retain logical request and cache-hit counts
+- `--reward-margin` requires a minimum cumulative improvement before
+  greedy/beam/exhaustive prefer a longer path; fixed/random remain forced
 - `snowprove corpus summarize REPORT.json` ranks strategies and classifies task
   rewards, path/reward disagreement, partial errors, and trivial cases
 - `snowprove corpus aggregate REPORT...` measures reward variance, winner and
@@ -331,13 +333,15 @@ Completed:
     errors, and trivial cases.
 11. A repeated-run aggregate command measures strategy reward variance and
     identifies unstable task labels and paths.
+12. Search and corpus runs support an explicit reward margin so benchmark
+    differences below the configured threshold do not favor longer paths.
 
 Next:
 
-1. Add an explicit reward-margin or confidence policy so near-neutral benchmark
-   differences do not change search decisions.
-2. Expand the corpus from 25 foundation tasks toward 50-200 systematic task
+1. Expand the corpus from 25 foundation tasks toward 50-200 systematic task
    variations based on observed gaps.
+2. Repeat aggregate runs as the corpus grows and use reward/path instability
+   to identify benchmark noise or underspecified task families.
 3. Add a small learned action-ranking policy only after baseline measurements
    are reproducible.
 

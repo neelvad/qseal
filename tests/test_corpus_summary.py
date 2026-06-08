@@ -65,6 +65,23 @@ def test_neutral_threshold_controls_ties_and_disagreement() -> None:
     assert task.reward_disagreement is False
 
 
+def test_run_reward_margin_sets_minimum_summary_threshold() -> None:
+    report = _report().model_copy(
+        update={
+            "config": CorpusRunConfig(
+                strategies=("fixed_order", "greedy"),
+                reward_margin=0.2,
+            )
+        }
+    )
+
+    summary = summarize_corpus_run(report, neutral_threshold=0.01)
+
+    assert summary.neutral_threshold == 0.2
+    assert summary.reward_margin == 0.2
+    assert summary.tasks[0].winning_strategies == ("fixed_order", "greedy")
+
+
 def test_single_strategy_task_is_not_classified_as_trivial() -> None:
     report = _report().model_copy(
         update={

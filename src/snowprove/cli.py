@@ -121,6 +121,13 @@ def corpus_group() -> None:
 @click.option("--random-seed", type=int, default=42, show_default=True)
 @click.option("--beam-width", type=click.IntRange(min=1), default=4, show_default=True)
 @click.option("--max-nodes", type=click.IntRange(min=1), default=100, show_default=True)
+@click.option(
+    "--reward-margin",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Minimum cumulative reward improvement required to prefer a longer path.",
+)
 @click.option("--warmups", type=click.IntRange(min=0), default=1, show_default=True)
 @click.option("--repetitions", type=click.IntRange(min=1), default=3, show_default=True)
 @click.option(
@@ -151,6 +158,7 @@ def corpus_run(
     random_seed: int,
     beam_width: int,
     max_nodes: int,
+    reward_margin: float,
     warmups: int,
     repetitions: int,
     timeout_seconds: float,
@@ -166,6 +174,7 @@ def corpus_run(
         "random_seed": random_seed,
         "beam_width": beam_width,
         "max_nodes": max_nodes,
+        "reward_margin": reward_margin,
         "warmups": warmups,
         "repetitions": repetitions,
         "timeout_seconds": timeout_seconds,

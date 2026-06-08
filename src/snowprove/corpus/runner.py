@@ -61,6 +61,7 @@ class CorpusRunConfig(BaseModel):
     random_seed: int = 42
     beam_width: int = Field(default=4, ge=1)
     max_nodes: int = Field(default=100, ge=1)
+    reward_margin: float = Field(default=0.0, ge=0)
     warmups: int = Field(default=1, ge=0)
     repetitions: int = Field(default=3, ge=1)
     timeout_seconds: float = Field(default=30.0, gt=0)
@@ -314,25 +315,36 @@ def _search(
     config: CorpusRunConfig,
 ) -> SearchResult:
     if strategy == "fixed_order":
-        return fixed_order_search(task.environment_task, environment_factory)
+        return fixed_order_search(
+            task.environment_task,
+            environment_factory,
+            reward_margin=config.reward_margin,
+        )
     if strategy == "random":
         return random_search(
             task.environment_task,
             environment_factory,
             seed=config.random_seed,
+            reward_margin=config.reward_margin,
         )
     if strategy == "greedy":
-        return greedy_search(task.environment_task, environment_factory)
+        return greedy_search(
+            task.environment_task,
+            environment_factory,
+            reward_margin=config.reward_margin,
+        )
     if strategy == "beam":
         return beam_search(
             task.environment_task,
             environment_factory,
             beam_width=config.beam_width,
+            reward_margin=config.reward_margin,
         )
     return exhaustive_search(
         task.environment_task,
         environment_factory,
         max_nodes=config.max_nodes,
+        reward_margin=config.reward_margin,
     )
 
 

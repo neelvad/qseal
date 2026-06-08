@@ -31,7 +31,10 @@ class _SearchNode:
 def fixed_order_search(
     task: EnvironmentTask,
     environment_factory: EnvironmentFactory,
+    *,
+    reward_margin: float = 0.0,
 ) -> SearchResult:
+    _validate_reward_margin(reward_margin)
     node = _root_node(task, environment_factory)
     explored = 0
     while node.active():
@@ -41,7 +44,13 @@ def fixed_order_search(
             (*node.action_ids, node.observation.actions[0].action_id),
         )
         explored += 1
-    return _result("fixed_order", task, node, explored_nodes=explored)
+    return _result(
+        "fixed_order",
+        task,
+        node,
+        explored_nodes=explored,
+        reward_margin=reward_margin,
+    )
 
 
 def random_search(
@@ -49,7 +58,9 @@ def random_search(
     environment_factory: EnvironmentFactory,
     *,
     seed: int,
+    reward_margin: float = 0.0,
 ) -> SearchResult:
+    _validate_reward_margin(reward_margin)
     generator = random.Random(seed)
     node = _root_node(task, environment_factory)
     explored = 0
@@ -67,21 +78,25 @@ def random_search(
         node,
         explored_nodes=explored,
         seed=seed,
+        reward_margin=reward_margin,
     )
 
 
 def greedy_search(
     task: EnvironmentTask,
     environment_factory: EnvironmentFactory,
+    *,
+    reward_margin: float = 0.0,
 ) -> SearchResult:
+    _validate_reward_margin(reward_margin)
     node = _root_node(task, environment_factory)
     explored = 0
     stopped_early = False
     while node.active():
         candidates = _expand_node(task, environment_factory, node)
         explored += len(candidates)
-        candidate = _best_node(candidates)
-        if candidate.cumulative_reward <= node.cumulative_reward:
+        candidate = _best_node(candidates, reward_margin)
+        if candidate.cumulative_reward <= node.cumulative_reward + reward_margin:
             stopped_early = True
             break
         node = candidate
@@ -91,6 +106,7 @@ def greedy_search(
         node,
         explored_nodes=explored,
         stopped_early=stopped_early,
+        reward_margin=reward_margin,
     )
 
 
@@ -99,9 +115,11 @@ def beam_search(
     environment_factory: EnvironmentFactory,
     *,
     beam_width: int = 4,
+    reward_margin: float = 0.0,
 ) -> SearchResult:
     if beam_width < 1:
         raise ValueError("beam_width must be one or greater.")
+    _validate_reward_margin(reward_margin)
 
     root = _root_node(task, environment_factory)
     frontier = [root]
@@ -116,16 +134,20 @@ def beam_search(
                 expanded.extend(children)
             else:
                 expanded.append(node)
-        frontier = _rank_nodes(_deduplicate_nodes(expanded))[:beam_width]
+        frontier = _rank_nodes(
+            _deduplicate_nodes(expanded, reward_margin),
+            reward_margin,
+        )[:beam_width]
         candidates_seen.extend(frontier)
 
-    best = _best_node(candidates_seen)
+    best = _best_node(candidates_seen, reward_margin)
     return _result(
         "beam",
         task,
         best,
         explored_nodes=explored,
         beam_width=beam_width,
+        reward_margin=reward_margin,
     )
 
 
@@ -134,9 +156,11 @@ def exhaustive_search(
     environment_factory: EnvironmentFactory,
     *,
     max_nodes: int = 1_000,
+    reward_margin: float = 0.0,
 ) -> SearchResult:
     if max_nodes < 1:
         raise ValueError("max_nodes must be one or greater.")
+    _validate_reward_margin(reward_margin)
 
     root = _root_node(task, environment_factory)
     frontier = [root]
@@ -161,14 +185,18 @@ def exhaustive_search(
             )
             explored += 1
             existing = best_by_sql.get(child.observation.current_sql)
-            if existing is not None and _node_sort_key(existing) <= _node_sort_key(child):
+            if existing is not None and _is_preferred_or_equal(
+                existing,
+                child,
+                reward_margin,
+            ):
                 continue
             best_by_sql[child.observation.current_sql] = child
             candidates_seen.append(child)
             if child.active():
                 frontier.append(child)
 
-    best = _best_node(candidates_seen)
+    best = _best_node(candidates_seen, reward_margin)
     return _result(
         "exhaustive",
         task,
@@ -176,6 +204,7 @@ def exhaustive_search(
         explored_nodes=explored,
         search_truncated=search_truncated,
         max_nodes=max_nodes,
+        reward_margin=reward_margin,
     )
 
 
@@ -241,27 +270,63 @@ def _expand_node(
     ]
 
 
-def _deduplicate_nodes(nodes: list[_SearchNode]) -> list[_SearchNode]:
+def _deduplicate_nodes(
+    nodes: list[_SearchNode],
+    reward_margin: float,
+) -> list[_SearchNode]:
     best_by_sql: dict[str, _SearchNode] = {}
     for node in nodes:
         existing = best_by_sql.get(node.observation.current_sql)
-        if existing is None or _node_sort_key(node) < _node_sort_key(existing):
+        if existing is None or not _is_preferred_or_equal(
+            existing,
+            node,
+            reward_margin,
+        ):
             best_by_sql[node.observation.current_sql] = node
     return list(best_by_sql.values())
 
 
-def _best_node(nodes: list[_SearchNode]) -> _SearchNode:
+def _best_node(nodes: list[_SearchNode], reward_margin: float) -> _SearchNode:
     if not nodes:
         raise ValueError("Search produced no nodes.")
-    return min(nodes, key=_node_sort_key)
+    return _rank_nodes(nodes, reward_margin)[0]
 
 
-def _rank_nodes(nodes: list[_SearchNode]) -> list[_SearchNode]:
-    return sorted(nodes, key=_node_sort_key)
+def _rank_nodes(nodes: list[_SearchNode], reward_margin: float) -> list[_SearchNode]:
+    ranked = []
+    remaining = sorted(nodes, key=_tie_sort_key)
+    while remaining:
+        best_reward = max(node.cumulative_reward for node in remaining)
+        equivalent = [
+            node
+            for node in remaining
+            if best_reward - node.cumulative_reward <= reward_margin
+        ]
+        ranked.extend(sorted(equivalent, key=_tie_sort_key))
+        equivalent_ids = {id(node) for node in equivalent}
+        remaining = [node for node in remaining if id(node) not in equivalent_ids]
+    return ranked
 
 
-def _node_sort_key(node: _SearchNode) -> tuple[float, int, tuple[str, ...]]:
-    return (-node.cumulative_reward, len(node.action_ids), node.action_ids)
+def _is_preferred_or_equal(
+    incumbent: _SearchNode,
+    challenger: _SearchNode,
+    reward_margin: float,
+) -> bool:
+    if incumbent.cumulative_reward > challenger.cumulative_reward + reward_margin:
+        return True
+    if challenger.cumulative_reward > incumbent.cumulative_reward + reward_margin:
+        return False
+    return _tie_sort_key(incumbent) <= _tie_sort_key(challenger)
+
+
+def _tie_sort_key(node: _SearchNode) -> tuple[int, tuple[str, ...]]:
+    return (len(node.action_ids), node.action_ids)
+
+
+def _validate_reward_margin(reward_margin: float) -> None:
+    if reward_margin < 0:
+        raise ValueError("reward_margin must be zero or greater.")
 
 
 def _result(
@@ -275,6 +340,7 @@ def _result(
     seed: int | None = None,
     beam_width: int | None = None,
     max_nodes: int | None = None,
+    reward_margin: float = 0.0,
 ) -> SearchResult:
     cumulative = 0.0
     steps = []
@@ -313,4 +379,5 @@ def _result(
         seed=seed,
         beam_width=beam_width,
         max_nodes=max_nodes,
+        reward_margin=reward_margin,
     )

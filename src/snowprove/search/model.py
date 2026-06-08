@@ -36,3 +36,4 @@ class SearchResult(BaseModel):
     seed: int | None = None
     beam_width: int | None = None
     max_nodes: int | None = None
+    reward_margin: float = 0.0

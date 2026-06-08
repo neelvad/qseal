@@ -55,6 +55,7 @@ class CorpusSummary(BaseModel):
     corpus_version: str
     corpus_fingerprint: str
     neutral_threshold: float
+    reward_margin: float = 0.0
     task_count: int
     completed_task_count: int
     error_task_count: int
@@ -84,8 +85,9 @@ def summarize_corpus_run(
     if neutral_threshold < 0:
         raise ValueError("neutral_threshold must be zero or greater.")
 
+    effective_threshold = max(neutral_threshold, report.config.reward_margin)
     tasks = tuple(
-        _summarize_task(task, neutral_threshold)
+        _summarize_task(task, effective_threshold)
         for task in report.tasks
     )
     wins = {
@@ -137,7 +139,8 @@ def summarize_corpus_run(
         corpus_id=report.corpus_id,
         corpus_version=report.corpus_version,
         corpus_fingerprint=report.corpus_fingerprint,
-        neutral_threshold=neutral_threshold,
+        neutral_threshold=effective_threshold,
+        reward_margin=report.config.reward_margin,
         task_count=len(tasks),
         completed_task_count=sum(bool(task.completed_strategies) for task in tasks),
         error_task_count=sum(bool(task.error_strategies) for task in tasks),

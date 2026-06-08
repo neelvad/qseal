@@ -99,7 +99,8 @@ twenty-five initial rewrite-search tasks. See
 uv run snowprove corpus run snowprove-runs/corpus \
   --task distinct-and-not-null \
   --strategy greedy \
-  --strategy beam
+  --strategy beam \
+  --reward-margin 0.05
 
 uv run snowprove corpus summarize snowprove-runs/corpus/corpus-run.json
 
