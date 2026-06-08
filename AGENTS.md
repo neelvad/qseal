@@ -148,7 +148,7 @@ Task corpus:
 
 - bundled `duckdb-v1` corpus installed with the package
 - versioned manifest with named fixture profiles and task definitions
-- five hand-written anchors plus twenty generated family tasks
+- five hand-written anchors plus generated task families
 - task families expand query variants across selected fixture profiles
 - each task resolves to an `EnvironmentTask` with corpus provenance
 - task and corpus content fingerprints are independent of checkout paths
@@ -340,7 +340,7 @@ Completed:
    avoid repeated oracle work and preserve experiment data.
 7. Fixed-order, seeded random, greedy, beam-search, and bounded exhaustive
    baselines explore the verified rewrite environment.
-8. A versioned DuckDB corpus defines six seeded fixture profiles and 102
+8. A versioned DuckDB corpus defines six seeded fixture profiles and 120
    concrete tasks with stable content fingerprints, including table-scale and
    multi-action predicate-pushdown variations.
 9. A corpus runner compares all five search strategies and writes versioned
@@ -563,14 +563,36 @@ Completed:
     0.065391 and 22 wins while using 28 oracle calls versus greedy's 34.
     The remaining exact misses are fixture-specific ordering cases rather than
     broad policy-search failures.
+51. The bundled corpus is now version 6 with 120 tasks. The expansion added 18
+    targeted choice-state calibration tasks without the `multi-action` tag:
+    `choice-distinct-not-null` and `choice-double-not-null` families over
+    users, orders, and events on standard-small, low-skew-small, and
+    standard-medium fixtures. These tasks are meant to give held-out
+    `multi-action` experiments some related choice-state training evidence.
+52. A one-run, 20 ms, 120-task transition run completed at
+    `/tmp/snowprove-corpus-120-transition-20260608/corpus-run.json`. All
+    strategies completed all tasks. Mean rewards were fixed/random 0.113390,
+    greedy 0.116516, and beam/exhaustive 0.121580. Fresh trajectories were
+    exported to `/tmp/snowprove-policy-120-20260608/trajectories.jsonl`: 539
+    rows, 185 labeled states, and oracle paths for all 120 tasks.
+53. Rerunning the multi-action holdout with the v6 trajectories at
+    `/tmp/snowprove-policy-120-holdout-multiaction-20260608` increased the
+    training split from 59 to 95 states and held out 90 states across 43 tasks.
+    Policy-abstain still tied greedy search at reward 0.092186 and 43 wins
+    while using 75 oracle calls versus greedy's 103, but offline exact and
+    adjusted accuracy dropped to 84/90 (0.9333). Inspection showed six
+    unacceptable misses, mostly cases where the feature-mean scorer strongly
+    prefers `remove_redundant_distinct` or predicate 0 while the trajectory
+    oracle prefers removing the redundant non-null filter or predicate 1 first.
+    This suggests corpus examples alone are not enough for the current
+    averaging scorer; a small supervised ranker is now better justified.
 
 Next:
 
-1. Add targeted choice-state corpus examples that do not all share the
-   `multi-action` tag, so held-out splits still contain learnable action-order
-   evidence.
-2. Consider replacing the feature-mean scorer with a small supervised ranker
+1. Consider replacing the feature-mean scorer with a small supervised ranker
    that can handle sparse/unseen context better than averaging win rates.
+2. Use the v6 choice-calibration families as training data for that ranker and
+   compare against the current feature-mean baseline on the same holdouts.
 3. Keep using `policy inspect-baseline` after each experiment to distinguish
    harmless near-ties from real search-reward regressions.
 

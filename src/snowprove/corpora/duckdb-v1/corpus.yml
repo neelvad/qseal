@@ -1,7 +1,7 @@
 schema_version: 1
 artifact_type: rewrite_task_corpus
 corpus_id: duckdb-foundations
-corpus_version: "5"
+corpus_version: "6"
 dialect: duckdb
 
 fixtures:
@@ -402,3 +402,70 @@ task_families:
         query_path: queries/double-not-null-events.sql
         tags:
           - table:events
+
+  - family_id: choice-distinct-not-null
+    constraints_path: schema.yml
+    fixture_ids:
+      - standard-small
+      - low-skew-small
+      - standard-medium
+    max_steps: 4
+    enabled_rules:
+      - remove_redundant_distinct
+      - remove_redundant_not_null_filter
+    tags:
+      - distinct
+      - filter
+      - choice-calibration
+      - order-sensitive
+    expected_verifiers:
+      - builtin
+    variants:
+      - variant_id: active-users
+        query_path: queries/choice-distinct-not-null-active-users.sql
+        tags:
+          - table:users
+          - selectivity:fixture-controlled
+      - variant_id: high-value-orders
+        query_path: queries/choice-distinct-not-null-high-value-orders.sql
+        tags:
+          - table:orders
+          - selectivity:high
+      - variant_id: events-user-range
+        query_path: queries/choice-distinct-not-null-events-user-range.sql
+        tags:
+          - table:events
+          - selectivity:user-range
+
+  - family_id: choice-double-not-null
+    constraints_path: schema.yml
+    fixture_ids:
+      - standard-small
+      - low-skew-small
+      - standard-medium
+    max_steps: 4
+    enabled_rules:
+      - remove_redundant_not_null_filter
+    tags:
+      - filter
+      - nullability
+      - choice-calibration
+      - order-sensitive
+    expected_verifiers:
+      - builtin
+    variants:
+      - variant_id: active-users
+        query_path: queries/choice-double-not-null-active-users.sql
+        tags:
+          - table:users
+          - selectivity:fixture-controlled
+      - variant_id: high-value-orders
+        query_path: queries/choice-double-not-null-high-value-orders.sql
+        tags:
+          - table:orders
+          - selectivity:high
+      - variant_id: events-user-range
+        query_path: queries/choice-double-not-null-events-user-range.sql
+        tags:
+          - table:events
+          - selectivity:user-range
