@@ -336,14 +336,18 @@ Completed:
     identifies unstable task labels and paths.
 12. Search and corpus runs support an explicit reward margin so benchmark
     differences below the configured threshold do not favor longer paths.
+13. `snowprove corpus repeat` runs isolated measurements and writes an automatic
+    stability aggregate without reusing benchmark caches across runs.
+14. The first three-run 53-task measurement completed cleanly with 4 winner
+    changes, 4 reward-class changes, and 8 path changes; 9 tasks were unstable,
+    mostly compact-fixture or multi-action cases.
 
 Next:
 
-1. Run repeated aggregate measurements over the 53-task corpus and use
-   reward/path instability to identify benchmark noise or underspecified task
-   families.
-2. Expand toward 100-200 tasks based on those measured gaps rather than adding
-   arbitrary variations.
+1. Investigate compact-fixture and multi-action instability identified by the
+   first three-run 53-task aggregate.
+2. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
+   variations.
 3. Add a small learned action-ranking policy only after baseline measurements
    are reproducible.
 

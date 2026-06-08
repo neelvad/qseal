@@ -14,6 +14,7 @@ from snowprove.corpus import (
     load_task_corpus,
     render_corpus_aggregate,
     render_corpus_summary,
+    run_repeated_task_corpus,
     run_task_corpus,
     summarize_corpus_run,
     write_corpus_aggregate,
@@ -218,6 +219,126 @@ def corpus_run(
 
     if any(summary.error_count for summary in report.strategy_summaries):
         raise click.exceptions.Exit(1)
+
+
+@corpus_group.command(name="repeat")
+@click.argument("output_dir", type=click.Path(file_okay=False, path_type=Path))
+@click.option(
+    "--runs",
+    type=click.IntRange(min=2),
+    default=3,
+    show_default=True,
+    help="Number of independent corpus measurements.",
+)
+@click.option(
+    "--manifest",
+    "manifest_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Corpus manifest. Defaults to the bundled duckdb-v1 corpus.",
+)
+@click.option(
+    "--task",
+    "task_ids",
+    multiple=True,
+    help="Only run a task ID. Can be passed more than once.",
+)
+@click.option(
+    "--strategy",
+    "strategies",
+    multiple=True,
+    type=SearchStrategyChoice,
+    help="Only run a search strategy. Can be passed more than once.",
+)
+@click.option("--random-seed", type=int, default=42, show_default=True)
+@click.option("--beam-width", type=click.IntRange(min=1), default=4, show_default=True)
+@click.option("--max-nodes", type=click.IntRange(min=1), default=100, show_default=True)
+@click.option(
+    "--reward-margin",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Minimum cumulative reward improvement required to prefer a longer path.",
+)
+@click.option("--warmups", type=click.IntRange(min=0), default=1, show_default=True)
+@click.option("--repetitions", type=click.IntRange(min=1), default=3, show_default=True)
+@click.option(
+    "--timeout",
+    "timeout_seconds",
+    type=click.FloatRange(min=0, min_open=True),
+    default=30.0,
+    show_default=True,
+)
+@click.option("--threads", type=click.IntRange(min=1), default=1, show_default=True)
+@click.option(
+    "--neutral-threshold",
+    type=click.FloatRange(min=0),
+    default=0.01,
+    show_default=True,
+    help="Maximum reward difference treated as equivalent.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+)
+def corpus_repeat(
+    output_dir: Path,
+    runs: int,
+    manifest_path: Path | None,
+    task_ids: tuple[str, ...],
+    strategies: tuple[str, ...],
+    random_seed: int,
+    beam_width: int,
+    max_nodes: int,
+    reward_margin: float,
+    warmups: int,
+    repetitions: int,
+    timeout_seconds: float,
+    threads: int,
+    neutral_threshold: float,
+    output_format: str,
+) -> None:
+    """Run independent corpus measurements and aggregate their stability."""
+    manifest_path = manifest_path or bundled_corpus_path()
+    config_values = {
+        "task_ids": task_ids,
+        "random_seed": random_seed,
+        "beam_width": beam_width,
+        "max_nodes": max_nodes,
+        "reward_margin": reward_margin,
+        "warmups": warmups,
+        "repetitions": repetitions,
+        "timeout_seconds": timeout_seconds,
+        "threads": threads,
+    }
+    if strategies:
+        config_values["strategies"] = strategies
+
+    click.echo(
+        f"Running {runs} independent corpus measurements in {output_dir}...",
+        err=True,
+    )
+    try:
+        aggregate = run_repeated_task_corpus(
+            load_task_corpus(manifest_path),
+            output_dir,
+            runs=runs,
+            config=CorpusRunConfig(**config_values),
+            neutral_threshold=neutral_threshold,
+        )
+    except ValueError as error:
+        raise click.ClickException(str(error)) from error
+
+    if output_format == "json":
+        click.echo(aggregate.model_dump_json(indent=2))
+    else:
+        click.echo(render_corpus_aggregate(aggregate))
+    click.echo(
+        f"Aggregate file written: {output_dir / 'corpus-aggregate.json'}",
+        err=True,
+    )
 
 
 @corpus_group.command(name="summarize")

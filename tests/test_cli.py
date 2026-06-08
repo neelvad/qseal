@@ -188,6 +188,81 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert not (output_dir / "fixtures" / "low-skew-small.duckdb").exists()
 
 
+def test_corpus_repeat_cli_runs_independent_measurements_and_aggregates(
+    tmp_path,
+) -> None:
+    corpus_root = copytree(bundled_corpus_path().parent, tmp_path / "corpus")
+    manifest_path = corpus_root / "corpus.yml"
+    payload = yaml.safe_load(manifest_path.read_text())
+    for fixture in payload["fixtures"]:
+        fixture["spec"].update(
+            {
+                "user_rows": 20,
+                "order_rows": 50,
+                "event_rows": 30,
+            }
+        )
+    manifest_path.write_text(yaml.safe_dump(payload, sort_keys=False))
+    output_dir = tmp_path / "repeat"
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "corpus",
+            "repeat",
+            str(output_dir),
+            "--runs",
+            "2",
+            "--manifest",
+            str(manifest_path),
+            "--task",
+            "redundant-distinct-users",
+            "--strategy",
+            "fixed_order",
+            "--reward-margin",
+            "0.05",
+            "--warmups",
+            "0",
+            "--repetitions",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    aggregate_path = output_dir / "corpus-aggregate.json"
+    aggregate = json.loads(aggregate_path.read_text())
+    report_paths = [
+        output_dir / "run-001" / "corpus-run.json",
+        output_dir / "run-002" / "corpus-run.json",
+    ]
+    reports = [json.loads(path.read_text()) for path in report_paths]
+    assert aggregate["artifact_type"] == "corpus_run_aggregate"
+    assert aggregate["run_count"] == 2
+    assert aggregate["source_reports"] == [str(path) for path in report_paths]
+    assert all(
+        report["strategy_summaries"][0]["benchmark_cache_misses"] == 1
+        for report in reports
+    )
+
+    repeated = CliRunner().invoke(
+        main,
+        [
+            "corpus",
+            "repeat",
+            str(output_dir),
+            "--runs",
+            "2",
+            "--manifest",
+            str(manifest_path),
+        ],
+    )
+
+    assert repeated.exit_code != 0
+    assert "Repeat output already exists" in repeated.output
+
+
 def test_suggest_cli_reports_unsupported_sql(tmp_path) -> None:
     query = tmp_path / "query.sql"
     schema = tmp_path / "schema.yml"

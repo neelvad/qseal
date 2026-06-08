@@ -17,6 +17,7 @@ from snowprove.corpus.model import (
     LoadedCorpusTask,
     LoadedTaskCorpus,
 )
+from snowprove.corpus.repeat import run_repeated_task_corpus
 from snowprove.corpus.runner import (
     CorpusRunConfig,
     CorpusRunEnvironment,
@@ -63,6 +64,7 @@ __all__ = [
     "load_task_corpus",
     "materialize_corpus_fixtures",
     "run_task_corpus",
+    "run_repeated_task_corpus",
     "render_corpus_summary",
     "render_corpus_aggregate",
     "summarize_corpus_run",

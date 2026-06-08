@@ -92,7 +92,7 @@ baselines are available from `snowprove.search`. See
 usage.
 
 A bundled, versioned DuckDB task corpus provides seeded fixture profiles and
-twenty-five initial rewrite-search tasks. See
+53 reproducible rewrite-search tasks. See
 [`docs/task-corpus.md`](docs/task-corpus.md).
 
 ```bash
@@ -103,6 +103,12 @@ uv run snowprove corpus run snowprove-runs/corpus \
   --reward-margin 0.05
 
 uv run snowprove corpus summarize snowprove-runs/corpus/corpus-run.json
+
+uv run snowprove corpus repeat snowprove-runs/corpus-repeat \
+  --runs 3 \
+  --reward-margin 0.05 \
+  --warmups 2 \
+  --repetitions 5
 
 uv run snowprove corpus aggregate \
   snowprove-runs/run-1/corpus-run.json \

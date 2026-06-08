@@ -50,6 +50,21 @@ uv run snowprove corpus run snowprove-runs/corpus-margin \
 The measured rewards remain unchanged in artifacts. The margin only changes
 search selection. Fixed-order and random remain forced-rollout baselines.
 
+For repeated independent measurements and an automatic stability aggregate:
+
+```bash
+uv run snowprove corpus repeat snowprove-runs/corpus-repeat \
+  --runs 3 \
+  --reward-margin 0.05 \
+  --warmups 2 \
+  --repetitions 5
+```
+
+This creates `run-001/`, `run-002/`, and so on, each with an isolated
+content-addressed benchmark cache, then writes `corpus-aggregate.json`.
+Existing reports are never overwritten because reusing their caches would
+invalidate measurement independence.
+
 The manifest separates named DuckDB fixture profiles from task definitions.
 Multiple tasks can therefore share one generated database.
 
@@ -164,7 +179,8 @@ effective neutral threshold so reported winners match the search policy.
 
 ## Aggregating Repeated Runs
 
-Aggregate two or more compatible run reports to measure benchmark stability:
+`corpus repeat` is the normal workflow. To aggregate reports produced
+separately, pass two or more compatible run reports explicitly:
 
 ```bash
 uv run snowprove corpus aggregate \
