@@ -334,6 +334,48 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
         == ["remove_redundant_distinct::query:distinct"]
     )
 
+    holdout_dir = tmp_path / "policy-holdout"
+    holdout = CliRunner().invoke(
+        main,
+        [
+            "policy",
+            "holdout-evaluate",
+            str(trajectories_path),
+            str(holdout_dir),
+            "--manifest",
+            str(manifest_path),
+            "--include-fixture",
+            "standard-small",
+            "--include-task",
+            "redundant-distinct-users",
+            "--minimum-duration-ms",
+            "10000",
+            "--warmups",
+            "0",
+            "--repetitions",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert holdout.exit_code == 0, holdout.output
+    holdout_report = json.loads((holdout_dir / "holdout-evaluation.json").read_text())
+    assert holdout_report["artifact_type"] == "policy_holdout_evaluation"
+    assert holdout_report["holdout_filter"]["include_fixtures"] == ["standard-small"]
+    assert holdout_report["trained_state_count"] == 0
+    assert holdout_report["heldout_state_count"] == 1
+    assert holdout_report["heldout_task_ids"] == ["redundant-distinct-users"]
+    assert set(holdout_report["strategy_rewards"]) == {
+        "greedy",
+        "policy_baseline_abstain",
+    }
+    holdout_corpus = json.loads((holdout_dir / "corpus-run" / "corpus-run.json").read_text())
+    assert holdout_corpus["config"]["strategies"] == [
+        "greedy",
+        "policy_baseline_abstain",
+    ]
+
 
 def test_corpus_repeat_cli_runs_independent_measurements_and_aggregates(
     tmp_path,

@@ -31,10 +31,12 @@ from snowprove.fixtures import DuckDbFixtureSpec, create_duckdb_fixture
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.policy import (
     PolicyDataFilter,
+    PolicyHoldoutEvaluation,
     evaluate_baseline_policy,
     load_baseline_policy,
     render_baseline_policy_evaluation,
     render_baseline_policy_training,
+    render_policy_holdout_evaluation,
     train_baseline_policy,
     write_baseline_policy,
 )
@@ -736,6 +738,163 @@ def policy_evaluate_baseline(
         click.echo(render_baseline_policy_evaluation(evaluation))
     if report_file is not None:
         click.echo(f"Evaluation file written: {report_file}", err=True)
+
+
+@policy_group.command(name="holdout-evaluate")
+@click.argument(
+    "trajectory_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.argument("output_dir", type=click.Path(file_okay=False, path_type=Path))
+@click.option(
+    "--manifest",
+    "manifest_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Corpus manifest. Defaults to the bundled duckdb-v1 corpus.",
+)
+@click.option("--include-task", "include_tasks", multiple=True)
+@click.option("--include-fixture", "include_fixtures", multiple=True)
+@click.option("--include-tag", "include_tags", multiple=True)
+@click.option("--reward-margin", type=click.FloatRange(min=0), default=0.05, show_default=True)
+@click.option(
+    "--reward-model",
+    type=RewardModelChoice,
+    default="transition",
+    show_default=True,
+)
+@click.option("--warmups", type=click.IntRange(min=0), default=1, show_default=True)
+@click.option("--repetitions", type=click.IntRange(min=1), default=3, show_default=True)
+@click.option(
+    "--timeout",
+    "timeout_seconds",
+    type=click.FloatRange(min=0, min_open=True),
+    default=30.0,
+    show_default=True,
+)
+@click.option("--threads", type=click.IntRange(min=1), default=1, show_default=True)
+@click.option(
+    "--minimum-duration-ms",
+    type=click.FloatRange(min=0),
+    default=5.0,
+    show_default=True,
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+)
+def policy_holdout_evaluate(
+    trajectory_path: Path,
+    output_dir: Path,
+    manifest_path: Path | None,
+    include_tasks: tuple[str, ...],
+    include_fixtures: tuple[str, ...],
+    include_tags: tuple[str, ...],
+    reward_margin: float,
+    reward_model: str,
+    warmups: int,
+    repetitions: int,
+    timeout_seconds: float,
+    threads: int,
+    minimum_duration_ms: float,
+    output_format: str,
+) -> None:
+    """Train excluding a held-out split and compare policy search on that split."""
+    if not (include_tasks or include_fixtures or include_tags):
+        raise click.ClickException(
+            "At least one holdout include filter is required: "
+            "--include-task, --include-fixture, or --include-tag."
+        )
+    if output_dir.exists():
+        raise click.ClickException(f"Output directory already exists: {output_dir}")
+
+    manifest_path = manifest_path or bundled_corpus_path()
+    corpus = load_task_corpus(manifest_path)
+    holdout_filter = PolicyDataFilter(
+        include_tasks=include_tasks,
+        include_fixtures=include_fixtures,
+        include_tags=include_tags,
+    )
+    train_filter = PolicyDataFilter(
+        exclude_tasks=include_tasks,
+        exclude_fixtures=include_fixtures,
+        exclude_tags=include_tags,
+    )
+    heldout_task_ids = _select_policy_holdout_tasks(corpus, holdout_filter)
+    if not heldout_task_ids:
+        raise click.ClickException("Holdout filters selected no corpus tasks.")
+
+    output_dir.mkdir(parents=True)
+    model_path = output_dir / "policy.json"
+    evaluation_path = output_dir / "offline-evaluation.json"
+    corpus_report_path = output_dir / "corpus-run" / "corpus-run.json"
+    holdout_report_path = output_dir / "holdout-evaluation.json"
+
+    model = train_baseline_policy(
+        trajectory_path,
+        source_trajectories=str(trajectory_path),
+        data_filter=train_filter,
+    )
+    write_baseline_policy(model, model_path)
+    offline_evaluation = evaluate_baseline_policy(
+        trajectory_path,
+        model,
+        source_trajectories=str(trajectory_path),
+        model_path=str(model_path),
+        data_filter=holdout_filter,
+    )
+    evaluation_path.write_text(offline_evaluation.model_dump_json(indent=2))
+    corpus_report = run_task_corpus(
+        corpus,
+        corpus_report_path.parent,
+        config=CorpusRunConfig(
+            strategies=("greedy", "policy_baseline_abstain"),
+            task_ids=heldout_task_ids,
+            reward_margin=reward_margin,
+            reward_model=reward_model,
+            warmups=warmups,
+            repetitions=repetitions,
+            timeout_seconds=timeout_seconds,
+            threads=threads,
+            minimum_duration_ms=minimum_duration_ms,
+            policy_model_path=str(model_path),
+            policy_model=model,
+        ),
+        report_path=corpus_report_path,
+    )
+    holdout = PolicyHoldoutEvaluation(
+        generated_at=model.generated_at,
+        source_trajectories=str(trajectory_path),
+        train_filter=train_filter,
+        holdout_filter=holdout_filter,
+        trained_state_count=model.labeled_state_count,
+        heldout_state_count=offline_evaluation.labeled_state_count,
+        offline_evaluation=offline_evaluation,
+        corpus_report_path=str(corpus_report_path),
+        heldout_task_ids=heldout_task_ids,
+        strategy_rewards={
+            summary.strategy: summary.mean_cumulative_reward
+            for summary in corpus_report.strategy_summaries
+        },
+        strategy_wins=_strategy_wins(corpus_report),
+        strategy_benchmark_requests={
+            summary.strategy: summary.benchmark_requests
+            for summary in corpus_report.strategy_summaries
+        },
+        strategy_verifier_requests={
+            summary.strategy: summary.verification_requests
+            for summary in corpus_report.strategy_summaries
+        },
+    )
+    holdout_report_path.write_text(holdout.model_dump_json(indent=2))
+
+    if output_format == "json":
+        click.echo(holdout.model_dump_json(indent=2))
+    else:
+        click.echo(render_policy_holdout_evaluation(holdout))
+    click.echo(f"Holdout evaluation file written: {holdout_report_path}", err=True)
 
 
 @fixtures_group.command(name="create")
@@ -1821,6 +1980,42 @@ def _candidate_generation_payload(
         "generated": generated,
         "skipped": skipped,
     }
+
+
+def _select_policy_holdout_tasks(corpus, data_filter: PolicyDataFilter) -> tuple[str, ...]:
+    selected = []
+    for task in corpus.tasks:
+        tags = set(task.definition.tags)
+        if data_filter.include_tasks and task.definition.task_id not in data_filter.include_tasks:
+            continue
+        if (
+            data_filter.include_fixtures
+            and task.fixture.fixture_id not in data_filter.include_fixtures
+        ):
+            continue
+        if data_filter.include_tags and not tags.intersection(data_filter.include_tags):
+            continue
+        selected.append(task.definition.task_id)
+    return tuple(selected)
+
+
+def _strategy_wins(report) -> dict[str, int]:
+    wins = {summary.strategy: 0 for summary in report.strategy_summaries}
+    for task in report.tasks:
+        completed = [
+            result
+            for result in task.results
+            if result.status == "COMPLETED" and result.search_result is not None
+        ]
+        if not completed:
+            continue
+        best_reward = max(
+            result.search_result.cumulative_reward for result in completed
+        )
+        for result in completed:
+            if result.search_result.cumulative_reward == best_reward:
+                wins[result.strategy] = wins.get(result.strategy, 0) + 1
+    return wins
 
 
 def _candidate_suggestions(

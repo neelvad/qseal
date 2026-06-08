@@ -88,6 +88,26 @@ class BaselinePolicyEvaluation(BaseModel):
     per_oracle_rule: tuple[RuleAccuracy, ...]
 
 
+class PolicyHoldoutEvaluation(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    schema_version: Literal[1] = 1
+    artifact_type: Literal["policy_holdout_evaluation"] = "policy_holdout_evaluation"
+    generated_at: datetime
+    source_trajectories: str
+    train_filter: PolicyDataFilter
+    holdout_filter: PolicyDataFilter
+    trained_state_count: int
+    heldout_state_count: int
+    offline_evaluation: BaselinePolicyEvaluation
+    corpus_report_path: str
+    heldout_task_ids: tuple[str, ...]
+    strategy_rewards: dict[str, float | None]
+    strategy_wins: dict[str, int]
+    strategy_benchmark_requests: dict[str, int]
+    strategy_verifier_requests: dict[str, int]
+
+
 @dataclass(frozen=True)
 class _StateExample:
     task_id: str
@@ -276,6 +296,30 @@ def render_baseline_policy_evaluation(evaluation: BaselinePolicyEvaluation) -> s
                 f"  {rule.rule_name}: {rule.correct_count}/{rule.state_count} "
                 f"({rule.accuracy:.4f})"
             )
+    return "\n".join(lines)
+
+
+def render_policy_holdout_evaluation(evaluation: PolicyHoldoutEvaluation) -> str:
+    lines = [
+        "Policy holdout evaluation",
+        f"Train states: {evaluation.trained_state_count}",
+        f"Held-out states: {evaluation.heldout_state_count}",
+        f"Held-out tasks: {len(evaluation.heldout_task_ids)}",
+        f"Corpus report: {evaluation.corpus_report_path}",
+        "",
+        "Strategy comparison:",
+    ]
+    for strategy, reward in evaluation.strategy_rewards.items():
+        rendered_reward = "n/a" if reward is None else f"{reward:.6f}"
+        lines.append(
+            f"  {strategy}: reward={rendered_reward}, "
+            f"wins={evaluation.strategy_wins.get(strategy, 0)}, "
+            f"vreq={evaluation.strategy_verifier_requests.get(strategy, 0)}, "
+            f"breq={evaluation.strategy_benchmark_requests.get(strategy, 0)}"
+        )
+    lines.append("")
+    lines.append("Offline label evaluation:")
+    lines.append(render_baseline_policy_evaluation(evaluation.offline_evaluation))
     return "\n".join(lines)
 
 

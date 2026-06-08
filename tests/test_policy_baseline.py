@@ -12,6 +12,10 @@ from snowprove.corpus import (
     load_task_corpus,
 )
 from snowprove.policy import PolicyDataFilter, evaluate_baseline_policy, train_baseline_policy
+from snowprove.policy.baseline import (
+    PolicyHoldoutEvaluation,
+    render_policy_holdout_evaluation,
+)
 from snowprove.rewrites.base import VerificationStatus
 from snowprove.search import SearchResult, SearchStep
 
@@ -99,6 +103,52 @@ def test_baseline_policy_filters_train_and_evaluation_splits(tmp_path) -> None:
     assert evaluation.data_filter.include_fixtures == ("standard-small",)
     assert evaluation.predicted_state_count == 1
     assert excluded.state_count == 0
+
+
+def test_renders_policy_holdout_evaluation(tmp_path) -> None:
+    corpus = load_task_corpus(bundled_corpus_path())
+    task = corpus.task("distinct-and-not-null")
+    trajectory_path = tmp_path / "trajectories.jsonl"
+    distinct_action = "remove_redundant_distinct::query:distinct"
+    not_null_action = "remove_redundant_not_null_filter::predicate:0"
+    export_corpus_trajectories(
+        _report(
+            corpus,
+            task.definition.task_id,
+            task.fingerprint,
+            task.fixture.fixture_id,
+            task.definition.enabled_rules,
+            task.definition.tags,
+            task.environment_task.sql,
+            distinct_action,
+            not_null_action,
+        ),
+        corpus,
+        trajectory_path,
+    )
+    model = train_baseline_policy(trajectory_path)
+    evaluation = evaluate_baseline_policy(trajectory_path, model)
+    holdout = PolicyHoldoutEvaluation(
+        generated_at=model.generated_at,
+        source_trajectories=str(trajectory_path),
+        train_filter=PolicyDataFilter(exclude_fixtures=("standard-small",)),
+        holdout_filter=PolicyDataFilter(include_fixtures=("standard-small",)),
+        trained_state_count=0,
+        heldout_state_count=evaluation.labeled_state_count,
+        offline_evaluation=evaluation,
+        corpus_report_path="/tmp/corpus-run.json",
+        heldout_task_ids=(task.definition.task_id,),
+        strategy_rewards={"greedy": 1.0, "policy_baseline_abstain": 1.0},
+        strategy_wins={"greedy": 1, "policy_baseline_abstain": 1},
+        strategy_benchmark_requests={"greedy": 2, "policy_baseline_abstain": 1},
+        strategy_verifier_requests={"greedy": 2, "policy_baseline_abstain": 1},
+    )
+
+    rendered = render_policy_holdout_evaluation(holdout)
+
+    assert holdout.artifact_type == "policy_holdout_evaluation"
+    assert "Policy holdout evaluation" in rendered
+    assert "policy_baseline_abstain" in rendered
 
 
 def _report(

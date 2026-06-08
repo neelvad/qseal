@@ -290,6 +290,22 @@ Available filters are `--include-task`, `--exclude-task`, `--include-fixture`,
 `--exclude-fixture`, `--include-tag`, and `--exclude-tag`. Repeating an option
 adds more accepted or rejected values.
 
+For a complete held-out search experiment, use:
+
+```bash
+uv run snowprove policy holdout-evaluate trajectories.jsonl \
+  snowprove-runs/policy-holdout-medium \
+  --include-fixture standard-medium \
+  --reward-margin 0.05 \
+  --minimum-duration-ms 20
+```
+
+The command trains a baseline policy excluding the held-out filters, evaluates
+offline action labels on the held-out states, then runs held-out corpus tasks
+with `greedy` and `policy_baseline_abstain`. It writes `policy.json`,
+`offline-evaluation.json`, `corpus-run/corpus-run.json`, and
+`holdout-evaluation.json` under the output directory.
+
 ## Summarizing Runs
 
 Use the summary command after a corpus run:

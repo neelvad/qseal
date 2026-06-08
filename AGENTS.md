@@ -443,13 +443,25 @@ Completed:
     greedy at mean reward 0.134872 and 74 wins while using fewer evaluations
     (105 verifier/benchmark requests versus greedy's 118). Forced
     `policy_baseline` reached mean reward 0.120825 and 68 wins.
+38. `snowprove policy holdout-evaluate TRAJECTORIES OUT --include-fixture X`
+    automates held-out experiments. It trains a baseline policy excluding the
+    held-out filters, evaluates offline labels on the held-out split, then runs
+    held-out corpus tasks with `greedy` and `policy_baseline_abstain`, writing
+    `policy.json`, `offline-evaluation.json`, `corpus-run/corpus-run.json`, and
+    `holdout-evaluation.json`.
+39. A standard-medium fixture holdout was written to
+    `/tmp/snowprove-policy-holdout-standard-medium-20260608`. Training used 79
+    labeled states and held out 18 states across 15 tasks. Offline accuracy was
+    18/18 with zero mean known reward gap. Held-out corpus search tied greedy
+    reward/wins at 0.096018 and 15 wins, while `policy_baseline_abstain` used
+    21 verifier/benchmark requests versus greedy's 24.
 
 Next:
 
 1. Run several held-out baseline policy splits and inspect accuracy/gap by
    fixture and tag.
 2. Run held-out train/eval experiments for `policy_baseline_abstain`, starting
-   with fixture and tag splits.
+   with fixture and tag splits via `policy holdout-evaluate`.
 3. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.
 4. Add a small learned action-ranking policy only after baseline measurements
