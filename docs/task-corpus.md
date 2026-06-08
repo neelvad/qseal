@@ -236,6 +236,28 @@ Labels are intentionally conservative:
 This is suitable for supervised action-ranking baselines before introducing
 learned or LLM-based candidate generation.
 
+## Baseline Policy
+
+The first policy workflow is intentionally simple and interpretable:
+
+```bash
+uv run snowprove policy train-baseline trajectories.jsonl \
+  --model-file policy.json
+
+uv run snowprove policy evaluate-baseline trajectories.jsonl \
+  --model-file policy.json \
+  --report-file policy-evaluation.json
+```
+
+`train-baseline` builds a feature-mean action ranker from state-level oracle
+labels. It scores action IDs using transparent feature statistics such as rule
+name, fixture/action, task-tag/action, and step/action combinations.
+
+`evaluate-baseline` reports top-1 state accuracy, per-oracle-rule accuracy, and
+known reward gaps where the trajectory data observed both the predicted and
+oracle action rewards. This is a sanity baseline before plugging learned scores
+into corpus search.
+
 ## Summarizing Runs
 
 Use the summary command after a corpus run:

@@ -243,6 +243,47 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert records[0]["task_oracle_strategy"] == "fixed_order"
     assert records[0]["is_task_oracle_step"] is True
 
+    model_path = tmp_path / "policy.json"
+    trained = CliRunner().invoke(
+        main,
+        [
+            "policy",
+            "train-baseline",
+            str(trajectories_path),
+            "--model-file",
+            str(model_path),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert trained.exit_code == 0, trained.output
+    model = json.loads(model_path.read_text())
+    assert model["artifact_type"] == "baseline_policy_model"
+    assert model["labeled_state_count"] == 1
+
+    evaluation_path = tmp_path / "policy-eval.json"
+    evaluated = CliRunner().invoke(
+        main,
+        [
+            "policy",
+            "evaluate-baseline",
+            str(trajectories_path),
+            "--model-file",
+            str(model_path),
+            "--report-file",
+            str(evaluation_path),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert evaluated.exit_code == 0, evaluated.output
+    evaluation = json.loads(evaluation_path.read_text())
+    assert evaluation["artifact_type"] == "baseline_policy_evaluation"
+    assert evaluation["predicted_state_count"] == 1
+    assert evaluation["accuracy"] == 1.0
+
 
 def test_corpus_repeat_cli_runs_independent_measurements_and_aggregates(
     tmp_path,

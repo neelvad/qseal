@@ -29,6 +29,14 @@ from snowprove.dbt.scan import scan_dbt_project
 from snowprove.dialects import DEFAULT_DIALECT, SUPPORTED_DIALECTS
 from snowprove.fixtures import DuckDbFixtureSpec, create_duckdb_fixture
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
+from snowprove.policy import (
+    evaluate_baseline_policy,
+    load_baseline_policy,
+    render_baseline_policy_evaluation,
+    render_baseline_policy_training,
+    train_baseline_policy,
+    write_baseline_policy,
+)
 from snowprove.report.json import (
     render_candidate_generation_json,
     render_candidate_run_json,
@@ -101,6 +109,11 @@ def fixtures_group() -> None:
 @main.group(name="corpus")
 def corpus_group() -> None:
     """Run reproducible rewrite-search tasks."""
+
+
+@main.group(name="policy")
+def policy_group() -> None:
+    """Train and evaluate simple rewrite action policies."""
 
 
 @corpus_group.command(name="run")
@@ -569,6 +582,91 @@ def corpus_export_trajectories(
         click.echo(export.model_dump_json(indent=2))
     else:
         click.echo(render_corpus_trajectory_export(export))
+
+
+@policy_group.command(name="train-baseline")
+@click.argument(
+    "trajectory_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--model-file",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the baseline policy model JSON artifact to this file.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+)
+def policy_train_baseline(
+    trajectory_path: Path,
+    model_file: Path,
+    output_format: str,
+) -> None:
+    """Train a simple feature-mean action ranker from trajectory JSONL."""
+    model = train_baseline_policy(
+        trajectory_path,
+        source_trajectories=str(trajectory_path),
+    )
+    write_baseline_policy(model, model_file)
+
+    if output_format == "json":
+        click.echo(model.model_dump_json(indent=2))
+    else:
+        click.echo(render_baseline_policy_training(model))
+    click.echo(f"Model file written: {model_file}", err=True)
+
+
+@policy_group.command(name="evaluate-baseline")
+@click.argument(
+    "trajectory_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--model-file",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Baseline policy model JSON artifact.",
+)
+@click.option(
+    "--report-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the evaluation JSON artifact to this file.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+)
+def policy_evaluate_baseline(
+    trajectory_path: Path,
+    model_file: Path,
+    report_file: Path | None,
+    output_format: str,
+) -> None:
+    """Evaluate a baseline policy model against trajectory oracle labels."""
+    evaluation = evaluate_baseline_policy(
+        trajectory_path,
+        load_baseline_policy(model_file),
+        source_trajectories=str(trajectory_path),
+        model_path=str(model_file),
+    )
+    if report_file is not None:
+        report_file.parent.mkdir(parents=True, exist_ok=True)
+        report_file.write_text(evaluation.model_dump_json(indent=2))
+
+    if output_format == "json":
+        click.echo(evaluation.model_dump_json(indent=2))
+    else:
+        click.echo(render_baseline_policy_evaluation(evaluation))
+    if report_file is not None:
+        click.echo(f"Evaluation file written: {report_file}", err=True)
 
 
 @fixtures_group.command(name="create")

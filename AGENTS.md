@@ -396,13 +396,26 @@ Completed:
     Rows include current SQL, available action IDs, chosen action, proposed and
     next SQL, rewards, verifier/timing fields, state-level oracle-best labels
     from observed suffix returns, and task-level oracle path labels.
+28. `snowprove policy train-baseline trajectories.jsonl --model-file
+    policy.json` trains an interpretable feature-mean action ranker from
+    state-level oracle labels. `snowprove policy evaluate-baseline
+    trajectories.jsonl --model-file policy.json` reports top-1 state accuracy,
+    per-oracle-rule accuracy, and known reward gaps.
+29. A same-run sanity check on
+    `/tmp/snowprove-corpus-75-transition-20260608/run-001/corpus-run.json`
+    exported 308 trajectory rows across 97 labeled states. The baseline policy
+    evaluated on the same trajectories reached 96/97 top-1 state accuracy
+    (0.9897) with a mean known reward gap of 0.000529. This confirms the
+    labels and scorer path are usable, but it is not a held-out result.
 
 Next:
 
-1. Use trajectory exports to build a simple supervised action-ranking baseline.
-2. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
+1. Add a held-out evaluation mode for the baseline policy, for example
+   train/evaluate splits by task ID or fixture profile.
+2. Plug baseline policy scores into corpus search as an additional strategy.
+3. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.
-3. Add a small learned action-ranking policy only after baseline measurements
+4. Add a small learned action-ranking policy only after baseline measurements
    are reproducible.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least
