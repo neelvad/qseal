@@ -134,8 +134,15 @@ def render_corpus_aggregate_inspection(
                         for name, count in summary.reward_class_counts.items()
                     )
                 ),
+                (
+                    "Adjusted class: "
+                    f"{summary.uncertainty_adjusted_reward_class} "
+                    f"(band={summary.uncertainty_band:.6f})"
+                ),
             ]
         )
+        if summary.uncertainty_reason:
+            lines.append(f"Reason: {summary.uncertainty_reason}")
         for run in task.runs:
             winners = ",".join(run.winning_strategies) or "none"
             lines.append(

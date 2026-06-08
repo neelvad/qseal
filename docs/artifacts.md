@@ -64,6 +64,11 @@ external cache files for newly generated reports.
 Each search result records `tie_policy`. Corpus runs use `shorter` for
 transition rewards and `endpoint` for state rewards.
 
+Aggregate reports include both raw reward-class-change counts and
+uncertainty-adjusted task classifications. `uncertainty_adjusted_reward_class`
+is `uncertain` when repeated rewards overlap the neutral threshold inside the
+recorded `uncertainty_band`; `uncertainty_reason` explains the classification.
+
 Corpus run configuration records `reward_model`. Transition mode caches
 verified SQL pairs under `benchmark`; state mode caches each distinct SQL text
 under `query_benchmark`. State-cache `inputs.measurement_mode` distinguishes an

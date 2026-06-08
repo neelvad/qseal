@@ -33,6 +33,8 @@ def test_aggregates_reward_and_task_stability() -> None:
     assert aggregate.task_count == 2
     assert aggregate.winner_changed_task_count == 1
     assert aggregate.reward_class_changed_task_count == 1
+    assert aggregate.uncertain_task_count == 1
+    assert aggregate.uncertainty_adjusted_reward_class_changed_task_count == 0
     assert aggregate.path_changed_task_count == 1
 
     strategies = {item.strategy: item for item in aggregate.strategy_summaries}
@@ -49,11 +51,19 @@ def test_aggregates_reward_and_task_stability() -> None:
         "neutral": 1,
         "positive": 1,
     }
+    assert (
+        tasks["class-and-path-change"].uncertainty_adjusted_reward_class
+        == "uncertain"
+    )
+    assert tasks["class-and-path-change"].uncertainty_reason is not None
 
     rendered = render_corpus_aggregate(aggregate)
     assert "Corpus: test-corpus v1 (2 runs)" in rendered
+    assert "0 adjusted reward-class changes" in rendered
+    assert "1 uncertain" in rendered
     assert "winner-change: winner" in rendered
     assert "paths:greedy" in rendered
+    assert "class=uncertain" in rendered
 
 
 def test_rejects_incompatible_reports() -> None:

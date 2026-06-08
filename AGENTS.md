@@ -374,14 +374,15 @@ Completed:
     `reward_margin`; materially worse endpoints still lose. A three-run,
     53-task experiment reduced path changes from 2 to 0 with zero winner
     changes.
+23. Aggregate reports now include uncertainty-adjusted reward classes. Raw
+    reward-class flips are preserved, but near-threshold repeated measurements
+    are marked `uncertain` with an uncertainty band and reason.
 
 Next:
 
-1. Investigate reward-class variance for near-neutral tasks, especially
-   single-action rewrites whose measured reward crosses the neutral threshold.
-2. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
+1. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.
-3. Add a small learned action-ranking policy only after baseline measurements
+2. Add a small learned action-ranking policy only after baseline measurements
    are reproducible.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least

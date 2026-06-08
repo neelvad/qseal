@@ -112,6 +112,12 @@ content-addressed benchmark cache, then writes `corpus-aggregate.json`.
 Existing reports are never overwritten because reusing their caches would
 invalidate measurement independence.
 
+Aggregate reports keep raw reward-class changes and add an uncertainty-adjusted
+class per task. A task is marked `uncertain` when repeated best rewards overlap
+the neutral threshold within the observed uncertainty band. This separates
+near-threshold measurement noise from meaningful positive, neutral, or negative
+classification changes.
+
 Inspect unstable tasks and their per-run timing paths with:
 
 ```bash
@@ -124,7 +130,8 @@ uv run snowprove corpus inspect-aggregate \
 ```
 
 The drilldown includes strategy paths, cumulative and step rewards, median
-latencies, speedups, executions per timing batch, and confidence. New run
+latencies, speedups, executions per timing batch, confidence, raw reward
+classes, the uncertainty-adjusted class, and the uncertainty band. New run
 reports store these fields directly on each search step; the inspector also
 supports older reports by resolving their retained benchmark caches.
 

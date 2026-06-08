@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from snowprove.corpus.runner import CorpusRunReport, SearchStrategy
 from snowprove.corpus.summary import RewardClass, summarize_corpus_run
 
+AggregateRewardClass = Literal["positive", "neutral", "negative", "error", "uncertain"]
+
 
 class AggregateStrategySummary(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -33,6 +35,9 @@ class AggregateTaskSummary(BaseModel):
     task_id: str
     run_count: int
     reward_class_counts: dict[RewardClass, int]
+    uncertainty_adjusted_reward_class: AggregateRewardClass = "uncertain"
+    uncertainty_band: float = 0.0
+    uncertainty_reason: str | None = None
     stable_winning_strategies: tuple[SearchStrategy, ...] = Field(default_factory=tuple)
     winner_changed: bool
     reward_class_changed: bool
@@ -54,6 +59,8 @@ class CorpusRunAggregate(BaseModel):
     task_count: int
     winner_changed_task_count: int
     reward_class_changed_task_count: int
+    uncertainty_adjusted_reward_class_changed_task_count: int = 0
+    uncertain_task_count: int = 0
     path_changed_task_count: int
     strategy_summaries: tuple[AggregateStrategySummary, ...]
     tasks: tuple[AggregateTaskSummary, ...]
@@ -83,8 +90,15 @@ def aggregate_corpus_runs(
         _aggregate_strategy(strategy, reports, summaries)
         for strategy in strategies
     )
+    effective_neutral_threshold = summaries[0].neutral_threshold
     task_summaries = tuple(
-        _aggregate_task(task_id, strategies, reports, summaries)
+        _aggregate_task(
+            task_id,
+            strategies,
+            reports,
+            summaries,
+            effective_neutral_threshold,
+        )
         for task_id in task_ids
     )
     first = reports[0]
@@ -99,6 +113,15 @@ def aggregate_corpus_runs(
         winner_changed_task_count=sum(task.winner_changed for task in task_summaries),
         reward_class_changed_task_count=sum(
             task.reward_class_changed for task in task_summaries
+        ),
+        uncertainty_adjusted_reward_class_changed_task_count=sum(
+            task.reward_class_changed
+            and task.uncertainty_adjusted_reward_class != "uncertain"
+            for task in task_summaries
+        ),
+        uncertain_task_count=sum(
+            task.uncertainty_adjusted_reward_class == "uncertain"
+            for task in task_summaries
         ),
         path_changed_task_count=sum(
             bool(task.path_changed_strategies) for task in task_summaries
@@ -117,6 +140,8 @@ def render_corpus_aggregate(aggregate: CorpusRunAggregate) -> str:
         (
             f"Stability: {aggregate.winner_changed_task_count} winner changes, "
             f"{aggregate.reward_class_changed_task_count} reward-class changes, "
+            f"{aggregate.uncertainty_adjusted_reward_class_changed_task_count} "
+            f"adjusted reward-class changes, {aggregate.uncertain_task_count} uncertain, "
             f"{aggregate.path_changed_task_count} path changes"
         ),
         "",
@@ -157,8 +182,11 @@ def render_corpus_aggregate(aggregate: CorpusRunAggregate) -> str:
             signals.append(f"paths:{','.join(task.path_changed_strategies)}")
         lines.append(
             f"  {task.task_id}: {','.join(signals)}, "
+            f"class={task.uncertainty_adjusted_reward_class}, "
             f"max reward stddev={task.maximum_strategy_reward_standard_deviation:.6f}"
         )
+        if task.uncertainty_reason:
+            lines.append(f"    {task.uncertainty_reason}")
     return "\n".join(lines)
 
 
@@ -210,6 +238,7 @@ def _aggregate_task(
     strategies: tuple[SearchStrategy, ...],
     reports: tuple[CorpusRunReport, ...],
     summaries,
+    neutral_threshold: float,
 ) -> AggregateTaskSummary:
     task_summaries = tuple(
         next(task for task in summary.tasks if task.task_id == task_id)
@@ -243,10 +272,28 @@ def _aggregate_task(
             reward_stddevs.append(statistics.pstdev(rewards))
 
     class_counts = Counter(task.reward_class for task in task_summaries)
+    best_rewards = tuple(
+        task.best_reward
+        for task in task_summaries
+        if task.best_reward is not None
+    )
+    uncertainty_band = max(
+        neutral_threshold,
+        max(reward_stddevs, default=0.0),
+    )
+    adjusted_class, uncertainty_reason = _uncertainty_adjusted_class(
+        class_counts,
+        best_rewards,
+        neutral_threshold,
+        uncertainty_band,
+    )
     return AggregateTaskSummary(
         task_id=task_id,
         run_count=len(reports),
         reward_class_counts=dict(sorted(class_counts.items())),
+        uncertainty_adjusted_reward_class=adjusted_class,
+        uncertainty_band=uncertainty_band,
+        uncertainty_reason=uncertainty_reason,
         stable_winning_strategies=tuple(
             strategy for strategy in strategies if strategy in stable_winners
         ),
@@ -255,6 +302,53 @@ def _aggregate_task(
         path_changed_strategies=tuple(path_changed),
         maximum_strategy_reward_standard_deviation=max(reward_stddevs, default=0.0),
     )
+
+
+def _uncertainty_adjusted_class(
+    class_counts: Counter[RewardClass],
+    best_rewards: tuple[float, ...],
+    neutral_threshold: float,
+    uncertainty_band: float,
+) -> tuple[AggregateRewardClass, str | None]:
+    if not best_rewards or "error" in class_counts:
+        return "error", None
+
+    classes = set(class_counts)
+    non_error_classes = classes - {"error"}
+    if len(non_error_classes) == 1:
+        return next(iter(non_error_classes)), None
+
+    if _overlaps_neutral_boundary(
+        best_rewards,
+        neutral_threshold,
+        uncertainty_band,
+    ):
+        return (
+            "uncertain",
+            (
+                "Observed best rewards overlap the neutral threshold within "
+                f"the uncertainty band ({uncertainty_band:.6f})."
+            ),
+        )
+    return (
+        "uncertain",
+        "Reward classes changed across runs outside the simple uncertainty band.",
+    )
+
+
+def _overlaps_neutral_boundary(
+    rewards: tuple[float, ...],
+    neutral_threshold: float,
+    uncertainty_band: float,
+) -> bool:
+    for reward in rewards:
+        lower = reward - uncertainty_band
+        upper = reward + uncertainty_band
+        if lower <= neutral_threshold <= upper:
+            return True
+        if lower <= -neutral_threshold <= upper:
+            return True
+    return False
 
 
 def _validate_compatible_reports(reports: tuple[CorpusRunReport, ...]) -> None:
