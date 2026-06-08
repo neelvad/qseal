@@ -258,6 +258,22 @@ known reward gaps where the trajectory data observed both the predicted and
 oracle action rewards. This is a sanity baseline before plugging learned scores
 into corpus search.
 
+Both training and evaluation support simple split filters:
+
+```bash
+uv run snowprove policy train-baseline trajectories.jsonl \
+  --exclude-fixture standard-medium \
+  --model-file policy-without-medium.json
+
+uv run snowprove policy evaluate-baseline trajectories.jsonl \
+  --include-fixture standard-medium \
+  --model-file policy-without-medium.json
+```
+
+Available filters are `--include-task`, `--exclude-task`, `--include-fixture`,
+`--exclude-fixture`, `--include-tag`, and `--exclude-tag`. Repeating an option
+adds more accepted or rejected values.
+
 ## Summarizing Runs
 
 Use the summary command after a corpus run:

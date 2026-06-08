@@ -407,11 +407,19 @@ Completed:
     evaluated on the same trajectories reached 96/97 top-1 state accuracy
     (0.9897) with a mean known reward gap of 0.000529. This confirms the
     labels and scorer path are usable, but it is not a held-out result.
+30. Baseline policy training/evaluation supports split filters:
+    `--include-task`, `--exclude-task`, `--include-fixture`,
+    `--exclude-fixture`, `--include-tag`, and `--exclude-tag`. Artifacts record
+    the applied filter.
+31. A first fixture holdout sanity check trained on the 75-task transition
+    trajectories excluding `standard-medium` and evaluated only
+    `standard-medium`: 18/18 top-1 state accuracy with zero mean known reward
+    gap. This is still a small split, but confirms the filter workflow works.
 
 Next:
 
-1. Add a held-out evaluation mode for the baseline policy, for example
-   train/evaluate splits by task ID or fixture profile.
+1. Run several held-out baseline policy splits and inspect accuracy/gap by
+   fixture and tag.
 2. Plug baseline policy scores into corpus search as an additional strategy.
 3. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.

@@ -30,6 +30,7 @@ from snowprove.dialects import DEFAULT_DIALECT, SUPPORTED_DIALECTS
 from snowprove.fixtures import DuckDbFixtureSpec, create_duckdb_fixture
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.policy import (
+    PolicyDataFilter,
     evaluate_baseline_policy,
     load_baseline_policy,
     render_baseline_policy_evaluation,
@@ -595,6 +596,12 @@ def corpus_export_trajectories(
     type=click.Path(dir_okay=False, path_type=Path),
     help="Write the baseline policy model JSON artifact to this file.",
 )
+@click.option("--include-task", "include_tasks", multiple=True)
+@click.option("--exclude-task", "exclude_tasks", multiple=True)
+@click.option("--include-fixture", "include_fixtures", multiple=True)
+@click.option("--exclude-fixture", "exclude_fixtures", multiple=True)
+@click.option("--include-tag", "include_tags", multiple=True)
+@click.option("--exclude-tag", "exclude_tags", multiple=True)
 @click.option(
     "--format",
     "output_format",
@@ -605,12 +612,26 @@ def corpus_export_trajectories(
 def policy_train_baseline(
     trajectory_path: Path,
     model_file: Path,
+    include_tasks: tuple[str, ...],
+    exclude_tasks: tuple[str, ...],
+    include_fixtures: tuple[str, ...],
+    exclude_fixtures: tuple[str, ...],
+    include_tags: tuple[str, ...],
+    exclude_tags: tuple[str, ...],
     output_format: str,
 ) -> None:
     """Train a simple feature-mean action ranker from trajectory JSONL."""
     model = train_baseline_policy(
         trajectory_path,
         source_trajectories=str(trajectory_path),
+        data_filter=PolicyDataFilter(
+            include_tasks=include_tasks,
+            exclude_tasks=exclude_tasks,
+            include_fixtures=include_fixtures,
+            exclude_fixtures=exclude_fixtures,
+            include_tags=include_tags,
+            exclude_tags=exclude_tags,
+        ),
     )
     write_baseline_policy(model, model_file)
 
@@ -637,6 +658,12 @@ def policy_train_baseline(
     type=click.Path(dir_okay=False, path_type=Path),
     help="Write the evaluation JSON artifact to this file.",
 )
+@click.option("--include-task", "include_tasks", multiple=True)
+@click.option("--exclude-task", "exclude_tasks", multiple=True)
+@click.option("--include-fixture", "include_fixtures", multiple=True)
+@click.option("--exclude-fixture", "exclude_fixtures", multiple=True)
+@click.option("--include-tag", "include_tags", multiple=True)
+@click.option("--exclude-tag", "exclude_tags", multiple=True)
 @click.option(
     "--format",
     "output_format",
@@ -648,6 +675,12 @@ def policy_evaluate_baseline(
     trajectory_path: Path,
     model_file: Path,
     report_file: Path | None,
+    include_tasks: tuple[str, ...],
+    exclude_tasks: tuple[str, ...],
+    include_fixtures: tuple[str, ...],
+    exclude_fixtures: tuple[str, ...],
+    include_tags: tuple[str, ...],
+    exclude_tags: tuple[str, ...],
     output_format: str,
 ) -> None:
     """Evaluate a baseline policy model against trajectory oracle labels."""
@@ -656,6 +689,14 @@ def policy_evaluate_baseline(
         load_baseline_policy(model_file),
         source_trajectories=str(trajectory_path),
         model_path=str(model_file),
+        data_filter=PolicyDataFilter(
+            include_tasks=include_tasks,
+            exclude_tasks=exclude_tasks,
+            include_fixtures=include_fixtures,
+            exclude_fixtures=exclude_fixtures,
+            include_tags=include_tags,
+            exclude_tags=exclude_tags,
+        ),
     )
     if report_file is not None:
         report_file.parent.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,7 @@
 from snowprove.policy.baseline import (
     BaselinePolicyEvaluation,
     BaselinePolicyModel,
+    PolicyDataFilter,
     evaluate_baseline_policy,
     load_baseline_policy,
     render_baseline_policy_evaluation,
@@ -12,6 +13,7 @@ from snowprove.policy.baseline import (
 __all__ = [
     "BaselinePolicyEvaluation",
     "BaselinePolicyModel",
+    "PolicyDataFilter",
     "evaluate_baseline_policy",
     "load_baseline_policy",
     "render_baseline_policy_evaluation",

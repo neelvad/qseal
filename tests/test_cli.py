@@ -252,6 +252,8 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
             str(trajectories_path),
             "--model-file",
             str(model_path),
+            "--exclude-fixture",
+            "missing-fixture",
             "--format",
             "json",
         ],
@@ -261,6 +263,7 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     model = json.loads(model_path.read_text())
     assert model["artifact_type"] == "baseline_policy_model"
     assert model["labeled_state_count"] == 1
+    assert model["data_filter"]["exclude_fixtures"] == ["missing-fixture"]
 
     evaluation_path = tmp_path / "policy-eval.json"
     evaluated = CliRunner().invoke(
@@ -273,6 +276,8 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
             str(model_path),
             "--report-file",
             str(evaluation_path),
+            "--include-fixture",
+            "standard-small",
             "--format",
             "json",
         ],
@@ -283,6 +288,7 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert evaluation["artifact_type"] == "baseline_policy_evaluation"
     assert evaluation["predicted_state_count"] == 1
     assert evaluation["accuracy"] == 1.0
+    assert evaluation["data_filter"]["include_fixtures"] == ["standard-small"]
 
 
 def test_corpus_repeat_cli_runs_independent_measurements_and_aggregates(

@@ -11,7 +11,7 @@ from snowprove.corpus import (
     export_corpus_trajectories,
     load_task_corpus,
 )
-from snowprove.policy import evaluate_baseline_policy, train_baseline_policy
+from snowprove.policy import PolicyDataFilter, evaluate_baseline_policy, train_baseline_policy
 from snowprove.rewrites.base import VerificationStatus
 from snowprove.search import SearchResult, SearchStep
 
@@ -54,6 +54,51 @@ def test_baseline_policy_trains_and_evaluates_state_oracle_actions(tmp_path) -> 
     assert evaluation.accuracy == 1.0
     assert evaluation.known_reward_gap_count == 1
     assert evaluation.mean_known_reward_gap == 0.0
+
+
+def test_baseline_policy_filters_train_and_evaluation_splits(tmp_path) -> None:
+    corpus = load_task_corpus(bundled_corpus_path())
+    task = corpus.task("distinct-and-not-null")
+    trajectory_path = tmp_path / "trajectories.jsonl"
+    distinct_action = "remove_redundant_distinct::query:distinct"
+    not_null_action = "remove_redundant_not_null_filter::predicate:0"
+    export_corpus_trajectories(
+        _report(
+            corpus,
+            task.definition.task_id,
+            task.fingerprint,
+            task.fixture.fixture_id,
+            task.definition.enabled_rules,
+            task.definition.tags,
+            task.environment_task.sql,
+            distinct_action,
+            not_null_action,
+        ),
+        corpus,
+        trajectory_path,
+    )
+
+    model = train_baseline_policy(
+        trajectory_path,
+        data_filter=PolicyDataFilter(exclude_fixtures=("standard-small",)),
+    )
+    evaluation = evaluate_baseline_policy(
+        trajectory_path,
+        model,
+        data_filter=PolicyDataFilter(include_fixtures=("standard-small",)),
+    )
+    excluded = evaluate_baseline_policy(
+        trajectory_path,
+        model,
+        data_filter=PolicyDataFilter(exclude_tags=("multi-action",)),
+    )
+
+    assert model.state_count == 0
+    assert model.data_filter.exclude_fixtures == ("standard-small",)
+    assert evaluation.state_count == 1
+    assert evaluation.data_filter.include_fixtures == ("standard-small",)
+    assert evaluation.predicted_state_count == 1
+    assert excluded.state_count == 0
 
 
 def _report(

@@ -12,6 +12,17 @@ from pydantic import BaseModel, ConfigDict, Field
 from snowprove.corpus import CorpusTrajectoryRecord, load_corpus_trajectory_records
 
 
+class PolicyDataFilter(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    include_tasks: tuple[str, ...] = Field(default_factory=tuple)
+    exclude_tasks: tuple[str, ...] = Field(default_factory=tuple)
+    include_fixtures: tuple[str, ...] = Field(default_factory=tuple)
+    exclude_fixtures: tuple[str, ...] = Field(default_factory=tuple)
+    include_tags: tuple[str, ...] = Field(default_factory=tuple)
+    exclude_tags: tuple[str, ...] = Field(default_factory=tuple)
+
+
 class FeatureStat(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -29,6 +40,7 @@ class BaselinePolicyModel(BaseModel):
     model_type: Literal["feature_mean_action_ranker"] = "feature_mean_action_ranker"
     generated_at: datetime
     source_trajectories: str | None = None
+    data_filter: PolicyDataFilter = Field(default_factory=PolicyDataFilter)
     state_count: int
     labeled_state_count: int
     feature_stats: tuple[FeatureStat, ...]
@@ -52,6 +64,7 @@ class BaselinePolicyEvaluation(BaseModel):
     model_type: str
     source_trajectories: str | None = None
     model_path: str | None = None
+    data_filter: PolicyDataFilter = Field(default_factory=PolicyDataFilter)
     state_count: int
     labeled_state_count: int
     predicted_state_count: int
@@ -80,9 +93,11 @@ def train_baseline_policy(
     trajectory_path: Path,
     *,
     source_trajectories: str | None = None,
+    data_filter: PolicyDataFilter | None = None,
 ) -> BaselinePolicyModel:
+    data_filter = data_filter or PolicyDataFilter()
     records = load_corpus_trajectory_records(trajectory_path)
-    examples = _state_examples(records)
+    examples = _filter_examples(_state_examples(records), data_filter)
     labeled = [example for example in examples if example.oracle_action_id is not None]
     feature_counts: dict[str, list[int]] = defaultdict(lambda: [0, 0])
 
@@ -108,6 +123,7 @@ def train_baseline_policy(
     return BaselinePolicyModel(
         generated_at=datetime.now(UTC),
         source_trajectories=source_trajectories,
+        data_filter=data_filter,
         state_count=len(examples),
         labeled_state_count=len(labeled),
         feature_stats=stats,
@@ -121,10 +137,15 @@ def evaluate_baseline_policy(
     *,
     source_trajectories: str | None = None,
     model_path: str | None = None,
+    data_filter: PolicyDataFilter | None = None,
 ) -> BaselinePolicyEvaluation:
+    data_filter = data_filter or PolicyDataFilter()
     examples = [
         example
-        for example in _state_examples(load_corpus_trajectory_records(trajectory_path))
+        for example in _filter_examples(
+            _state_examples(load_corpus_trajectory_records(trajectory_path)),
+            data_filter,
+        )
         if example.oracle_action_id is not None
     ]
     scores = {stat.feature: stat.win_rate for stat in model.feature_stats}
@@ -153,6 +174,7 @@ def evaluate_baseline_policy(
         model_type=model.model_type,
         source_trajectories=source_trajectories,
         model_path=model_path,
+        data_filter=data_filter,
         state_count=len(examples),
         labeled_state_count=len(examples),
         predicted_state_count=predicted,
@@ -192,6 +214,7 @@ def render_baseline_policy_training(model: BaselinePolicyModel) -> str:
             f"Labeled states: {model.labeled_state_count}",
             f"Feature stats: {len(model.feature_stats)}",
             f"Default score: {model.default_score:.6f}",
+            f"Filter: {_render_filter(model.data_filter)}",
         ]
     )
 
@@ -210,6 +233,7 @@ def render_baseline_policy_evaluation(evaluation: BaselinePolicyEvaluation) -> s
         f"Top-1 accuracy: {accuracy}",
         f"Known reward gaps: {evaluation.known_reward_gap_count}",
         f"Mean known reward gap: {mean_gap}",
+        f"Filter: {_render_filter(evaluation.data_filter)}",
     ]
     if evaluation.per_oracle_rule:
         lines.append("")
@@ -253,6 +277,35 @@ def _state_examples(
     return tuple(examples)
 
 
+def _filter_examples(
+    examples: tuple[_StateExample, ...],
+    data_filter: PolicyDataFilter,
+) -> tuple[_StateExample, ...]:
+    return tuple(
+        example
+        for example in examples
+        if _matches_filter(example, data_filter)
+    )
+
+
+def _matches_filter(example: _StateExample, data_filter: PolicyDataFilter) -> bool:
+    tags = set(example.tags)
+    if data_filter.include_tasks and example.task_id not in data_filter.include_tasks:
+        return False
+    if example.task_id in data_filter.exclude_tasks:
+        return False
+    if (
+        data_filter.include_fixtures
+        and example.fixture_id not in data_filter.include_fixtures
+    ):
+        return False
+    if example.fixture_id in data_filter.exclude_fixtures:
+        return False
+    if data_filter.include_tags and not tags.intersection(data_filter.include_tags):
+        return False
+    return not tags.intersection(data_filter.exclude_tags)
+
+
 def _predict(
     example: _StateExample,
     scores: dict[str, float],
@@ -294,6 +347,22 @@ def _features(example: _StateExample, action_id: str) -> tuple[str, ...]:
 
 def _rule_name(action_id: str) -> str:
     return action_id.split("::", 1)[0]
+
+
+def _render_filter(data_filter: PolicyDataFilter) -> str:
+    parts = []
+    for field_name in (
+        "include_tasks",
+        "exclude_tasks",
+        "include_fixtures",
+        "exclude_fixtures",
+        "include_tags",
+        "exclude_tags",
+    ):
+        values = getattr(data_filter, field_name)
+        if values:
+            parts.append(f"{field_name}={','.join(values)}")
+    return "; ".join(parts) if parts else "none"
 
 
 def load_baseline_policy_evaluation(path: Path) -> BaselinePolicyEvaluation:
