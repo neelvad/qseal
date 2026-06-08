@@ -9,11 +9,14 @@ from snowprove.constraints.loader import load_constraint_catalog
 from snowprove.corpora import bundled_corpus_path
 from snowprove.corpus import (
     CorpusRunConfig,
+    aggregate_corpus_runs,
     load_corpus_run_report,
     load_task_corpus,
+    render_corpus_aggregate,
     render_corpus_summary,
     run_task_corpus,
     summarize_corpus_run,
+    write_corpus_aggregate,
     write_corpus_summary,
 )
 from snowprove.dbt.project import DbtProjectDiscoveryError, discover_compiled_sql_path
@@ -256,6 +259,58 @@ def corpus_summarize(
     if summary_file is not None:
         write_corpus_summary(summary, summary_file)
         click.echo(f"Summary file written: {summary_file}", err=True)
+
+
+@corpus_group.command(name="aggregate")
+@click.argument(
+    "report_paths",
+    nargs=-1,
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--neutral-threshold",
+    type=click.FloatRange(min=0),
+    default=0.01,
+    show_default=True,
+    help="Maximum reward difference treated as equivalent.",
+)
+@click.option(
+    "--aggregate-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the versioned JSON aggregate artifact to this file.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+)
+def corpus_aggregate(
+    report_paths: tuple[Path, ...],
+    neutral_threshold: float,
+    aggregate_file: Path | None,
+    output_format: str,
+) -> None:
+    """Aggregate repeated compatible corpus runs."""
+    try:
+        aggregate = aggregate_corpus_runs(
+            tuple(load_corpus_run_report(path) for path in report_paths),
+            source_reports=tuple(str(path) for path in report_paths),
+            neutral_threshold=neutral_threshold,
+        )
+    except ValueError as error:
+        raise click.ClickException(str(error)) from error
+
+    if output_format == "json":
+        click.echo(aggregate.model_dump_json(indent=2))
+    else:
+        click.echo(render_corpus_aggregate(aggregate))
+
+    if aggregate_file is not None:
+        write_corpus_aggregate(aggregate, aggregate_file)
+        click.echo(f"Aggregate file written: {aggregate_file}", err=True)
 
 
 @fixtures_group.command(name="create")

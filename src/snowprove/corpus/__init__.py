@@ -1,3 +1,11 @@
+from snowprove.corpus.aggregate import (
+    AggregateStrategySummary,
+    AggregateTaskSummary,
+    CorpusRunAggregate,
+    aggregate_corpus_runs,
+    render_corpus_aggregate,
+    write_corpus_aggregate,
+)
 from snowprove.corpus.loader import load_task_corpus
 from snowprove.corpus.materialize import materialize_corpus_fixtures
 from snowprove.corpus.model import (
@@ -30,9 +38,12 @@ from snowprove.corpus.summary import (
 )
 
 __all__ = [
+    "AggregateStrategySummary",
+    "AggregateTaskSummary",
     "CorpusFixture",
     "CorpusManifest",
     "CorpusRunConfig",
+    "CorpusRunAggregate",
     "CorpusRunEnvironment",
     "CorpusRunReport",
     "CorpusTaskRun",
@@ -47,11 +58,14 @@ __all__ = [
     "CorpusSummary",
     "RankedStrategySummary",
     "TaskSummary",
+    "aggregate_corpus_runs",
     "load_corpus_run_report",
     "load_task_corpus",
     "materialize_corpus_fixtures",
     "run_task_corpus",
     "render_corpus_summary",
+    "render_corpus_aggregate",
     "summarize_corpus_run",
     "write_corpus_summary",
+    "write_corpus_aggregate",
 ]

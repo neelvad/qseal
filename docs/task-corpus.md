@@ -141,6 +141,31 @@ differ by more than `--neutral-threshold`, which defaults to `0.01`. A task is
 marked trivial when every completed strategy selects the same path and rewards
 remain within that threshold.
 
+## Aggregating Repeated Runs
+
+Aggregate two or more compatible run reports to measure benchmark stability:
+
+```bash
+uv run snowprove corpus aggregate \
+  snowprove-runs/run-1/corpus-run.json \
+  snowprove-runs/run-2/corpus-run.json \
+  --aggregate-file snowprove-runs/corpus-aggregate.json
+```
+
+Reports must use the same corpus fingerprint, task set, run configuration, and
+runtime environment. The aggregate records:
+
+- strategy reward mean, standard deviation, and range
+- mean wins, logical benchmark requests, and elapsed time
+- tasks whose winning strategies change across runs
+- tasks whose positive/neutral/negative classification changes
+- strategies that select different action paths across runs
+- maximum per-strategy reward standard deviation for each task
+
+This separates stable corpus-level policy differences from noisy task-level
+decisions. Path changes on near-neutral tasks indicate that the reward margin
+is too small to support a reliable training label.
+
 ## Adding Tasks
 
 Prefer adding variations systematically rather than copying arbitrary SQL.

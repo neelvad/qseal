@@ -102,6 +102,10 @@ uv run snowprove corpus run snowprove-runs/corpus \
   --strategy beam
 
 uv run snowprove corpus summarize snowprove-runs/corpus/corpus-run.json
+
+uv run snowprove corpus aggregate \
+  snowprove-runs/run-1/corpus-run.json \
+  snowprove-runs/run-2/corpus-run.json
 ```
 
 Corpus strategies share task-level verifier and benchmark results, ensuring

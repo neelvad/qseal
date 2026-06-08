@@ -162,6 +162,8 @@ Task corpus:
   while per-strategy metrics retain logical request and cache-hit counts
 - `snowprove corpus summarize REPORT.json` ranks strategies and classifies task
   rewards, path/reward disagreement, partial errors, and trivial cases
+- `snowprove corpus aggregate REPORT...` measures reward variance, winner and
+  reward-class changes, and per-strategy path stability across compatible runs
 
 dbt workflows:
 
@@ -327,11 +329,13 @@ Completed:
    JSON reports with per-run and aggregate oracle/performance metrics.
 10. A corpus summary command ranks strategies and highlights task disagreement,
     errors, and trivial cases.
+11. A repeated-run aggregate command measures strategy reward variance and
+    identifies unstable task labels and paths.
 
 Next:
 
-1. Run and inspect repeated baseline comparisons to calibrate benchmark noise,
-   task difficulty, and useful reward thresholds.
+1. Add an explicit reward-margin or confidence policy so near-neutral benchmark
+   differences do not change search decisions.
 2. Expand the corpus from 25 foundation tasks toward 50-200 systematic task
    variations based on observed gaps.
 3. Add a small learned action-ranking policy only after baseline measurements
