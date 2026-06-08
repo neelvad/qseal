@@ -486,16 +486,46 @@ Completed:
     for non-null plus predicate-pushdown tasks, and a new `double-not-null`
     multi-action family over users, orders, and events. Focused corpus,
     trajectory, and policy tests passed after the expansion.
+44. A three-run, 20 ms, 102-task transition repeat completed at
+    `/tmp/snowprove-corpus-102-transition-20260608/corpus-aggregate.json`.
+    It reported 20 winner changes, 20 raw reward-class changes, 0
+    uncertainty-adjusted reward-class changes, 20 uncertain tasks, and 27 path
+    changes. Beam and exhaustive won all 102 tasks with mean reward 0.095486;
+    greedy won 97 tasks with mean reward 0.091349. The uncertainty-adjusted
+    result says the expanded corpus is usable, but many added tasks sit close
+    to the neutral threshold.
+45. Fresh trajectories from
+    `/tmp/snowprove-corpus-102-transition-20260608/run-001/corpus-run.json`
+    were exported to `/tmp/snowprove-policy-102-20260608/trajectories.jsonl`:
+    425 rows, 147 labeled states, and oracle paths for all 102 tasks.
+46. Expanded holdout checks completed with `--reward-margin 0.05`,
+    `--label-margin 0.055`, and 20 ms batches:
+    - `/tmp/snowprove-policy-102-holdout-multiaction-20260608`: held out
+      `multi-action`, trained on 59 states, held out 88 states across 43 tasks,
+      exact offline accuracy 85/88 (0.9659), adjusted accuracy 86/88 (0.9773),
+      and tied greedy at reward 0.083697 and 43 wins while using 69 oracle
+      calls versus greedy's 97.
+    - `/tmp/snowprove-policy-102-holdout-standard-medium-20260608`: held out
+      `standard-medium`, trained on 115 states, held out 32 states across 22
+      tasks, exact/adjusted offline accuracy 30/32 (0.9375), and tied greedy
+      at reward 0.060731 and 22 wins while using 28 oracle calls versus
+      greedy's 34.
+    - `/tmp/snowprove-policy-102-holdout-events-20260608`: held out
+      `table:events`, trained on 98 states, held out 49 states across 35 tasks,
+      exact/adjusted offline accuracy 48/49 (0.9796), and tied greedy at
+      reward 0.083988 and 35 wins while using 41 oracle calls versus greedy's
+      50.
+    The offline misses are concentrated in redundant non-null action ordering;
+    so far they do not translate into worse held-out corpus search rewards.
 
 Next:
 
-1. Run fresh 102-task corpus repeats, preferably transition reward with
-   `--reward-margin 0.05` and `--minimum-duration-ms 20`, then inspect
-   remaining unstable or near-neutral tasks.
-2. Export fresh trajectories from the 102-task run and rerun the policy
-   holdout checks, especially `multi-action` and fixture/table held-outs.
-3. Add a small learned action-ranking policy only after the expanded baseline
-   measurements are reproducible.
+1. Inspect the 102-task offline holdout misses automatically instead of
+   manually, especially redundant non-null action-order mistakes.
+2. Decide whether to add policy features for competing action context or more
+   corpus examples that break redundant-not-null ties.
+3. If policy-abstain continues to tie greedy after that inspection, move on to
+   the first small learned action-ranking policy.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least
 five structured actions, solver-backed equivalence rewards, repeatable latency
