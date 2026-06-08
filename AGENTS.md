@@ -325,8 +325,9 @@ Completed:
    avoid repeated oracle work and preserve experiment data.
 7. Fixed-order, seeded random, greedy, beam-search, and bounded exhaustive
    baselines explore the verified rewrite environment.
-8. A versioned DuckDB corpus defines four seeded fixture profiles and 25
-   concrete tasks with stable content fingerprints.
+8. A versioned DuckDB corpus defines six seeded fixture profiles and 53
+   concrete tasks with stable content fingerprints, including table-scale and
+   predicate-pushdown variations.
 9. A corpus runner compares all five search strategies and writes versioned
    JSON reports with per-run and aggregate oracle/performance metrics.
 10. A corpus summary command ranks strategies and highlights task disagreement,
@@ -338,10 +339,11 @@ Completed:
 
 Next:
 
-1. Expand the corpus from 25 foundation tasks toward 50-200 systematic task
-   variations based on observed gaps.
-2. Repeat aggregate runs as the corpus grows and use reward/path instability
-   to identify benchmark noise or underspecified task families.
+1. Run repeated aggregate measurements over the 53-task corpus and use
+   reward/path instability to identify benchmark noise or underspecified task
+   families.
+2. Expand toward 100-200 tasks based on those measured gaps rather than adding
+   arbitrary variations.
 3. Add a small learned action-ranking policy only after baseline measurements
    are reproducible.
 

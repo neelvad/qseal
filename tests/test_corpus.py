@@ -1,3 +1,4 @@
+from collections import Counter
 from pathlib import Path
 from shutil import copytree
 
@@ -16,11 +17,11 @@ def test_loads_versioned_duckdb_corpus() -> None:
     corpus = load_task_corpus(CORPUS_PATH)
 
     assert corpus.manifest.corpus_id == "duckdb-foundations"
-    assert corpus.manifest.corpus_version == "2"
+    assert corpus.manifest.corpus_version == "3"
     assert corpus.manifest.dialect == "duckdb"
-    assert len(corpus.manifest.fixtures) == 4
-    assert len(corpus.manifest.task_families) == 5
-    assert len(corpus.tasks) == 25
+    assert len(corpus.manifest.fixtures) == 6
+    assert len(corpus.manifest.task_families) == 6
+    assert len(corpus.tasks) == 53
     assert [task.definition.task_id for task in corpus.tasks[:5]] == [
         "redundant-distinct-users",
         "redundant-not-null-user-id",
@@ -35,7 +36,7 @@ def test_loads_versioned_duckdb_corpus() -> None:
     assert task.environment_task.max_steps == 4
     assert task.environment_task.metadata == {
         "corpus_id": "duckdb-foundations",
-        "corpus_version": "2",
+        "corpus_version": "3",
         "fixture_id": "standard-small",
         "tags": ["distinct", "filter", "multi-action", "order-sensitive"],
     }
@@ -47,7 +48,7 @@ def test_loads_versioned_duckdb_corpus() -> None:
     assert generated.definition.variant_id == "orders"
     assert generated.environment_task.metadata == {
         "corpus_id": "duckdb-foundations",
-        "corpus_version": "2",
+        "corpus_version": "3",
         "fixture_id": "duplicate-heavy-small",
         "tags": [
             "distinct",
@@ -60,6 +61,30 @@ def test_loads_versioned_duckdb_corpus() -> None:
         "family_id": "distinct",
         "variant_id": "orders",
     }
+    assert Counter(
+        task.definition.family_id for task in corpus.tasks if task.definition.family_id
+    ) == {
+        "distinct": 8,
+        "not-null": 8,
+        "unused-left-join": 8,
+        "join-distinct-exists": 8,
+        "distinct-not-null": 8,
+        "predicate-pushdown": 8,
+    }
+
+
+def test_corpus_has_no_duplicate_query_fixture_rule_experiments() -> None:
+    corpus = load_task_corpus(CORPUS_PATH)
+    signatures = [
+        (
+            " ".join(task.environment_task.sql.split()),
+            task.definition.fixture_id,
+            task.definition.enabled_rules,
+        )
+        for task in corpus.tasks
+    ]
+
+    assert len(signatures) == len(set(signatures))
 
 
 def test_bundled_corpus_path_rejects_unknown_name() -> None:

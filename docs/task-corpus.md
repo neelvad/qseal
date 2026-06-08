@@ -89,8 +89,8 @@ The bundled corpus contains five hand-written anchor tasks:
 - `JOIN` plus `DISTINCT` to `EXISTS`
 - a multi-action `DISTINCT` plus non-null-filter task
 
-It also expands five task families across query variants and contrasting
-fixture profiles, producing 25 concrete tasks total. The generated families
+It also expands six task families across query variants and contrasting
+fixture profiles, producing 53 concrete tasks total. The generated families
 cover:
 
 - redundant `DISTINCT`
@@ -98,10 +98,15 @@ cover:
 - unused `LEFT JOIN`
 - `JOIN` plus `DISTINCT` to `EXISTS`
 - multi-action `DISTINCT` plus non-null-filter cases
+- predicate pushdown through simple projection subqueries
 
-Four fixture profiles vary seed, selectivity, duplicates, nulls, and join skew.
-This is still a small foundation set, not yet a statistically useful training
-set.
+Six fixture profiles vary table scale, seed, selectivity, duplicates, nulls,
+and join skew. Two scale profiles apply the standard distribution to compact
+and medium table sizes. Predicate-pushdown variants include fixture-controlled
+active-user selectivity and a selective high-value-order filter.
+
+The corpus is large enough for baseline and harness development, but remains a
+foundation set rather than a statistically useful training set.
 
 ## Run Artifacts
 

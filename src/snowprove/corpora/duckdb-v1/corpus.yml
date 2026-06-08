@@ -1,7 +1,7 @@
 schema_version: 1
 artifact_type: rewrite_task_corpus
 corpus_id: duckdb-foundations
-corpus_version: "2"
+corpus_version: "3"
 dialect: duckdb
 
 fixtures:
@@ -49,6 +49,28 @@ fixtures:
       duplicate_fraction: 0.8
       skew_fraction: 0.95
       segment_count: 20
+  - fixture_id: standard-compact
+    spec:
+      seed: 42
+      user_rows: 1000
+      order_rows: 10000
+      event_rows: 5000
+      active_fraction: 0.2
+      null_fraction: 0.1
+      duplicate_fraction: 0.25
+      skew_fraction: 0.8
+      segment_count: 10
+  - fixture_id: standard-medium
+    spec:
+      seed: 42
+      user_rows: 25000
+      order_rows: 250000
+      event_rows: 125000
+      active_fraction: 0.2
+      null_fraction: 0.1
+      duplicate_fraction: 0.25
+      skew_fraction: 0.8
+      segment_count: 10
 
 tasks:
   - task_id: redundant-distinct-users
@@ -133,6 +155,8 @@ task_families:
     fixture_ids:
       - active-heavy-small
       - duplicate-heavy-small
+      - standard-compact
+      - standard-medium
     max_steps: 2
     enabled_rules:
       - remove_redundant_distinct
@@ -158,6 +182,8 @@ task_families:
     fixture_ids:
       - active-heavy-small
       - duplicate-heavy-small
+      - standard-compact
+      - standard-medium
     max_steps: 2
     enabled_rules:
       - remove_redundant_not_null_filter
@@ -182,6 +208,8 @@ task_families:
     fixture_ids:
       - active-heavy-small
       - duplicate-heavy-small
+      - standard-compact
+      - standard-medium
     max_steps: 2
     enabled_rules:
       - remove_unused_left_join
@@ -207,6 +235,8 @@ task_families:
     fixture_ids:
       - active-heavy-small
       - duplicate-heavy-small
+      - standard-compact
+      - standard-medium
     max_steps: 2
     enabled_rules:
       - rewrite_join_distinct_to_exists
@@ -233,6 +263,8 @@ task_families:
     fixture_ids:
       - active-heavy-small
       - duplicate-heavy-small
+      - standard-compact
+      - standard-medium
     max_steps: 4
     enabled_rules:
       - remove_redundant_distinct
@@ -253,3 +285,32 @@ task_families:
         query_path: queries/distinct-and-not-null-orders.sql
         tags:
           - table:orders
+
+  - family_id: predicate-pushdown
+    constraints_path: schema.yml
+    fixture_ids:
+      - standard-small
+      - low-skew-small
+      - active-heavy-small
+      - duplicate-heavy-small
+    max_steps: 2
+    enabled_rules:
+      - predicate_pushdown
+    tags:
+      - filter
+      - subquery
+      - predicate-pushdown
+      - single-action
+    expected_verifiers:
+      - builtin
+    variants:
+      - variant_id: user-status
+        query_path: queries/predicate-pushdown-user-status.sql
+        tags:
+          - table:users
+          - selectivity:fixture-controlled
+      - variant_id: high-value-orders
+        query_path: queries/predicate-pushdown-high-value-orders.sql
+        tags:
+          - table:orders
+          - selectivity:high
