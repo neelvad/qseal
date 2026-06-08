@@ -1,7 +1,7 @@
 schema_version: 1
 artifact_type: rewrite_task_corpus
 corpus_id: duckdb-foundations
-corpus_version: "4"
+corpus_version: "5"
 dialect: duckdb
 
 fixtures:
@@ -327,6 +327,11 @@ task_families:
         tags:
           - table:orders
           - selectivity:high
+      - variant_id: events-user
+        query_path: queries/predicate-pushdown-events-user.sql
+        tags:
+          - table:events
+          - selectivity:user-range
 
   - family_id: not-null-pushdown
     constraints_path: schema.yml
@@ -335,6 +340,7 @@ task_families:
       - low-skew-small
       - active-heavy-small
       - duplicate-heavy-small
+      - standard-medium
     max_steps: 4
     enabled_rules:
       - remove_redundant_not_null_filter
@@ -359,3 +365,40 @@ task_families:
         tags:
           - table:orders
           - selectivity:high
+      - variant_id: events
+        query_path: queries/not-null-pushdown-events.sql
+        tags:
+          - table:events
+          - selectivity:user-range
+
+  - family_id: double-not-null
+    constraints_path: schema.yml
+    fixture_ids:
+      - standard-small
+      - low-skew-small
+      - active-heavy-small
+      - duplicate-heavy-small
+      - standard-medium
+    max_steps: 4
+    enabled_rules:
+      - remove_redundant_not_null_filter
+    tags:
+      - filter
+      - nullability
+      - multi-action
+      - order-sensitive
+    expected_verifiers:
+      - builtin
+    variants:
+      - variant_id: users
+        query_path: queries/double-not-null-users.sql
+        tags:
+          - table:users
+      - variant_id: orders
+        query_path: queries/double-not-null-orders.sql
+        tags:
+          - table:orders
+      - variant_id: events
+        query_path: queries/double-not-null-events.sql
+        tags:
+          - table:events

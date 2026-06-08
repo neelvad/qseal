@@ -325,7 +325,7 @@ Completed:
    avoid repeated oracle work and preserve experiment data.
 7. Fixed-order, seeded random, greedy, beam-search, and bounded exhaustive
    baselines explore the verified rewrite environment.
-8. A versioned DuckDB corpus defines six seeded fixture profiles and 75
+8. A versioned DuckDB corpus defines six seeded fixture profiles and 102
    concrete tasks with stable content fingerprints, including table-scale and
    multi-action predicate-pushdown variations.
 9. A corpus runner compares all five search strategies and writes versioned
@@ -481,15 +481,21 @@ Completed:
     accuracy at 42/43 but raised adjusted accuracy to 43/43. Held-out corpus
     search still tied greedy at reward 0.166312 and 21 wins while using 47
     verifier/benchmark requests versus greedy's 60.
+43. The bundled corpus is now version 5 with 102 tasks. The expansion added
+    an events predicate-pushdown variant, events plus standard-medium coverage
+    for non-null plus predicate-pushdown tasks, and a new `double-not-null`
+    multi-action family over users, orders, and events. Focused corpus,
+    trajectory, and policy tests passed after the expansion.
 
 Next:
 
-1. Inspect the multi-action holdout miss and decide whether policy features or
-   corpus coverage need to change.
-2. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
-   variations.
-3. Add a small learned action-ranking policy only after baseline measurements
-   are reproducible.
+1. Run fresh 102-task corpus repeats, preferably transition reward with
+   `--reward-margin 0.05` and `--minimum-duration-ms 20`, then inspect
+   remaining unstable or near-neutral tasks.
+2. Export fresh trajectories from the 102-task run and rerun the policy
+   holdout checks, especially `multi-action` and fixture/table held-outs.
+3. Add a small learned action-ranking policy only after the expanded baseline
+   measurements are reproducible.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least
 five structured actions, solver-backed equivalence rewards, repeatable latency
