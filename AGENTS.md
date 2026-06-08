@@ -543,15 +543,36 @@ Completed:
     All inspected misses had tied action scores, so the next improvement should
     focus on action-context features or additional corpus examples that break
     redundant-not-null ordering ties.
+48. Baseline policy training now ignores states with fewer than two available
+    actions when estimating feature win rates. Single-action states remain in
+    model metadata and evaluation, but they no longer teach that an action is
+    perfect when there was no alternative. The feature extractor now includes
+    action-set context: available rule sets, competing rules, target kind,
+    target index, same-rule action counts, and same-rule positions.
+49. Rerunning the 102-task multi-action holdout with these choice-state
+    features at
+    `/tmp/snowprove-policy-102-holdout-multiaction-choice-context-20260608`
+    kept exact offline accuracy at 85/88 and adjusted accuracy at 86/88, but
+    restored held-out search parity: policy-abstain tied greedy at reward
+    0.090728 and 43 wins while using 73 oracle calls versus greedy's 101.
+    Inspecting the misses still showed tied 0.0 scores because a full
+    `multi-action` holdout leaves no choice-state examples to learn from.
+50. Rerunning the `standard-medium` holdout at
+    `/tmp/snowprove-policy-102-holdout-standard-medium-choice-context-20260608`
+    kept exact/adjusted offline accuracy at 30/32 and tied greedy at reward
+    0.065391 and 22 wins while using 28 oracle calls versus greedy's 34.
+    The remaining exact misses are fixture-specific ordering cases rather than
+    broad policy-search failures.
 
 Next:
 
-1. Add policy features for competing action context, or add targeted corpus
-   examples that break redundant-not-null ordering ties.
-2. Rerun the 102-task multi-action holdout and inspect whether exact/adjusted
-   offline misses improve without hurting policy-abstain search rewards.
-3. If policy-abstain continues to tie greedy after that, move on to the first
-   small learned action-ranking policy.
+1. Add targeted choice-state corpus examples that do not all share the
+   `multi-action` tag, so held-out splits still contain learnable action-order
+   evidence.
+2. Consider replacing the feature-mean scorer with a small supervised ranker
+   that can handle sparse/unseen context better than averaging win rates.
+3. Keep using `policy inspect-baseline` after each experiment to distinguish
+   harmless near-ties from real search-reward regressions.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least
 five structured actions, solver-backed equivalence rewards, repeatable latency

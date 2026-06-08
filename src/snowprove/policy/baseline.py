@@ -176,6 +176,8 @@ def train_baseline_policy(
     feature_counts: dict[str, list[int]] = defaultdict(lambda: [0, 0])
 
     for example in labeled:
+        if len(example.available_action_ids) < 2:
+            continue
         assert example.oracle_action_id is not None
         for action_id in example.available_action_ids:
             is_oracle = action_id == example.oracle_action_id
@@ -388,6 +390,7 @@ def score_baseline_action(
             tags=context.tags,
             step_index=context.step_index,
             action_id=action_id,
+            available_action_ids=context.available_action_ids,
         )
         if feature in scores
     ]
@@ -640,6 +643,7 @@ def _features(example: _StateExample, action_id: str) -> tuple[str, ...]:
         tags=example.tags,
         step_index=example.step_index,
         action_id=action_id,
+        available_action_ids=example.available_action_ids,
     )
 
 
@@ -649,19 +653,61 @@ def _feature_values(
     tags: tuple[str, ...],
     step_index: int,
     action_id: str,
+    available_action_ids: tuple[str, ...] = (),
 ) -> tuple[str, ...]:
     rule_name = _rule_name(action_id)
+    target_kind, target_index = _action_target(action_id)
+    available_rules = tuple(sorted({_rule_name(item) for item in available_action_ids}))
+    same_rule_actions = tuple(
+        sorted(item for item in available_action_ids if _rule_name(item) == rule_name)
+    )
+    same_rule_position = (
+        same_rule_actions.index(action_id) if action_id in same_rule_actions else None
+    )
+    available_rule_key = "+".join(available_rules) if available_rules else "none"
     return (
         f"action:{action_id}",
         f"rule:{rule_name}",
         f"fixture_action:{fixture_id}:{action_id}",
         f"step_action:{step_index}:{action_id}",
+        f"target_kind:{target_kind}",
+        f"rule_target_kind:{rule_name}:{target_kind}",
+        f"available_rules:{available_rule_key}",
+        f"action_available_rules:{action_id}:{available_rule_key}",
+        f"rule_available_rules:{rule_name}:{available_rule_key}",
+        *(f"competes_with:{rule_name}:{other}" for other in available_rules if other != rule_name),
+        *(
+            (f"target_index:{target_index}", f"rule_target_index:{rule_name}:{target_index}")
+            if target_index is not None
+            else ()
+        ),
+        *(
+            (
+                f"same_rule_count:{rule_name}:{len(same_rule_actions)}",
+                f"same_rule_position:{rule_name}:{same_rule_position}",
+            )
+            if same_rule_position is not None and len(same_rule_actions) > 1
+            else ()
+        ),
         *(f"tag_action:{tag}:{action_id}" for tag in tags),
     )
 
 
 def _rule_name(action_id: str) -> str:
     return action_id.split("::", 1)[0]
+
+
+def _action_target(action_id: str) -> tuple[str, int | None]:
+    if "::" not in action_id:
+        return "unknown", None
+    match_id = action_id.split("::", 1)[1]
+    if ":" not in match_id:
+        return match_id, None
+    target_kind, raw_index = match_id.split(":", 1)
+    try:
+        return target_kind, int(raw_index)
+    except ValueError:
+        return target_kind, None
 
 
 def _render_filter(data_filter: PolicyDataFilter) -> str:

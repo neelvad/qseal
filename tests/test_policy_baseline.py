@@ -58,6 +58,20 @@ def test_baseline_policy_trains_and_evaluates_state_oracle_actions(tmp_path) -> 
         stat.feature == f"action:{not_null_action}" and stat.win_rate == 1.0
         for stat in model.feature_stats
     )
+    assert any(
+        stat.feature
+        == (
+            "available_rules:"
+            "remove_redundant_distinct+remove_redundant_not_null_filter"
+        )
+        for stat in model.feature_stats
+    )
+    assert any(
+        stat.feature
+        == "competes_with:remove_redundant_not_null_filter:remove_redundant_distinct"
+        and stat.win_rate == 1.0
+        for stat in model.feature_stats
+    )
     assert evaluation.artifact_type == "baseline_policy_evaluation"
     assert evaluation.predicted_state_count == 1
     assert evaluation.correct_count == 1
@@ -66,6 +80,57 @@ def test_baseline_policy_trains_and_evaluates_state_oracle_actions(tmp_path) -> 
     assert evaluation.adjusted_accuracy == 1.0
     assert evaluation.known_reward_gap_count == 1
     assert evaluation.mean_known_reward_gap == 0.0
+
+
+def test_baseline_policy_features_include_same_rule_action_context(tmp_path) -> None:
+    corpus = load_task_corpus(bundled_corpus_path())
+    task = corpus.task("double-not-null-events-standard-medium")
+    trajectory_path = tmp_path / "trajectories.jsonl"
+    first_predicate = "remove_redundant_not_null_filter::predicate:0"
+    second_predicate = "remove_redundant_not_null_filter::predicate:1"
+    export_corpus_trajectories(
+        _report(
+            corpus,
+            task.definition.task_id,
+            task.fingerprint,
+            task.fixture.fixture_id,
+            task.definition.enabled_rules,
+            task.definition.tags,
+            task.environment_task.sql,
+            first_predicate,
+            second_predicate,
+            first_rewrite_sql=(
+                "SELECT event_id, user_id\n"
+                "FROM events\n"
+                "WHERE user_id IS NOT NULL;"
+            ),
+            second_rewrite_sql=(
+                "SELECT event_id, user_id\n"
+                "FROM events\n"
+                "WHERE event_id IS NOT NULL;"
+            ),
+            first_reward=0.1,
+            second_reward=0.3,
+        ),
+        corpus,
+        trajectory_path,
+    )
+
+    model = train_baseline_policy(trajectory_path)
+
+    stats = {stat.feature: stat for stat in model.feature_stats}
+    assert (
+        stats["same_rule_count:remove_redundant_not_null_filter:2"].appearances
+        == 2
+    )
+    assert (
+        stats["same_rule_position:remove_redundant_not_null_filter:1"].oracle_count
+        == 1
+    )
+    assert (
+        stats["rule_target_index:remove_redundant_not_null_filter:1"].win_rate
+        == 1.0
+    )
 
 
 def test_baseline_policy_filters_train_and_evaluation_splits(tmp_path) -> None:
@@ -260,6 +325,11 @@ def _report(
     initial_sql: str,
     distinct_action: str,
     not_null_action: str,
+    *,
+    first_rewrite_sql: str = "SELECT user_id\nFROM users\nWHERE user_id IS NOT NULL;",
+    second_rewrite_sql: str = "SELECT DISTINCT user_id\nFROM users;",
+    first_reward: float = 0.1,
+    second_reward: float = 0.3,
 ) -> CorpusRunReport:
     return CorpusRunReport(
         generated_at=datetime.now(UTC),
@@ -285,16 +355,16 @@ def _report(
                         task_id,
                         initial_sql,
                         distinct_action,
-                        "SELECT user_id\nFROM users\nWHERE user_id IS NOT NULL;",
-                        reward=0.1,
+                        first_rewrite_sql,
+                        reward=first_reward,
                     ),
                     _result(
                         "greedy",
                         task_id,
                         initial_sql,
                         not_null_action,
-                        "SELECT DISTINCT user_id\nFROM users;",
-                        reward=0.3,
+                        second_rewrite_sql,
+                        reward=second_reward,
                     ),
                 ),
             ),
