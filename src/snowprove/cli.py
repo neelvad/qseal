@@ -73,6 +73,7 @@ SearchStrategyChoice = click.Choice(
     ["fixed_order", "random", "greedy", "beam", "exhaustive"],
     case_sensitive=False,
 )
+RewardModelChoice = click.Choice(["transition", "state"], case_sensitive=False)
 
 
 @click.group()
@@ -131,6 +132,13 @@ def corpus_group() -> None:
     show_default=True,
     help="Minimum cumulative reward improvement required to prefer a longer path.",
 )
+@click.option(
+    "--reward-model",
+    type=RewardModelChoice,
+    default="transition",
+    show_default=True,
+    help="Use paired transition timings or cached absolute SQL-state timings.",
+)
 @click.option("--warmups", type=click.IntRange(min=0), default=1, show_default=True)
 @click.option("--repetitions", type=click.IntRange(min=1), default=3, show_default=True)
 @click.option(
@@ -169,6 +177,7 @@ def corpus_run(
     beam_width: int,
     max_nodes: int,
     reward_margin: float,
+    reward_model: str,
     warmups: int,
     repetitions: int,
     timeout_seconds: float,
@@ -186,6 +195,7 @@ def corpus_run(
         "beam_width": beam_width,
         "max_nodes": max_nodes,
         "reward_margin": reward_margin,
+        "reward_model": reward_model,
         "warmups": warmups,
         "repetitions": repetitions,
         "timeout_seconds": timeout_seconds,
@@ -271,6 +281,13 @@ def corpus_run(
     show_default=True,
     help="Minimum cumulative reward improvement required to prefer a longer path.",
 )
+@click.option(
+    "--reward-model",
+    type=RewardModelChoice,
+    default="transition",
+    show_default=True,
+    help="Use paired transition timings or cached absolute SQL-state timings.",
+)
 @click.option("--warmups", type=click.IntRange(min=0), default=1, show_default=True)
 @click.option("--repetitions", type=click.IntRange(min=1), default=3, show_default=True)
 @click.option(
@@ -312,6 +329,7 @@ def corpus_repeat(
     beam_width: int,
     max_nodes: int,
     reward_margin: float,
+    reward_model: str,
     warmups: int,
     repetitions: int,
     timeout_seconds: float,
@@ -328,6 +346,7 @@ def corpus_repeat(
         "beam_width": beam_width,
         "max_nodes": max_nodes,
         "reward_margin": reward_margin,
+        "reward_model": reward_model,
         "warmups": warmups,
         "repetitions": repetitions,
         "timeout_seconds": timeout_seconds,

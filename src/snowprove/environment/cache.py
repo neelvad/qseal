@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from snowprove.benchmark.model import BenchmarkResult
+from snowprove.benchmark.model import BenchmarkResult, QueryBenchmarkResult
 from snowprove.cache import JsonFileCache, content_hash
 from snowprove.constraints.model import ConstraintCatalog
 from snowprove.dialects import DEFAULT_DIALECT, SqlDialect
@@ -76,8 +76,40 @@ class CachedPerformanceEvaluator:
         self.cache = cache
         self.namespace = namespace
         self.context = context or {}
+        self.supports_query_benchmark = getattr(
+            evaluator,
+            "supports_query_benchmark",
+            False,
+        )
         self.hits = 0
         self.misses = 0
+
+    def evaluate_query(self, sql: str) -> QueryBenchmarkResult:
+        if not self.supports_query_benchmark:
+            raise RuntimeError("Wrapped evaluator does not support query benchmarks.")
+        evaluator_context = (
+            self.evaluator.cache_context()
+            if hasattr(self.evaluator, "cache_context")
+            else {}
+        )
+        key = content_hash(
+            {
+                "kind": "query_benchmark",
+                "namespace": self.namespace,
+                "context": self.context,
+                "evaluator": evaluator_context,
+                "sql": sql.strip(),
+            }
+        )
+        cached = self.cache.load("query_benchmark", key, QueryBenchmarkResult)
+        if cached is not None:
+            self.hits += 1
+            return QueryBenchmarkResult.model_validate(cached)
+
+        self.misses += 1
+        result = self.evaluator.evaluate_query(sql)
+        self.cache.store("query_benchmark", key, result)
+        return result
 
     def evaluate(self, original_sql: str, rewritten_sql: str) -> BenchmarkResult:
         evaluator_context = (

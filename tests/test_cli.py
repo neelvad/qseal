@@ -184,6 +184,7 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert report["tasks"][0]["task_id"] == "redundant-distinct-users"
     assert report["tasks"][0]["results"][0]["status"] == "COMPLETED"
     assert report["config"]["reward_margin"] == 0.05
+    assert report["config"]["reward_model"] == "transition"
     assert report["config"]["minimum_duration_ms"] == 10000
     assert report["tasks"][0]["results"][0]["search_result"]["reward_margin"] == 0.05
     assert (
@@ -261,6 +262,7 @@ def test_corpus_repeat_cli_runs_independent_measurements_and_aggregates(
     assert aggregate["artifact_type"] == "corpus_run_aggregate"
     assert aggregate["run_count"] == 2
     assert aggregate["source_reports"] == [str(path) for path in report_paths]
+    assert all(report["config"]["reward_model"] == "transition" for report in reports)
     assert all(
         report["strategy_summaries"][0]["benchmark_cache_misses"] == 1
         for report in reports

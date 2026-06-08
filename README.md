@@ -114,6 +114,12 @@ uv run snowprove corpus repeat snowprove-runs/corpus-repeat \
 uv run snowprove corpus inspect-aggregate \
   snowprove-runs/corpus-repeat/corpus-aggregate.json
 
+uv run snowprove corpus repeat snowprove-runs/corpus-state \
+  --runs 3 \
+  --reward-model state \
+  --reward-margin 0.05 \
+  --minimum-duration-ms 20
+
 uv run snowprove corpus aggregate \
   snowprove-runs/run-1/corpus-run.json \
   snowprove-runs/run-2/corpus-run.json

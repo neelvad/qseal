@@ -53,3 +53,15 @@ class BenchmarkResult(BaseModel):
     confidence_reason: str | None = None
     reason: str | None = None
     inputs: dict[str, str] = Field(default_factory=dict)
+
+
+class QueryBenchmarkResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: BenchmarkStatus
+    query: QueryBenchmark
+    environment: BenchmarkEnvironment
+    timing_confident: bool = True
+    confidence_reason: str | None = None
+    reason: str | None = None
+    inputs: dict[str, str] = Field(default_factory=dict)

@@ -34,6 +34,7 @@ from snowprove.verifier.backends import BuiltinVerifierBackend
 from snowprove.verifier.backends.base import VerifierBackend
 
 SearchStrategy = Literal["fixed_order", "random", "greedy", "beam", "exhaustive"]
+RewardModel = Literal["transition", "state"]
 VerifierFactory = Callable[[LoadedCorpusTask], VerifierBackend]
 
 
@@ -67,6 +68,7 @@ class CorpusRunConfig(BaseModel):
     timeout_seconds: float = Field(default=30.0, gt=0)
     threads: int = Field(default=1, ge=1)
     minimum_duration_ms: float = Field(default=5.0, ge=0)
+    reward_model: RewardModel = "transition"
 
     @model_validator(mode="after")
     def validate_unique_values(self) -> CorpusRunConfig:
@@ -245,6 +247,7 @@ def _run_strategy(
             verifier=verifier,
             performance_evaluator=evaluator,
             rules=rules,
+            reward_model=config.reward_model,
         )
 
     started = time.perf_counter()

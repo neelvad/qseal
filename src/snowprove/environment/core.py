@@ -3,9 +3,15 @@ from __future__ import annotations
 import hashlib
 import math
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
-from snowprove.benchmark import BenchmarkResult, BenchmarkStatus, benchmark_query_pair
+from snowprove.benchmark import (
+    BenchmarkResult,
+    BenchmarkStatus,
+    QueryBenchmarkResult,
+    benchmark_query,
+    benchmark_query_pair,
+)
 from snowprove.environment.model import (
     EnvironmentAction,
     EnvironmentObservation,
@@ -25,6 +31,11 @@ from snowprove.verifier.backends.base import VerifierBackend
 
 
 class PerformanceEvaluator(Protocol):
+    supports_query_benchmark: bool = False
+
+    def evaluate_query(self, sql: str) -> QueryBenchmarkResult:
+        pass
+
     def evaluate(self, original_sql: str, rewritten_sql: str) -> BenchmarkResult:
         pass
 
@@ -60,6 +71,19 @@ class DuckDbPerformanceEvaluator:
         self.threads = threads
         self.fixture_fingerprint = fixture_fingerprint
         self.minimum_duration_ms = minimum_duration_ms
+        self.supports_query_benchmark = True
+
+    def evaluate_query(self, sql: str) -> QueryBenchmarkResult:
+        return benchmark_query(
+            sql,
+            database_path=self.database_path,
+            setup_sql=self.setup_sql,
+            warmups=self.warmups,
+            repetitions=self.repetitions,
+            timeout_seconds=self.timeout_seconds,
+            threads=self.threads,
+            minimum_duration_ms=self.minimum_duration_ms,
+        )
 
     def evaluate(self, original_sql: str, rewritten_sql: str) -> BenchmarkResult:
         return benchmark_query_pair(
@@ -100,11 +124,15 @@ class RewriteEnvironment:
         performance_evaluator: PerformanceEvaluator | None = None,
         trajectory_recorder: TrajectoryRecorder | None = None,
         rules: tuple[RewriteRule, ...] = DEFAULT_RULES,
+        reward_model: Literal["transition", "state"] = "transition",
     ) -> None:
+        if reward_model not in ("transition", "state"):
+            raise ValueError(f"Unknown reward model: {reward_model}.")
         self.verifier = verifier or BuiltinVerifierBackend()
         self.performance_evaluator = performance_evaluator
         self.trajectory_recorder = trajectory_recorder
         self.rules = rules
+        self.reward_model = reward_model
         self._task: EnvironmentTask | None = None
         self._observation: EnvironmentObservation | None = None
         self._done = False
@@ -162,13 +190,11 @@ class RewriteEnvironment:
             self._record(task, observation, transition)
             return transition
 
-        benchmark = (
-            self.performance_evaluator.evaluate(
-                observation.current_sql,
-                suggestion.rewritten_sql,
-            )
-            if self.performance_evaluator is not None
-            else None
+        benchmark = _evaluate_performance(
+            self.performance_evaluator,
+            observation.current_sql,
+            suggestion.rewritten_sql,
+            reward_model=self.reward_model,
         )
         next_step = observation.step_index + 1
         next_query = parse_select(suggestion.rewritten_sql, dialect=task.dialect)
@@ -254,6 +280,58 @@ def _verification_failure_reward(status: VerificationStatus) -> float:
     if status == VerificationStatus.NOT_EQUIVALENT:
         return -1.0
     return -0.25
+
+
+def _evaluate_performance(
+    evaluator: PerformanceEvaluator | None,
+    original_sql: str,
+    rewritten_sql: str,
+    *,
+    reward_model: Literal["transition", "state"],
+) -> BenchmarkResult | None:
+    if evaluator is None:
+        return None
+    if reward_model == "state":
+        if not getattr(evaluator, "supports_query_benchmark", False):
+            raise ValueError(
+                "The selected performance evaluator does not support state rewards."
+            )
+        original = evaluator.evaluate_query(original_sql)
+        rewritten = evaluator.evaluate_query(rewritten_sql)
+        return _benchmark_result_from_query_states(original, rewritten)
+    return evaluator.evaluate(original_sql, rewritten_sql)
+
+
+def _benchmark_result_from_query_states(
+    original: QueryBenchmarkResult,
+    rewritten: QueryBenchmarkResult,
+) -> BenchmarkResult:
+    status = original.status
+    if status == BenchmarkStatus.COMPLETED:
+        status = rewritten.status
+    speedup = (
+        original.query.median_ms / rewritten.query.median_ms
+        if original.query.median_ms is not None
+        and rewritten.query.median_ms is not None
+        and rewritten.query.median_ms > 0
+        else None
+    )
+    timing_confident = original.timing_confident and rewritten.timing_confident
+    reason = original.reason or rewritten.reason
+    confidence_reason = original.confidence_reason or rewritten.confidence_reason
+    return BenchmarkResult(
+        status=status,
+        original=original.query,
+        rewritten=rewritten.query,
+        environment=original.environment,
+        speedup=speedup,
+        row_counts_match=original.query.row_count == rewritten.query.row_count
+        if original.query.row_count is not None and rewritten.query.row_count is not None
+        else None,
+        timing_confident=timing_confident,
+        confidence_reason=confidence_reason,
+        reason=reason,
+    )
 
 
 def _performance_reward(benchmark: BenchmarkResult | None) -> float:

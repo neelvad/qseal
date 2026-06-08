@@ -1,7 +1,7 @@
 import duckdb
 import pytest
 
-from snowprove.benchmark.duckdb import benchmark_query_pair
+from snowprove.benchmark.duckdb import benchmark_query, benchmark_query_pair
 from snowprove.benchmark.model import BenchmarkStatus
 
 SETUP_SQL = """
@@ -38,6 +38,23 @@ def test_benchmarks_query_pair_reproducibly() -> None:
     assert result.row_counts_match is True
     assert result.speedup is not None
     assert "PROJECTION" in str(result.original.explain)
+
+
+def test_benchmarks_absolute_query_state() -> None:
+    result = benchmark_query(
+        "SELECT user_id FROM users",
+        setup_sql=SETUP_SQL,
+        warmups=1,
+        repetitions=3,
+        minimum_duration_ms=5,
+    )
+
+    assert result.status == BenchmarkStatus.COMPLETED
+    assert result.query.median_ms is not None
+    assert result.query.executions_per_sample > 1
+    assert len(result.query.timings_ms) == 3
+    assert result.query.row_count == 100
+    assert result.timing_confident is True
 
 
 def test_reports_duckdb_query_errors() -> None:

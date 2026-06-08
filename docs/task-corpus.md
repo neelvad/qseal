@@ -33,10 +33,10 @@ uv run snowprove corpus run snowprove-runs/corpus-smoke \
 ```
 
 Useful controls include `--random-seed`, `--beam-width`, `--max-nodes`,
-`--reward-margin`, `--minimum-duration-ms`, `--threads`, `--timeout`,
-`--manifest`, and `--report-file`. Fixture databases and content-addressed
-oracle caches are retained under the output directory, so repeated runs reuse
-both.
+`--reward-margin`, `--reward-model`, `--minimum-duration-ms`, `--threads`,
+`--timeout`, `--manifest`, and `--report-file`. Fixture databases and
+content-addressed oracle caches are retained under the output directory, so
+repeated runs reuse both.
 
 Use `--reward-margin` to require a meaningful cumulative improvement before
 greedy, beam, or exhaustive search prefers a longer path:
@@ -65,6 +65,26 @@ the target duration, and divides the batch time back into a per-execution
 latency. Artifacts record both batch timings and executions per sample. A
 transition receives zero reward only if the batching safety cap still cannot
 reach the requested duration.
+
+The default `--reward-model transition` benchmarks each verified rewrite pair
+together. It currently gives the most stable corpus-level measurements.
+
+`--reward-model state` benchmarks and caches each distinct SQL state, then
+computes transition rewards from those absolute runtimes:
+
+```bash
+uv run snowprove corpus repeat snowprove-runs/corpus-state \
+  --runs 3 \
+  --reward-model state \
+  --reward-margin 0.05 \
+  --minimum-duration-ms 20
+```
+
+State rewards telescope consistently, so completed paths reaching the same
+final SQL receive the same cumulative reward within a run. Independent state
+measurements are noisier than paired timings, however. Current experiments
+support keeping transition rewards as the default and using at least 20 ms
+batches for state-reward analysis.
 
 For repeated independent measurements and an automatic stability aggregate:
 

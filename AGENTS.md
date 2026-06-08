@@ -356,12 +356,18 @@ Completed:
     positive and predicate pushdown as neutral. The remaining multi-action
     instability comes from independently benchmarked transition rewards making
     cumulative reward path-dependent.
+19. Absolute SQL-state benchmarking and content-addressed `query_benchmark`
+    caching are available through `--reward-model state`. Completed paths to
+    the same SQL telescope to equal rewards within a run.
+20. Full-corpus experiments showed state rewards are noisier: 5 ms state
+    batches produced 21 unstable tasks, while 20 ms produced 5, compared with
+    3 under the default 5 ms paired transition model. Transition remains the
+    default; state experiments should currently use at least 20 ms batches.
 
 Next:
 
-1. Replace transition-relative performance rewards with cached absolute
-   SQL-state runtimes so paths reaching the same final SQL receive comparable
-   cumulative rewards.
+1. Improve absolute-state measurement variance, likely by measuring related
+   states in an interleaved session while retaining per-state cache identities.
 2. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.
 3. Add a small learned action-ranking policy only after baseline measurements

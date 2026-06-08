@@ -56,6 +56,15 @@ amortize timer noise. Low-confidence benchmark results receive zero reward if
 the batching safety cap cannot reach the configured sample duration. Raw
 timings and speedup remain in the benchmark artifact. Proven transitions
 without performance data also receive zero.
+
+`RewriteEnvironment(reward_model="transition")` uses a direct benchmark for
+each rewrite edge. `reward_model="state"` measures each distinct SQL state once
+through the content-addressed cache and derives edge rewards from the two state
+runtimes. State rewards eliminate order-dependent cumulative rewards for paths
+that reach the same final SQL, at the cost of noisier independent timing. State
+mode fails explicitly if the configured evaluator cannot benchmark individual
+queries.
+
 `NOT_EQUIVALENT` receives `-1`; other unproven results receive `-0.25` and
 terminate the episode without advancing state.
 

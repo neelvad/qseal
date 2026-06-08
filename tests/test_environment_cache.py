@@ -1,10 +1,13 @@
 import math
 
+import pytest
+
 from snowprove.benchmark.model import (
     BenchmarkEnvironment,
     BenchmarkResult,
     BenchmarkStatus,
     QueryBenchmark,
+    QueryBenchmarkResult,
 )
 from snowprove.cache import JsonFileCache, content_hash
 from snowprove.constraints.model import ConstraintCatalog, TableConstraints
@@ -83,6 +86,106 @@ def test_cached_benchmark_avoids_repeated_delegate_calls(tmp_path) -> None:
     assert evaluator.misses == 1
     assert evaluator.hits == 1
     assert len(tuple((tmp_path / "cache" / "benchmark").rglob("*.json"))) == 1
+
+
+def test_cached_query_benchmark_is_keyed_by_sql_state(tmp_path) -> None:
+    delegate = _StatePerformanceEvaluator(
+        {
+            "SELECT DISTINCT user_id FROM users": 2.0,
+            "SELECT user_id FROM users": 1.0,
+        }
+    )
+    evaluator = CachedPerformanceEvaluator(
+        delegate,
+        JsonFileCache(tmp_path / "cache"),
+        namespace="test-query-benchmark-v1",
+    )
+
+    first = evaluator.evaluate_query("SELECT user_id FROM users")
+    second = evaluator.evaluate_query("SELECT user_id FROM users")
+
+    assert first == second
+    assert delegate.calls == ["SELECT user_id FROM users"]
+    assert evaluator.misses == 1
+    assert evaluator.hits == 1
+    assert len(tuple((tmp_path / "cache" / "query_benchmark").rglob("*.json"))) == 1
+
+
+def test_absolute_state_rewards_are_path_invariant(tmp_path) -> None:
+    task = EnvironmentTask(
+        task_id="path-invariant",
+        sql=(
+            "SELECT user_id FROM users "
+            "WHERE email IS NOT NULL AND display_name IS NOT NULL"
+        ),
+        constraints=ConstraintCatalog(
+            tables={
+                "users": TableConstraints(
+                    columns={
+                        "email": {"nullable": False},
+                        "display_name": {"nullable": False},
+                    }
+                )
+            }
+        ),
+    )
+    runtimes = {
+        task.sql: 4.0,
+        "SELECT user_id\nFROM users\nWHERE display_name IS NOT NULL;": 2.0,
+        "SELECT user_id\nFROM users\nWHERE email IS NOT NULL;": 3.0,
+        "SELECT user_id\nFROM users;": 1.0,
+    }
+    evaluator = CachedPerformanceEvaluator(
+        _StatePerformanceEvaluator(runtimes),
+        JsonFileCache(tmp_path / "cache"),
+        namespace="path-invariant-v1",
+    )
+    environment = RewriteEnvironment(
+        performance_evaluator=evaluator,
+        reward_model="state",
+    )
+
+    first = environment.reset(task)
+    first_path = environment.step(first.actions[0].action_id)
+    first_final = environment.step(first_path.observation.actions[0].action_id)
+
+    second = environment.reset(task)
+    second_path = environment.step(second.actions[1].action_id)
+    second_final = environment.step(second_path.observation.actions[0].action_id)
+
+    first_reward = first_path.reward + first_final.reward
+    second_reward = second_path.reward + second_final.reward
+    assert first_reward == pytest.approx(math.log(4.0))
+    assert second_reward == pytest.approx(math.log(4.0))
+    assert first_reward == pytest.approx(second_reward)
+    assert evaluator.misses == 4
+    assert evaluator.hits == 4
+
+
+def test_state_rewards_reject_pair_only_evaluator() -> None:
+    task = EnvironmentTask(
+        task_id="unsupported-state-rewards",
+        sql="SELECT DISTINCT user_id FROM users",
+        constraints=ConstraintCatalog(
+            tables={
+                "users": TableConstraints(
+                    unique=[("user_id",)],
+                )
+            }
+        ),
+    )
+    environment = RewriteEnvironment(
+        performance_evaluator=_CountingPerformanceEvaluator(speedup=2),
+        reward_model="state",
+    )
+
+    observation = environment.reset(task)
+
+    with pytest.raises(
+        ValueError,
+        match="does not support state rewards",
+    ):
+        environment.step(observation.actions[0].action_id)
 
 
 def test_environment_reuses_cached_oracles_across_episodes(tmp_path) -> None:
@@ -231,4 +334,40 @@ class _CountingPerformanceEvaluator:
             environment=environment,
             speedup=self.speedup,
             row_counts_match=True,
+        )
+
+
+class _StatePerformanceEvaluator:
+    supports_query_benchmark = True
+
+    def __init__(self, runtimes: dict[str, float]) -> None:
+        self.runtimes = runtimes
+        self.calls: list[str] = []
+
+    def cache_context(self):
+        return {"evaluator": "state", "runtimes": self.runtimes}
+
+    def evaluate_query(self, sql: str) -> QueryBenchmarkResult:
+        self.calls.append(sql)
+        runtime = self.runtimes[sql]
+        environment = BenchmarkEnvironment(
+            duckdb_version="test",
+            python_version="test",
+            platform="test",
+            database_path="fixture.duckdb",
+            threads=1,
+            warmups=0,
+            repetitions=1,
+            timeout_seconds=1,
+        )
+        return QueryBenchmarkResult(
+            status=BenchmarkStatus.COMPLETED,
+            query=QueryBenchmark(
+                status=BenchmarkStatus.COMPLETED,
+                sql=sql,
+                timings_ms=(runtime,),
+                median_ms=runtime,
+                row_count=1,
+            ),
+            environment=environment,
         )

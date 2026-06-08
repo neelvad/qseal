@@ -14,6 +14,7 @@ from snowprove.benchmark.model import (
     BenchmarkResult,
     BenchmarkStatus,
     QueryBenchmark,
+    QueryBenchmarkResult,
 )
 
 
@@ -22,6 +23,61 @@ class QueryTimedOutError(RuntimeError):
 
 
 _MAX_EXECUTIONS_PER_SAMPLE = 1_000
+
+
+def benchmark_query(
+    sql: str,
+    *,
+    database_path: Path | str = ":memory:",
+    setup_sql: str | None = None,
+    warmups: int = 2,
+    repetitions: int = 5,
+    timeout_seconds: float = 30.0,
+    threads: int = 1,
+    minimum_duration_ms: float = 0.0,
+) -> QueryBenchmarkResult:
+    _validate_settings(
+        warmups,
+        repetitions,
+        timeout_seconds,
+        threads,
+        minimum_duration_ms,
+    )
+    environment = _environment(
+        database_path,
+        threads=threads,
+        warmups=warmups,
+        repetitions=repetitions,
+        timeout_seconds=timeout_seconds,
+        minimum_duration_ms=minimum_duration_ms,
+    )
+    connection = duckdb.connect(str(database_path))
+    try:
+        connection.execute(f"SET threads = {threads}")
+        if setup_sql:
+            connection.execute(setup_sql)
+        query = _benchmark_query_on_connection(
+            connection,
+            sql,
+            warmups=warmups,
+            repetitions=repetitions,
+            timeout_seconds=timeout_seconds,
+            minimum_duration_ms=minimum_duration_ms,
+        )
+        timing_confident = _timing_target_reached(query, minimum_duration_ms)
+        return QueryBenchmarkResult(
+            status=BenchmarkStatus.COMPLETED,
+            query=query,
+            environment=environment,
+            timing_confident=timing_confident,
+            confidence_reason=_confidence_reason(timing_confident, minimum_duration_ms),
+        )
+    except QueryTimedOutError as error:
+        return _failed_query_result(sql, environment, BenchmarkStatus.TIMEOUT, str(error))
+    except duckdb.Error as error:
+        return _failed_query_result(sql, environment, BenchmarkStatus.ERROR, str(error))
+    finally:
+        connection.close()
 
 
 def benchmark_query_pair(
@@ -43,12 +99,8 @@ def benchmark_query_pair(
         threads,
         minimum_duration_ms,
     )
-    database = str(database_path)
-    environment = BenchmarkEnvironment(
-        duckdb_version=duckdb.__version__,
-        python_version=platform.python_version(),
-        platform=platform.platform(),
-        database_path=database,
+    environment = _environment(
+        database_path,
         threads=threads,
         warmups=warmups,
         repetitions=repetitions,
@@ -56,14 +108,11 @@ def benchmark_query_pair(
         minimum_duration_ms=minimum_duration_ms,
     )
 
-    connection = duckdb.connect(database)
+    connection = duckdb.connect(str(database_path))
     try:
         connection.execute(f"SET threads = {threads}")
         if setup_sql:
             connection.execute(setup_sql)
-
-        original_plan = _explain(connection, original_sql, timeout_seconds)
-        rewritten_plan = _explain(connection, rewritten_sql, timeout_seconds)
 
         for index in range(warmups):
             queries = (
@@ -74,6 +123,10 @@ def benchmark_query_pair(
             for sql in queries:
                 _execute_timed(connection, sql, timeout_seconds)
 
+        plans = {
+            "original": _explain(connection, original_sql, timeout_seconds),
+            "rewritten": _explain(connection, rewritten_sql, timeout_seconds),
+        }
         executions_per_sample = {
             "original": _calibrate_executions_per_sample(
                 connection,
@@ -92,7 +145,11 @@ def benchmark_query_pair(
         batch_samples: dict[str, list[float]] = {"original": [], "rewritten": []}
         row_counts: dict[str, int] = {}
         for index in range(repetitions):
-            labels = ("original", "rewritten") if index % 2 == 0 else ("rewritten", "original")
+            labels = (
+                ("original", "rewritten")
+                if index % 2 == 0
+                else ("rewritten", "original")
+            )
             for label in labels:
                 sql = original_sql if label == "original" else rewritten_sql
                 batch_elapsed_ms, row_count = _execute_timed_batch(
@@ -113,7 +170,7 @@ def benchmark_query_pair(
             batch_samples["original"],
             executions_per_sample["original"],
             row_counts["original"],
-            original_plan,
+            plans["original"],
         )
         rewritten = _completed_query(
             rewritten_sql,
@@ -121,7 +178,7 @@ def benchmark_query_pair(
             batch_samples["rewritten"],
             executions_per_sample["rewritten"],
             row_counts["rewritten"],
-            rewritten_plan,
+            plans["rewritten"],
         )
         speedup = (
             original.median_ms / rewritten.median_ms
@@ -134,12 +191,6 @@ def benchmark_query_pair(
             _timing_target_reached(query, minimum_duration_ms)
             for query in (original, rewritten)
         )
-        confidence_reason = None
-        if not timing_confident:
-            confidence_reason = (
-                "The timing batch safety cap could not reach the "
-                f"{minimum_duration_ms:g} ms minimum sample duration."
-            )
         return BenchmarkResult(
             status=BenchmarkStatus.COMPLETED,
             original=original,
@@ -148,7 +199,7 @@ def benchmark_query_pair(
             speedup=speedup,
             row_counts_match=original.row_count == rewritten.row_count,
             timing_confident=timing_confident,
-            confidence_reason=confidence_reason,
+            confidence_reason=_confidence_reason(timing_confident, minimum_duration_ms),
         )
     except QueryTimedOutError as error:
         return _failed_result(
@@ -168,6 +219,80 @@ def benchmark_query_pair(
         )
     finally:
         connection.close()
+
+
+def _environment(
+    database_path: Path | str,
+    *,
+    threads: int,
+    warmups: int,
+    repetitions: int,
+    timeout_seconds: float,
+    minimum_duration_ms: float,
+) -> BenchmarkEnvironment:
+    return BenchmarkEnvironment(
+        duckdb_version=duckdb.__version__,
+        python_version=platform.python_version(),
+        platform=platform.platform(),
+        database_path=str(database_path),
+        threads=threads,
+        warmups=warmups,
+        repetitions=repetitions,
+        timeout_seconds=timeout_seconds,
+        minimum_duration_ms=minimum_duration_ms,
+    )
+
+
+def _benchmark_query_on_connection(
+    connection: duckdb.DuckDBPyConnection,
+    sql: str,
+    *,
+    warmups: int,
+    repetitions: int,
+    timeout_seconds: float,
+    minimum_duration_ms: float,
+) -> QueryBenchmark:
+    for _ in range(warmups):
+        _execute_timed(connection, sql, timeout_seconds)
+    return _completed_query(
+        sql,
+        *_measure_query(
+            connection,
+            sql,
+            repetitions,
+            timeout_seconds,
+            minimum_duration_ms,
+        ),
+    )
+
+
+def _measure_query(
+    connection: duckdb.DuckDBPyConnection,
+    sql: str,
+    repetitions: int,
+    timeout_seconds: float,
+    minimum_duration_ms: float,
+) -> tuple[list[float], list[float], int, int, str]:
+    plan = _explain(connection, sql, timeout_seconds)
+    executions_per_sample = _calibrate_executions_per_sample(
+        connection,
+        sql,
+        timeout_seconds,
+        minimum_duration_ms,
+    )
+    samples = []
+    batch_samples = []
+    row_count = 0
+    for _ in range(repetitions):
+        batch_elapsed_ms, row_count = _execute_timed_batch(
+            connection,
+            sql,
+            timeout_seconds,
+            executions_per_sample,
+        )
+        batch_samples.append(batch_elapsed_ms)
+        samples.append(batch_elapsed_ms / executions_per_sample)
+    return samples, batch_samples, executions_per_sample, row_count, plan
 
 
 def _execute_timed(
@@ -303,6 +428,32 @@ def _failed_result(
         rewritten=QueryBenchmark(status=status, sql=rewritten_sql.strip(), error=reason),
         environment=environment,
         reason=reason,
+    )
+
+
+def _failed_query_result(
+    sql: str,
+    environment: BenchmarkEnvironment,
+    status: BenchmarkStatus,
+    reason: str,
+) -> QueryBenchmarkResult:
+    return QueryBenchmarkResult(
+        status=status,
+        query=QueryBenchmark(status=status, sql=sql.strip(), error=reason),
+        environment=environment,
+        reason=reason,
+    )
+
+
+def _confidence_reason(
+    timing_confident: bool,
+    minimum_duration_ms: float,
+) -> str | None:
+    if timing_confident:
+        return None
+    return (
+        "The timing batch safety cap could not reach the "
+        f"{minimum_duration_ms:g} ms minimum sample duration."
     )
 
 
