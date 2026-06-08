@@ -274,6 +274,11 @@ known reward gaps where the trajectory data observed both the predicted and
 oracle action rewards. This is a sanity baseline before plugging learned scores
 into corpus search.
 
+Offline evaluation reports exact top-1 accuracy and adjusted accuracy.
+Adjusted accuracy treats a predicted action as acceptable when its observed
+suffix reward is within `--reward-margin` of the oracle action, which avoids
+over-penalizing near-tie action-order labels.
+
 Both training and evaluation support simple split filters:
 
 ```bash
@@ -297,6 +302,7 @@ uv run snowprove policy holdout-evaluate trajectories.jsonl \
   snowprove-runs/policy-holdout-medium \
   --include-fixture standard-medium \
   --reward-margin 0.05 \
+  --label-margin 0.055 \
   --minimum-duration-ms 20
 ```
 
@@ -305,6 +311,8 @@ offline action labels on the held-out states, then runs held-out corpus tasks
 with `greedy` and `policy_baseline_abstain`. It writes `policy.json`,
 `offline-evaluation.json`, `corpus-run/corpus-run.json`, and
 `holdout-evaluation.json` under the output directory.
+`--label-margin` controls adjusted offline accuracy and defaults to the search
+`--reward-margin`.
 
 ## Summarizing Runs
 

@@ -469,6 +469,18 @@ Completed:
       offline accuracy 42/43 with mean known reward gap 0.001192, tied greedy
       at reward 0.180552 and 21 wins, using 47 verifier/benchmark requests
       versus greedy's 60.
+41. Offline policy evaluation now records exact accuracy and margin-adjusted
+    accuracy. `evaluate-baseline --reward-margin` and `holdout-evaluate
+    --label-margin` treat predictions with observed suffix reward within the
+    margin of the oracle action as acceptable, which avoids turning near-tie
+    action-order labels into hard misses. In holdout runs, `--reward-margin`
+    remains the search decision margin and `--label-margin` defaults to it.
+42. Rerunning the multi-action holdout with `--reward-margin 0.05` and
+    `--label-margin 0.055` at
+    `/tmp/snowprove-policy-holdout-multiaction-label-margin-20260608` kept exact
+    accuracy at 42/43 but raised adjusted accuracy to 43/43. Held-out corpus
+    search still tied greedy at reward 0.166312 and 21 wins while using 47
+    verifier/benchmark requests versus greedy's 60.
 
 Next:
 

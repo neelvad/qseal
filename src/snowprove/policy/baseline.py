@@ -65,7 +65,9 @@ class RuleAccuracy(BaseModel):
     rule_name: str
     state_count: int
     correct_count: int
+    acceptable_count: int = 0
     accuracy: float
+    adjusted_accuracy: float | None = None
 
 
 class BaselinePolicyEvaluation(BaseModel):
@@ -81,7 +83,10 @@ class BaselinePolicyEvaluation(BaseModel):
     labeled_state_count: int
     predicted_state_count: int
     correct_count: int
+    acceptable_count: int = 0
     accuracy: float | None
+    adjusted_accuracy: float | None = None
+    reward_margin: float = Field(default=0.0, ge=0)
     known_reward_gap_count: int
     mean_known_reward_gap: float | None
     max_known_reward_gap: float | None
@@ -170,7 +175,10 @@ def evaluate_baseline_policy(
     source_trajectories: str | None = None,
     model_path: str | None = None,
     data_filter: PolicyDataFilter | None = None,
+    reward_margin: float = 0.0,
 ) -> BaselinePolicyEvaluation:
+    if reward_margin < 0:
+        raise ValueError("reward_margin must be zero or greater.")
     data_filter = data_filter or PolicyDataFilter()
     examples = [
         example
@@ -182,9 +190,10 @@ def evaluate_baseline_policy(
     ]
     scores = {stat.feature: stat.win_rate for stat in model.feature_stats}
     correct = 0
+    acceptable = 0
     predicted = 0
     known_gaps = []
-    by_rule: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+    by_rule: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
 
     for example in examples:
         prediction = _predict(example, scores, model.default_score)
@@ -199,8 +208,13 @@ def evaluate_baseline_policy(
 
         oracle_reward = example.observed_suffix_rewards.get(example.oracle_action_id or "")
         predicted_reward = example.observed_suffix_rewards.get(prediction)
+        is_acceptable = is_correct
         if oracle_reward is not None and predicted_reward is not None:
-            known_gaps.append(oracle_reward - predicted_reward)
+            reward_gap = oracle_reward - predicted_reward
+            known_gaps.append(reward_gap)
+            is_acceptable = reward_gap <= reward_margin
+        acceptable += int(is_acceptable)
+        by_rule[rule_name][2] += int(is_acceptable)
 
     return BaselinePolicyEvaluation(
         model_type=model.model_type,
@@ -211,7 +225,10 @@ def evaluate_baseline_policy(
         labeled_state_count=len(examples),
         predicted_state_count=predicted,
         correct_count=correct,
+        acceptable_count=acceptable,
         accuracy=correct / predicted if predicted else None,
+        adjusted_accuracy=acceptable / predicted if predicted else None,
+        reward_margin=reward_margin,
         known_reward_gap_count=len(known_gaps),
         mean_known_reward_gap=(
             sum(known_gaps) / len(known_gaps) if known_gaps else None
@@ -222,7 +239,9 @@ def evaluate_baseline_policy(
                 rule_name=rule_name,
                 state_count=counts[0],
                 correct_count=counts[1],
+                acceptable_count=counts[2],
                 accuracy=counts[1] / counts[0] if counts[0] else 0.0,
+                adjusted_accuracy=counts[2] / counts[0] if counts[0] else None,
             )
             for rule_name, counts in sorted(by_rule.items())
         ),
@@ -274,6 +293,11 @@ def render_baseline_policy_training(model: BaselinePolicyModel) -> str:
 
 def render_baseline_policy_evaluation(evaluation: BaselinePolicyEvaluation) -> str:
     accuracy = "n/a" if evaluation.accuracy is None else f"{evaluation.accuracy:.4f}"
+    adjusted_accuracy = (
+        "n/a"
+        if evaluation.adjusted_accuracy is None
+        else f"{evaluation.adjusted_accuracy:.4f}"
+    )
     mean_gap = (
         "n/a"
         if evaluation.mean_known_reward_gap is None
@@ -284,6 +308,8 @@ def render_baseline_policy_evaluation(evaluation: BaselinePolicyEvaluation) -> s
         f"States: {evaluation.state_count}",
         f"Predicted states: {evaluation.predicted_state_count}",
         f"Top-1 accuracy: {accuracy}",
+        f"Adjusted accuracy: {adjusted_accuracy}",
+        f"Reward margin: {evaluation.reward_margin:.6f}",
         f"Known reward gaps: {evaluation.known_reward_gap_count}",
         f"Mean known reward gap: {mean_gap}",
         f"Filter: {_render_filter(evaluation.data_filter)}",
@@ -292,9 +318,15 @@ def render_baseline_policy_evaluation(evaluation: BaselinePolicyEvaluation) -> s
         lines.append("")
         lines.append("Per oracle rule:")
         for rule in evaluation.per_oracle_rule:
+            adjusted = (
+                "n/a"
+                if rule.adjusted_accuracy is None
+                else f"{rule.adjusted_accuracy:.4f}"
+            )
             lines.append(
                 f"  {rule.rule_name}: {rule.correct_count}/{rule.state_count} "
-                f"({rule.accuracy:.4f})"
+                f"({rule.accuracy:.4f}), adjusted={rule.acceptable_count}/"
+                f"{rule.state_count} ({adjusted})"
             )
     return "\n".join(lines)
 

@@ -695,6 +695,13 @@ def policy_train_baseline(
 @click.option("--include-tag", "include_tags", multiple=True)
 @click.option("--exclude-tag", "exclude_tags", multiple=True)
 @click.option(
+    "--reward-margin",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Reward gap tolerated when computing adjusted offline accuracy.",
+)
+@click.option(
     "--format",
     "output_format",
     type=OutputFormat,
@@ -711,6 +718,7 @@ def policy_evaluate_baseline(
     exclude_fixtures: tuple[str, ...],
     include_tags: tuple[str, ...],
     exclude_tags: tuple[str, ...],
+    reward_margin: float,
     output_format: str,
 ) -> None:
     """Evaluate a baseline policy model against trajectory oracle labels."""
@@ -727,6 +735,7 @@ def policy_evaluate_baseline(
             include_tags=include_tags,
             exclude_tags=exclude_tags,
         ),
+        reward_margin=reward_margin,
     )
     if report_file is not None:
         report_file.parent.mkdir(parents=True, exist_ok=True)
@@ -756,6 +765,15 @@ def policy_evaluate_baseline(
 @click.option("--include-fixture", "include_fixtures", multiple=True)
 @click.option("--include-tag", "include_tags", multiple=True)
 @click.option("--reward-margin", type=click.FloatRange(min=0), default=0.05, show_default=True)
+@click.option(
+    "--label-margin",
+    type=click.FloatRange(min=0),
+    default=None,
+    help=(
+        "Reward gap tolerated for offline adjusted accuracy. "
+        "Defaults to --reward-margin."
+    ),
+)
 @click.option(
     "--reward-model",
     type=RewardModelChoice,
@@ -793,6 +811,7 @@ def policy_holdout_evaluate(
     include_fixtures: tuple[str, ...],
     include_tags: tuple[str, ...],
     reward_margin: float,
+    label_margin: float | None,
     reward_model: str,
     warmups: int,
     repetitions: int,
@@ -844,6 +863,7 @@ def policy_holdout_evaluate(
         source_trajectories=str(trajectory_path),
         model_path=str(model_path),
         data_filter=holdout_filter,
+        reward_margin=label_margin if label_margin is not None else reward_margin,
     )
     evaluation_path.write_text(offline_evaluation.model_dump_json(indent=2))
     corpus_report = run_task_corpus(

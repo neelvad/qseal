@@ -350,6 +350,8 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
             "redundant-distinct-users",
             "--minimum-duration-ms",
             "10000",
+            "--label-margin",
+            "0.06",
             "--warmups",
             "0",
             "--repetitions",
@@ -365,6 +367,8 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert holdout_report["holdout_filter"]["include_fixtures"] == ["standard-small"]
     assert holdout_report["trained_state_count"] == 0
     assert holdout_report["heldout_state_count"] == 1
+    assert holdout_report["offline_evaluation"]["reward_margin"] == 0.06
+    assert holdout_report["offline_evaluation"]["adjusted_accuracy"] == 1.0
     assert holdout_report["heldout_task_ids"] == ["redundant-distinct-users"]
     assert set(holdout_report["strategy_rewards"]) == {
         "greedy",
