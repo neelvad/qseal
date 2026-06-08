@@ -61,6 +61,9 @@ Corpus search steps copy the benchmark medians, speedup, batch sizes, and
 confidence into the run report so aggregate inspection does not depend on
 external cache files for newly generated reports.
 
+Each search result records `tie_policy`. Corpus runs use `shorter` for
+transition rewards and `endpoint` for state rewards.
+
 Corpus run configuration records `reward_model`. Transition mode caches
 verified SQL pairs under `benchmark`; state mode caches each distinct SQL text
 under `query_benchmark`. State-cache `inputs.measurement_mode` distinguishes an

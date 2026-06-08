@@ -1,6 +1,10 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from snowprove.rewrites.base import VerificationStatus
+
+SearchTiePolicy = Literal["shorter", "endpoint"]
 
 
 class SearchStep(BaseModel):
@@ -44,3 +48,4 @@ class SearchResult(BaseModel):
     beam_width: int | None = None
     max_nodes: int | None = None
     reward_margin: float = 0.0
+    tie_policy: SearchTiePolicy = "shorter"

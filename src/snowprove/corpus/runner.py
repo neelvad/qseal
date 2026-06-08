@@ -319,11 +319,13 @@ def _search(
     environment_factory: Callable[[], RewriteEnvironment],
     config: CorpusRunConfig,
 ) -> SearchResult:
+    tie_policy = "endpoint" if config.reward_model == "state" else "shorter"
     if strategy == "fixed_order":
         return fixed_order_search(
             task.environment_task,
             environment_factory,
             reward_margin=config.reward_margin,
+            tie_policy=tie_policy,
         )
     if strategy == "random":
         return random_search(
@@ -331,12 +333,14 @@ def _search(
             environment_factory,
             seed=config.random_seed,
             reward_margin=config.reward_margin,
+            tie_policy=tie_policy,
         )
     if strategy == "greedy":
         return greedy_search(
             task.environment_task,
             environment_factory,
             reward_margin=config.reward_margin,
+            tie_policy=tie_policy,
         )
     if strategy == "beam":
         return beam_search(
@@ -344,12 +348,14 @@ def _search(
             environment_factory,
             beam_width=config.beam_width,
             reward_margin=config.reward_margin,
+            tie_policy=tie_policy,
         )
     return exhaustive_search(
         task.environment_task,
         environment_factory,
         max_nodes=config.max_nodes,
         reward_margin=config.reward_margin,
+        tie_policy=tie_policy,
     )
 
 

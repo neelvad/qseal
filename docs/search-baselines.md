@@ -54,6 +54,13 @@ prefer a longer or more complex path. Rewards remain unmodified in artifacts;
 the margin only affects search decisions. Fixed-order and random record the
 margin for provenance but remain forced-rollout baselines.
 
+Every result also records a `tie_policy`. Transition-reward corpus runs use
+`shorter`, preserving the existing preference for fewer rewrites when rewards
+are within the margin. State-reward corpus runs use `endpoint`: a terminal or
+truncated endpoint is preferred over an active partial path when their rewards
+are within the margin. An endpoint that is worse by more than the margin still
+loses.
+
 Exhaustive search's `max_nodes` bounds evaluated child nodes, including solver
 and benchmark calls. It is intended only for short episodes and small action
 spaces.

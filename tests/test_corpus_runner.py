@@ -10,6 +10,7 @@ from snowprove.benchmark.model import (
     BenchmarkResult,
     BenchmarkStatus,
     QueryBenchmark,
+    QueryBenchmarkResult,
 )
 from snowprove.corpora import bundled_corpus_path
 from snowprove.corpus import CorpusRunConfig, load_task_corpus, run_task_corpus
@@ -143,6 +144,31 @@ def test_strategies_share_identical_transition_rewards(tmp_path: Path) -> None:
     )
 
 
+def test_state_reward_model_uses_endpoint_tie_policy(tmp_path: Path) -> None:
+    corpus = _tiny_corpus(tmp_path)
+    report = run_task_corpus(
+        corpus,
+        tmp_path / "run",
+        config=CorpusRunConfig(
+            task_ids=("distinct-and-not-null",),
+            strategies=("greedy",),
+            reward_model="state",
+            reward_margin=0.05,
+        ),
+        performance_evaluator_factory=_state_runtime_evaluator_factory,
+    )
+
+    strategy_result = report.tasks[0].results[0]
+    result = strategy_result.search_result
+    assert result is not None, strategy_result.error
+    assert result.tie_policy == "endpoint"
+    assert result.final_sql == "SELECT user_id\nFROM users;"
+    assert result.action_ids == (
+        "remove_redundant_distinct::query:distinct",
+        "remove_redundant_not_null_filter::predicate:0",
+    )
+
+
 def test_strategy_errors_are_recorded_without_aborting_report(tmp_path: Path) -> None:
     corpus = _tiny_corpus(tmp_path)
 
@@ -213,6 +239,18 @@ def _failing_evaluator_factory(task, database_path, fixture_manifest):
     return _FailingPerformanceEvaluator()
 
 
+def _state_runtime_evaluator_factory(task, database_path, fixture_manifest):
+    del task, database_path, fixture_manifest
+    return _StateRuntimePerformanceEvaluator(
+        {
+            "SELECT DISTINCT user_id\nFROM users\nWHERE user_id IS NOT NULL;": 2.0,
+            "SELECT user_id\nFROM users\nWHERE user_id IS NOT NULL;": 1.0,
+            "SELECT DISTINCT user_id\nFROM users;": 1.5,
+            "SELECT user_id\nFROM users;": 0.98,
+        }
+    )
+
+
 class _FixedPerformanceEvaluator:
     def __init__(self, speedup: float) -> None:
         self.speedup = speedup
@@ -260,6 +298,48 @@ class _FailingPerformanceEvaluator:
     def evaluate(self, original_sql: str, rewritten_sql: str) -> BenchmarkResult:
         del original_sql, rewritten_sql
         raise RuntimeError("benchmark failed")
+
+
+class _StateRuntimePerformanceEvaluator:
+    supports_query_benchmark = True
+    supports_interleaved_query_benchmark = True
+
+    def __init__(self, runtimes: dict[str, float]) -> None:
+        self.runtimes = runtimes
+
+    def cache_context(self):
+        return {"evaluator": "state-runtime", "runtimes": self.runtimes}
+
+    def evaluate_query_pair(
+        self,
+        original_sql: str,
+        rewritten_sql: str,
+    ) -> tuple[QueryBenchmarkResult, QueryBenchmarkResult]:
+        return self._result(original_sql), self._result(rewritten_sql)
+
+    def _result(self, sql: str) -> QueryBenchmarkResult:
+        runtime = self.runtimes[sql.strip()]
+        environment = BenchmarkEnvironment(
+            duckdb_version="test",
+            python_version="test",
+            platform="test",
+            database_path="fixture.duckdb",
+            threads=1,
+            warmups=0,
+            repetitions=1,
+            timeout_seconds=1,
+        )
+        return QueryBenchmarkResult(
+            status=BenchmarkStatus.COMPLETED,
+            query=QueryBenchmark(
+                status=BenchmarkStatus.COMPLETED,
+                sql=sql.strip(),
+                timings_ms=(runtime,),
+                median_ms=runtime,
+                row_count=1,
+            ),
+            environment=environment,
+        )
 
 
 class _ChangingPerformanceEvaluator(_FixedPerformanceEvaluator):

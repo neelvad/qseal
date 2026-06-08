@@ -369,12 +369,16 @@ Completed:
     experiment reduced state instability from 5 tasks to 2 with zero winner
     changes. A controlled five-run comparison still found transition rewards
     about 2-3x less variable, so transition remains the default.
+22. State-reward corpus search now uses endpoint-aware tie scoring. Completed
+    endpoints beat active partial paths only when cumulative rewards are within
+    `reward_margin`; materially worse endpoints still lose. A three-run,
+    53-task experiment reduced path changes from 2 to 0 with zero winner
+    changes.
 
 Next:
 
-1. Investigate endpoint-aware search scoring for state rewards. Remaining path
-   changes occur when a near-neutral intermediate edge crosses the reward
-   margin even though completed-path rewards telescope consistently.
+1. Investigate reward-class variance for near-neutral tasks, especially
+   single-action rewrites whose measured reward crosses the neutral threshold.
 2. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.
 3. Add a small learned action-ranking policy only after baseline measurements

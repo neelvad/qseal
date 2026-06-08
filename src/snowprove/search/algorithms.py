@@ -10,7 +10,7 @@ from snowprove.environment import (
     EnvironmentTransition,
     RewriteEnvironment,
 )
-from snowprove.search.model import SearchResult, SearchStep
+from snowprove.search.model import SearchResult, SearchStep, SearchTiePolicy
 
 EnvironmentFactory = Callable[[], RewriteEnvironment]
 
@@ -33,8 +33,10 @@ def fixed_order_search(
     environment_factory: EnvironmentFactory,
     *,
     reward_margin: float = 0.0,
+    tie_policy: SearchTiePolicy = "shorter",
 ) -> SearchResult:
     _validate_reward_margin(reward_margin)
+    _validate_tie_policy(tie_policy)
     node = _root_node(task, environment_factory)
     explored = 0
     while node.active():
@@ -50,6 +52,7 @@ def fixed_order_search(
         node,
         explored_nodes=explored,
         reward_margin=reward_margin,
+        tie_policy=tie_policy,
     )
 
 
@@ -59,8 +62,10 @@ def random_search(
     *,
     seed: int,
     reward_margin: float = 0.0,
+    tie_policy: SearchTiePolicy = "shorter",
 ) -> SearchResult:
     _validate_reward_margin(reward_margin)
+    _validate_tie_policy(tie_policy)
     generator = random.Random(seed)
     node = _root_node(task, environment_factory)
     explored = 0
@@ -79,6 +84,7 @@ def random_search(
         explored_nodes=explored,
         seed=seed,
         reward_margin=reward_margin,
+        tie_policy=tie_policy,
     )
 
 
@@ -87,16 +93,23 @@ def greedy_search(
     environment_factory: EnvironmentFactory,
     *,
     reward_margin: float = 0.0,
+    tie_policy: SearchTiePolicy = "shorter",
 ) -> SearchResult:
     _validate_reward_margin(reward_margin)
+    _validate_tie_policy(tie_policy)
     node = _root_node(task, environment_factory)
     explored = 0
     stopped_early = False
     while node.active():
         candidates = _expand_node(task, environment_factory, node)
         explored += len(candidates)
-        candidate = _best_node(candidates, reward_margin)
-        if candidate.cumulative_reward <= node.cumulative_reward + reward_margin:
+        candidate = _best_node(candidates, reward_margin, tie_policy)
+        if _is_preferred_or_equal(
+            node,
+            candidate,
+            reward_margin,
+            tie_policy,
+        ):
             stopped_early = True
             break
         node = candidate
@@ -107,6 +120,7 @@ def greedy_search(
         explored_nodes=explored,
         stopped_early=stopped_early,
         reward_margin=reward_margin,
+        tie_policy=tie_policy,
     )
 
 
@@ -116,10 +130,12 @@ def beam_search(
     *,
     beam_width: int = 4,
     reward_margin: float = 0.0,
+    tie_policy: SearchTiePolicy = "shorter",
 ) -> SearchResult:
     if beam_width < 1:
         raise ValueError("beam_width must be one or greater.")
     _validate_reward_margin(reward_margin)
+    _validate_tie_policy(tie_policy)
 
     root = _root_node(task, environment_factory)
     frontier = [root]
@@ -135,12 +151,13 @@ def beam_search(
             else:
                 expanded.append(node)
         frontier = _rank_nodes(
-            _deduplicate_nodes(expanded, reward_margin),
+            _deduplicate_nodes(expanded, reward_margin, tie_policy),
             reward_margin,
+            tie_policy,
         )[:beam_width]
         candidates_seen.extend(frontier)
 
-    best = _best_node(candidates_seen, reward_margin)
+    best = _best_node(candidates_seen, reward_margin, tie_policy)
     return _result(
         "beam",
         task,
@@ -148,6 +165,7 @@ def beam_search(
         explored_nodes=explored,
         beam_width=beam_width,
         reward_margin=reward_margin,
+        tie_policy=tie_policy,
     )
 
 
@@ -157,10 +175,12 @@ def exhaustive_search(
     *,
     max_nodes: int = 1_000,
     reward_margin: float = 0.0,
+    tie_policy: SearchTiePolicy = "shorter",
 ) -> SearchResult:
     if max_nodes < 1:
         raise ValueError("max_nodes must be one or greater.")
     _validate_reward_margin(reward_margin)
+    _validate_tie_policy(tie_policy)
 
     root = _root_node(task, environment_factory)
     frontier = [root]
@@ -189,6 +209,7 @@ def exhaustive_search(
                 existing,
                 child,
                 reward_margin,
+                tie_policy,
             ):
                 continue
             best_by_sql[child.observation.current_sql] = child
@@ -196,7 +217,7 @@ def exhaustive_search(
             if child.active():
                 frontier.append(child)
 
-    best = _best_node(candidates_seen, reward_margin)
+    best = _best_node(candidates_seen, reward_margin, tie_policy)
     return _result(
         "exhaustive",
         task,
@@ -205,6 +226,7 @@ def exhaustive_search(
         search_truncated=search_truncated,
         max_nodes=max_nodes,
         reward_margin=reward_margin,
+        tie_policy=tie_policy,
     )
 
 
@@ -273,6 +295,7 @@ def _expand_node(
 def _deduplicate_nodes(
     nodes: list[_SearchNode],
     reward_margin: float,
+    tie_policy: SearchTiePolicy,
 ) -> list[_SearchNode]:
     best_by_sql: dict[str, _SearchNode] = {}
     for node in nodes:
@@ -281,20 +304,29 @@ def _deduplicate_nodes(
             existing,
             node,
             reward_margin,
+            tie_policy,
         ):
             best_by_sql[node.observation.current_sql] = node
     return list(best_by_sql.values())
 
 
-def _best_node(nodes: list[_SearchNode], reward_margin: float) -> _SearchNode:
+def _best_node(
+    nodes: list[_SearchNode],
+    reward_margin: float,
+    tie_policy: SearchTiePolicy,
+) -> _SearchNode:
     if not nodes:
         raise ValueError("Search produced no nodes.")
-    return _rank_nodes(nodes, reward_margin)[0]
+    return _rank_nodes(nodes, reward_margin, tie_policy)[0]
 
 
-def _rank_nodes(nodes: list[_SearchNode], reward_margin: float) -> list[_SearchNode]:
+def _rank_nodes(
+    nodes: list[_SearchNode],
+    reward_margin: float,
+    tie_policy: SearchTiePolicy,
+) -> list[_SearchNode]:
     ranked = []
-    remaining = sorted(nodes, key=_tie_sort_key)
+    remaining = sorted(nodes, key=lambda node: _tie_sort_key(node, tie_policy))
     while remaining:
         best_reward = max(node.cumulative_reward for node in remaining)
         equivalent = [
@@ -302,7 +334,9 @@ def _rank_nodes(nodes: list[_SearchNode], reward_margin: float) -> list[_SearchN
             for node in remaining
             if best_reward - node.cumulative_reward <= reward_margin
         ]
-        ranked.extend(sorted(equivalent, key=_tie_sort_key))
+        ranked.extend(
+            sorted(equivalent, key=lambda node: _tie_sort_key(node, tie_policy))
+        )
         equivalent_ids = {id(node) for node in equivalent}
         remaining = [node for node in remaining if id(node) not in equivalent_ids]
     return ranked
@@ -312,21 +346,34 @@ def _is_preferred_or_equal(
     incumbent: _SearchNode,
     challenger: _SearchNode,
     reward_margin: float,
+    tie_policy: SearchTiePolicy,
 ) -> bool:
     if incumbent.cumulative_reward > challenger.cumulative_reward + reward_margin:
         return True
     if challenger.cumulative_reward > incumbent.cumulative_reward + reward_margin:
         return False
-    return _tie_sort_key(incumbent) <= _tie_sort_key(challenger)
+    return _tie_sort_key(incumbent, tie_policy) <= _tie_sort_key(
+        challenger,
+        tie_policy,
+    )
 
 
-def _tie_sort_key(node: _SearchNode) -> tuple[int, tuple[str, ...]]:
-    return (len(node.action_ids), node.action_ids)
+def _tie_sort_key(
+    node: _SearchNode,
+    tie_policy: SearchTiePolicy,
+) -> tuple[int, int, tuple[str, ...]]:
+    endpoint_rank = 0 if tie_policy == "endpoint" and not node.active() else 1
+    return (endpoint_rank, len(node.action_ids), node.action_ids)
 
 
 def _validate_reward_margin(reward_margin: float) -> None:
     if reward_margin < 0:
         raise ValueError("reward_margin must be zero or greater.")
+
+
+def _validate_tie_policy(tie_policy: SearchTiePolicy) -> None:
+    if tie_policy not in ("shorter", "endpoint"):
+        raise ValueError(f"Unknown search tie policy: {tie_policy}.")
 
 
 def _result(
@@ -341,6 +388,7 @@ def _result(
     beam_width: int | None = None,
     max_nodes: int | None = None,
     reward_margin: float = 0.0,
+    tie_policy: SearchTiePolicy = "shorter",
 ) -> SearchResult:
     cumulative = 0.0
     steps = []
@@ -415,4 +463,5 @@ def _result(
         beam_width=beam_width,
         max_nodes=max_nodes,
         reward_margin=reward_margin,
+        tie_policy=tie_policy,
     )

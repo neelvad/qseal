@@ -133,6 +133,48 @@ def test_greedy_requires_improvement_beyond_reward_margin() -> None:
     assert result.reward_margin == 0.05
 
 
+def test_greedy_endpoint_policy_accepts_terminal_ties_within_margin() -> None:
+    result = greedy_search(
+        _task(),
+        _factory(
+            {
+                (INITIAL_SQL, EMAIL_REMOVED_SQL): 2.0,
+                (INITIAL_SQL, DISPLAY_NAME_REMOVED_SQL): 1.0,
+                (EMAIL_REMOVED_SQL, FINAL_SQL): 1.02,
+            }
+        ),
+        reward_margin=0.05,
+        tie_policy="endpoint",
+    )
+
+    assert result.action_ids == (
+        "remove_redundant_not_null_filter::predicate:0",
+        "remove_redundant_not_null_filter::predicate:0",
+    )
+    assert result.final_sql == FINAL_SQL
+    assert result.stopped_early is False
+    assert result.tie_policy == "endpoint"
+
+
+def test_greedy_endpoint_policy_rejects_materially_worse_endpoint() -> None:
+    result = greedy_search(
+        _task(),
+        _factory(
+            {
+                (INITIAL_SQL, EMAIL_REMOVED_SQL): 2.0,
+                (INITIAL_SQL, DISPLAY_NAME_REMOVED_SQL): 1.0,
+                (EMAIL_REMOVED_SQL, FINAL_SQL): 0.90,
+            }
+        ),
+        reward_margin=0.05,
+        tie_policy="endpoint",
+    )
+
+    assert result.action_ids == ("remove_redundant_not_null_filter::predicate:0",)
+    assert result.final_sql == EMAIL_REMOVED_SQL
+    assert result.stopped_early is True
+
+
 def test_beam_search_finds_best_complete_path() -> None:
     result = beam_search(_task(), _factory(), beam_width=2)
 
@@ -176,6 +218,31 @@ def test_search_prefers_shorter_path_within_reward_margin(search) -> None:
     assert result.reward_margin == 0.05
 
 
+@pytest.mark.parametrize("search", [beam_search, exhaustive_search])
+def test_endpoint_policy_prefers_complete_path_within_reward_margin(search) -> None:
+    kwargs = {"beam_width": 2} if search is beam_search else {"max_nodes": 20}
+    result = search(
+        _task(max_steps=1),
+        _factory(
+            {
+                (INITIAL_SQL, EMAIL_REMOVED_SQL): 1.02,
+                (INITIAL_SQL, DISPLAY_NAME_REMOVED_SQL): 1.03,
+            }
+        ),
+        reward_margin=0.05,
+        tie_policy="endpoint",
+        **kwargs,
+    )
+
+    assert result.action_ids in (
+        ("remove_redundant_not_null_filter::predicate:0",),
+        ("remove_redundant_not_null_filter::predicate:1",),
+    )
+    assert result.final_sql in (EMAIL_REMOVED_SQL, DISPLAY_NAME_REMOVED_SQL)
+    assert result.reward_margin == 0.05
+    assert result.tie_policy == "endpoint"
+
+
 def test_exhaustive_search_reports_node_limit() -> None:
     result = exhaustive_search(_task(), _factory(), max_nodes=1)
 
@@ -189,6 +256,7 @@ def test_exhaustive_search_reports_node_limit() -> None:
         (beam_search, {"beam_width": 0}, "beam_width"),
         (exhaustive_search, {"max_nodes": 0}, "max_nodes"),
         (greedy_search, {"reward_margin": -0.1}, "reward_margin"),
+        (greedy_search, {"tie_policy": "unknown"}, "tie policy"),
     ],
 )
 def test_search_rejects_invalid_limits(search, kwargs, message: str) -> None:

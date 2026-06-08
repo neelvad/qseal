@@ -90,6 +90,12 @@ than direct transition timings. Current experiments support keeping transition
 rewards as the default and using at least 20 ms batches for state-reward
 analysis.
 
+State-reward corpus runs use endpoint-aware search ties. When a completed path
+and an active partial path are within `--reward-margin`, search prefers the
+completed endpoint. This avoids unstable stopping decisions on near-neutral
+final rewrites without accepting an endpoint that is materially worse than the
+partial path.
+
 For repeated independent measurements and an automatic stability aggregate:
 
 ```bash
