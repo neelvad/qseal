@@ -111,6 +111,9 @@ uv run snowprove corpus repeat snowprove-runs/corpus-repeat \
   --warmups 2 \
   --repetitions 5
 
+uv run snowprove corpus inspect-aggregate \
+  snowprove-runs/corpus-repeat/corpus-aggregate.json
+
 uv run snowprove corpus aggregate \
   snowprove-runs/run-1/corpus-run.json \
   snowprove-runs/run-2/corpus-run.json

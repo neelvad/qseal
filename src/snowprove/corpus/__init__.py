@@ -6,6 +6,11 @@ from snowprove.corpus.aggregate import (
     render_corpus_aggregate,
     write_corpus_aggregate,
 )
+from snowprove.corpus.inspect import (
+    CorpusAggregateInspection,
+    inspect_corpus_aggregate,
+    render_corpus_aggregate_inspection,
+)
 from snowprove.corpus.loader import load_task_corpus
 from snowprove.corpus.materialize import materialize_corpus_fixtures
 from snowprove.corpus.model import (
@@ -42,6 +47,7 @@ __all__ = [
     "AggregateStrategySummary",
     "AggregateTaskSummary",
     "CorpusFixture",
+    "CorpusAggregateInspection",
     "CorpusManifest",
     "CorpusRunConfig",
     "CorpusRunAggregate",
@@ -61,12 +67,14 @@ __all__ = [
     "TaskSummary",
     "aggregate_corpus_runs",
     "load_corpus_run_report",
+    "inspect_corpus_aggregate",
     "load_task_corpus",
     "materialize_corpus_fixtures",
     "run_task_corpus",
     "run_repeated_task_corpus",
     "render_corpus_summary",
     "render_corpus_aggregate",
+    "render_corpus_aggregate_inspection",
     "summarize_corpus_run",
     "write_corpus_summary",
     "write_corpus_aggregate",

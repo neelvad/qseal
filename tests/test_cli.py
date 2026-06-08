@@ -192,6 +192,16 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
         ]
         is False
     )
+    assert (
+        report["tasks"][0]["results"][0]["search_result"]["steps"][0][
+            "original_median_ms"
+        ]
+        is not None
+    )
+    assert (
+        report["tasks"][0]["results"][0]["search_result"]["steps"][0]["speedup"]
+        is not None
+    )
     assert report["strategy_summaries"][0]["low_confidence_steps"] == 1
     assert report["strategy_summaries"][0]["strategy"] == "fixed_order"
     assert (output_dir / "fixtures" / "standard-small.duckdb").is_file()
@@ -255,6 +265,30 @@ def test_corpus_repeat_cli_runs_independent_measurements_and_aggregates(
         report["strategy_summaries"][0]["benchmark_cache_misses"] == 1
         for report in reports
     )
+
+    inspected = CliRunner().invoke(
+        main,
+        [
+            "corpus",
+            "inspect-aggregate",
+            str(aggregate_path),
+            "--task",
+            "redundant-distinct-users",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert inspected.exit_code == 0, inspected.output
+    inspection = json.loads(inspected.output)
+    assert inspection["artifact_type"] == "corpus_aggregate_inspection"
+    assert inspection["task_count"] == 1
+    assert len(inspection["tasks"][0]["runs"]) == 2
+    step = inspection["tasks"][0]["runs"][0]["strategies"][0]["steps"][0]
+    assert step["original_median_ms"] is not None
+    assert step["rewritten_median_ms"] is not None
+    assert step["original_executions_per_sample"] >= 1
+    assert step["timing_confident"] is True
 
     repeated = CliRunner().invoke(
         main,

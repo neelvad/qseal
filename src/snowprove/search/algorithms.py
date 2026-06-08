@@ -367,6 +367,31 @@ def _result(
                     if transition.benchmark is not None
                     else None
                 ),
+                original_median_ms=(
+                    transition.benchmark.original.median_ms
+                    if transition.benchmark is not None
+                    else None
+                ),
+                rewritten_median_ms=(
+                    transition.benchmark.rewritten.median_ms
+                    if transition.benchmark is not None
+                    else None
+                ),
+                original_executions_per_sample=(
+                    transition.benchmark.original.executions_per_sample
+                    if transition.benchmark is not None
+                    else None
+                ),
+                rewritten_executions_per_sample=(
+                    transition.benchmark.rewritten.executions_per_sample
+                    if transition.benchmark is not None
+                    else None
+                ),
+                speedup=(
+                    transition.benchmark.speedup
+                    if transition.benchmark is not None
+                    else None
+                ),
                 terminated=transition.terminated,
                 truncated=transition.truncated,
             )

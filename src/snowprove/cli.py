@@ -10,9 +10,11 @@ from snowprove.corpora import bundled_corpus_path
 from snowprove.corpus import (
     CorpusRunConfig,
     aggregate_corpus_runs,
+    inspect_corpus_aggregate,
     load_corpus_run_report,
     load_task_corpus,
     render_corpus_aggregate,
+    render_corpus_aggregate_inspection,
     render_corpus_summary,
     run_repeated_task_corpus,
     run_task_corpus,
@@ -460,6 +462,43 @@ def corpus_aggregate(
     if aggregate_file is not None:
         write_corpus_aggregate(aggregate, aggregate_file)
         click.echo(f"Aggregate file written: {aggregate_file}", err=True)
+
+
+@corpus_group.command(name="inspect-aggregate")
+@click.argument(
+    "aggregate_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--task",
+    "task_id",
+    help="Inspect one task ID. Defaults to every unstable task.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+)
+def corpus_inspect_aggregate(
+    aggregate_path: Path,
+    task_id: str | None,
+    output_format: str,
+) -> None:
+    """Inspect task paths and timings across an aggregate's source runs."""
+    try:
+        inspection = inspect_corpus_aggregate(
+            aggregate_path,
+            task_id=task_id,
+        )
+    except ValueError as error:
+        raise click.ClickException(str(error)) from error
+
+    if output_format == "json":
+        click.echo(inspection.model_dump_json(indent=2))
+    else:
+        click.echo(render_corpus_aggregate_inspection(inspection))
 
 
 @fixtures_group.command(name="create")

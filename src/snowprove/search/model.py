@@ -16,6 +16,11 @@ class SearchStep(BaseModel):
     verification_status: VerificationStatus
     timing_confident: bool | None = None
     confidence_reason: str | None = None
+    original_median_ms: float | None = None
+    rewritten_median_ms: float | None = None
+    original_executions_per_sample: int | None = None
+    rewritten_executions_per_sample: int | None = None
+    speedup: float | None = None
     terminated: bool
     truncated: bool
 

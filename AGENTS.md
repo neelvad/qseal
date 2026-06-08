@@ -349,11 +349,19 @@ Completed:
     changes, 4 to 1 reward-class changes, 8 to 2 path changes, and 9 to 3
     unstable tasks. Strategy reward standard deviation fell to roughly
     0.001-0.002.
+17. `snowprove corpus inspect-aggregate` drills into unstable tasks across
+    source runs, including paths, rewards, medians, speedups, batch sizes, and
+    timing confidence.
+18. A targeted five-run, 20 ms experiment stabilized left-join elimination as
+    positive and predicate pushdown as neutral. The remaining multi-action
+    instability comes from independently benchmarked transition rewards making
+    cumulative reward path-dependent.
 
 Next:
 
-1. Investigate the three remaining unstable tasks and decide whether they need
-   longer batches, a larger reward margin, or explicit neutral labels.
+1. Replace transition-relative performance rewards with cached absolute
+   SQL-state runtimes so paths reaching the same final SQL receive comparable
+   cumulative rewards.
 2. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.
 3. Add a small learned action-ranking policy only after baseline measurements

@@ -82,6 +82,22 @@ content-addressed benchmark cache, then writes `corpus-aggregate.json`.
 Existing reports are never overwritten because reusing their caches would
 invalidate measurement independence.
 
+Inspect unstable tasks and their per-run timing paths with:
+
+```bash
+uv run snowprove corpus inspect-aggregate \
+  snowprove-runs/corpus-repeat/corpus-aggregate.json
+
+uv run snowprove corpus inspect-aggregate \
+  snowprove-runs/corpus-repeat/corpus-aggregate.json \
+  --task distinct-not-null-users-standard-compact
+```
+
+The drilldown includes strategy paths, cumulative and step rewards, median
+latencies, speedups, executions per timing batch, and confidence. New run
+reports store these fields directly on each search step; the inspector also
+supports older reports by resolving their retained benchmark caches.
+
 The manifest separates named DuckDB fixture profiles from task definitions.
 Multiple tasks can therefore share one generated database.
 

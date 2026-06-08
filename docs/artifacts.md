@@ -57,6 +57,10 @@ The evaluator materializes every result and alternates original/rewritten
 execution order. Row-count equality is not semantic equivalence; benchmark only
 after a verifier has approved the pair.
 
+Corpus search steps copy the benchmark medians, speedup, batch sizes, and
+confidence into the run report so aggregate inspection does not depend on
+external cache files for newly generated reports.
+
 ## `verification`
 
 Emitted by:
