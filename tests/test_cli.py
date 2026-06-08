@@ -166,6 +166,8 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
             "fixed_order",
             "--reward-margin",
             "0.05",
+            "--minimum-duration-ms",
+            "10000",
             "--warmups",
             "0",
             "--repetitions",
@@ -182,7 +184,15 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert report["tasks"][0]["task_id"] == "redundant-distinct-users"
     assert report["tasks"][0]["results"][0]["status"] == "COMPLETED"
     assert report["config"]["reward_margin"] == 0.05
+    assert report["config"]["minimum_duration_ms"] == 10000
     assert report["tasks"][0]["results"][0]["search_result"]["reward_margin"] == 0.05
+    assert (
+        report["tasks"][0]["results"][0]["search_result"]["steps"][0][
+            "timing_confident"
+        ]
+        is False
+    )
+    assert report["strategy_summaries"][0]["low_confidence_steps"] == 1
     assert report["strategy_summaries"][0]["strategy"] == "fixed_order"
     assert (output_dir / "fixtures" / "standard-small.duckdb").is_file()
     assert not (output_dir / "fixtures" / "low-skew-small.duckdb").exists()

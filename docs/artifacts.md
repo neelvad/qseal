@@ -45,9 +45,12 @@ Important fields:
 - `status`: `COMPLETED`, `ERROR`, or `TIMEOUT`
 - `environment`: DuckDB, Python, platform, database, thread, warmup,
   repetition, and timeout metadata
-- `original` and `rewritten`: every timing sample, median, median absolute
-  deviation, range, row count, and `EXPLAIN` output
+- `original` and `rewritten`: per-execution and batch timing samples,
+  executions per sample, median, median absolute deviation, range, row count,
+  and `EXPLAIN` output
 - `speedup`: original median divided by rewritten median
+- `timing_confident`: whether the benchmark should be used as a reward signal
+- `confidence_reason`: why a completed benchmark was marked low confidence
 - `row_counts_match`: diagnostic cardinality comparison
 
 The evaluator materializes every result and alternates original/rewritten

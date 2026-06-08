@@ -357,6 +357,16 @@ def _result(
                 reward=transition.reward,
                 cumulative_reward=cumulative,
                 verification_status=transition.verification.status,
+                timing_confident=(
+                    transition.benchmark.timing_confident
+                    if transition.benchmark is not None
+                    else None
+                ),
+                confidence_reason=(
+                    transition.benchmark.confidence_reason
+                    if transition.benchmark is not None
+                    else None
+                ),
                 terminated=transition.terminated,
                 truncated=transition.truncated,
             )

@@ -341,11 +341,19 @@ Completed:
 14. The first three-run 53-task measurement completed cleanly with 4 winner
     changes, 4 reward-class changes, and 8 path changes; 9 tasks were unstable,
     mostly compact-fixture or multi-action cases.
+15. DuckDB benchmarks calibrate repeated executions toward 5 ms timing batches
+    by default, record batch metadata and timing confidence, and
+    neutralize rewards only when the batching safety cap cannot reach the
+    target duration.
+16. A three-run batched measurement reduced instability from 4 to 1 winner
+    changes, 4 to 1 reward-class changes, 8 to 2 path changes, and 9 to 3
+    unstable tasks. Strategy reward standard deviation fell to roughly
+    0.001-0.002.
 
 Next:
 
-1. Investigate compact-fixture and multi-action instability identified by the
-   first three-run 53-task aggregate.
+1. Investigate the three remaining unstable tasks and decide whether they need
+   longer batches, a larger reward margin, or explicit neutral labels.
 2. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.
 3. Add a small learned action-ranking policy only after baseline measurements

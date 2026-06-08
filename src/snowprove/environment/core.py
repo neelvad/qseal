@@ -50,6 +50,7 @@ class DuckDbPerformanceEvaluator:
         timeout_seconds: float = 30.0,
         threads: int = 1,
         fixture_fingerprint: str | None = None,
+        minimum_duration_ms: float = 0.0,
     ) -> None:
         self.database_path = database_path
         self.setup_sql = setup_sql
@@ -58,6 +59,7 @@ class DuckDbPerformanceEvaluator:
         self.timeout_seconds = timeout_seconds
         self.threads = threads
         self.fixture_fingerprint = fixture_fingerprint
+        self.minimum_duration_ms = minimum_duration_ms
 
     def evaluate(self, original_sql: str, rewritten_sql: str) -> BenchmarkResult:
         return benchmark_query_pair(
@@ -69,6 +71,7 @@ class DuckDbPerformanceEvaluator:
             repetitions=self.repetitions,
             timeout_seconds=self.timeout_seconds,
             threads=self.threads,
+            minimum_duration_ms=self.minimum_duration_ms,
         )
 
     def cache_context(self) -> dict[str, Any]:
@@ -85,6 +88,7 @@ class DuckDbPerformanceEvaluator:
             "repetitions": self.repetitions,
             "timeout_seconds": self.timeout_seconds,
             "threads": self.threads,
+            "minimum_duration_ms": self.minimum_duration_ms,
         }
 
 
@@ -258,6 +262,7 @@ def _performance_reward(benchmark: BenchmarkResult | None) -> float:
         or benchmark.status != BenchmarkStatus.COMPLETED
         or benchmark.speedup is None
         or benchmark.speedup <= 0
+        or not benchmark.timing_confident
     ):
         return 0.0
     return math.log(benchmark.speedup)

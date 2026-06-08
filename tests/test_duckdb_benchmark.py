@@ -29,6 +29,8 @@ def test_benchmarks_query_pair_reproducibly() -> None:
     assert result.environment.repetitions == 3
     assert len(result.original.timings_ms) == 3
     assert len(result.rewritten.timings_ms) == 3
+    assert len(result.original.batch_timings_ms) == 3
+    assert len(result.rewritten.batch_timings_ms) == 3
     assert result.original.median_ms is not None
     assert result.rewritten.median_ms is not None
     assert result.original.row_count == 100
@@ -52,6 +54,43 @@ def test_reports_duckdb_query_errors() -> None:
     assert result.row_counts_match is None
 
 
+def test_batches_fast_queries_to_reach_minimum_sample_duration() -> None:
+    result = benchmark_query_pair(
+        "SELECT DISTINCT user_id FROM users",
+        "SELECT user_id FROM users",
+        setup_sql=SETUP_SQL,
+        warmups=0,
+        repetitions=1,
+        minimum_duration_ms=5,
+    )
+
+    assert result.status == BenchmarkStatus.COMPLETED
+    assert result.speedup is not None
+    assert result.timing_confident is True
+    assert result.environment.minimum_duration_ms == 5
+    assert result.original.executions_per_sample > 1
+    assert result.rewritten.executions_per_sample > 1
+    assert result.original.batch_timings_ms
+    assert result.rewritten.batch_timings_ms
+
+
+def test_marks_timing_low_confidence_when_batch_cap_cannot_reach_target() -> None:
+    result = benchmark_query_pair(
+        "SELECT 1",
+        "SELECT 1",
+        warmups=0,
+        repetitions=1,
+        minimum_duration_ms=10_000,
+    )
+
+    assert result.status == BenchmarkStatus.COMPLETED
+    assert result.speedup is not None
+    assert result.timing_confident is False
+    assert result.original.executions_per_sample == 1000
+    assert result.rewritten.executions_per_sample == 1000
+    assert "safety cap" in str(result.confidence_reason)
+
+
 def test_interrupts_queries_that_exceed_timeout() -> None:
     result = benchmark_query_pair(
         "SELECT sum(a.i * b.i) FROM range(1000000) a(i), range(1000000) b(i)",
@@ -72,6 +111,7 @@ def test_interrupts_queries_that_exceed_timeout() -> None:
         ({"repetitions": 0}, "repetitions"),
         ({"timeout_seconds": 0}, "timeout_seconds"),
         ({"threads": 0}, "threads"),
+        ({"minimum_duration_ms": -1}, "minimum_duration_ms"),
     ],
 )
 def test_rejects_invalid_benchmark_settings(kwargs, message: str) -> None:

@@ -17,10 +17,15 @@ def render_duckdb_benchmark_report(result: BenchmarkResult) -> Text:
     output.append(
         f"Original median: {result.original.median_ms:.3f} ms\n"
         f"Rewritten median: {result.rewritten.median_ms:.3f} ms\n"
+        f"Executions/sample: {result.original.executions_per_sample} / "
+        f"{result.rewritten.executions_per_sample}\n"
         f"Speedup: {result.speedup:.3f}x\n"
         f"Rows: {result.original.row_count} / {result.rewritten.row_count}\n"
         f"Row counts match: {result.row_counts_match}\n"
+        f"Timing confident: {result.timing_confident}\n"
     )
+    if result.confidence_reason is not None:
+        output.append(f"Confidence: {result.confidence_reason}\n")
     return output
 
 

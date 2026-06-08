@@ -130,6 +130,19 @@ def test_step_uses_log_speedup_reward() -> None:
     ]
 
 
+def test_step_neutralizes_low_confidence_speedup() -> None:
+    evaluator = _FixedPerformanceEvaluator(speedup=2.0, timing_confident=False)
+    environment = RewriteEnvironment(performance_evaluator=evaluator)
+    observation = environment.reset(_task())
+
+    transition = environment.step(observation.actions[0].action_id)
+
+    assert transition.benchmark is not None
+    assert transition.benchmark.speedup == 2.0
+    assert transition.benchmark.timing_confident is False
+    assert transition.reward == 0.0
+
+
 def test_environment_requires_reset_and_available_action() -> None:
     environment = RewriteEnvironment()
 
@@ -185,8 +198,9 @@ class _RejectingVerifier:
 
 
 class _FixedPerformanceEvaluator:
-    def __init__(self, speedup: float) -> None:
+    def __init__(self, speedup: float, *, timing_confident: bool = True) -> None:
         self.speedup = speedup
+        self.timing_confident = timing_confident
         self.calls: list[tuple[str, str]] = []
 
     def evaluate(self, original_sql: str, rewritten_sql: str) -> BenchmarkResult:
@@ -220,4 +234,8 @@ class _FixedPerformanceEvaluator:
             environment=environment,
             speedup=self.speedup,
             row_counts_match=True,
+            timing_confident=self.timing_confident,
+            confidence_reason=(
+                None if self.timing_confident else "Synthetic timing below duration floor."
+            ),
         )

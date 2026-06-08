@@ -15,6 +15,8 @@ class QueryBenchmark(BaseModel):
     status: BenchmarkStatus
     sql: str
     timings_ms: tuple[float, ...] = Field(default_factory=tuple)
+    batch_timings_ms: tuple[float, ...] = Field(default_factory=tuple)
+    executions_per_sample: int = Field(default=1, ge=1)
     median_ms: float | None = None
     median_absolute_deviation_ms: float | None = None
     min_ms: float | None = None
@@ -35,6 +37,7 @@ class BenchmarkEnvironment(BaseModel):
     warmups: int
     repetitions: int
     timeout_seconds: float
+    minimum_duration_ms: float = 0.0
 
 
 class BenchmarkResult(BaseModel):
@@ -46,5 +49,7 @@ class BenchmarkResult(BaseModel):
     environment: BenchmarkEnvironment
     speedup: float | None = None
     row_counts_match: bool | None = None
+    timing_confident: bool = True
+    confidence_reason: str | None = None
     reason: str | None = None
     inputs: dict[str, str] = Field(default_factory=dict)

@@ -66,6 +66,7 @@ class CorpusRunConfig(BaseModel):
     repetitions: int = Field(default=3, ge=1)
     timeout_seconds: float = Field(default=30.0, gt=0)
     threads: int = Field(default=1, ge=1)
+    minimum_duration_ms: float = Field(default=5.0, ge=0)
 
     @model_validator(mode="after")
     def validate_unique_values(self) -> CorpusRunConfig:
@@ -128,6 +129,7 @@ class StrategyRunSummary(BaseModel):
     benchmark_requests: int = 0
     verification_cache_misses: int
     benchmark_cache_misses: int
+    low_confidence_steps: int = 0
     total_elapsed_seconds: float
 
 
@@ -416,6 +418,7 @@ def _duckdb_evaluator(config: CorpusRunConfig) -> PerformanceEvaluatorFactory:
             timeout_seconds=config.timeout_seconds,
             threads=config.threads,
             fixture_fingerprint=fixture_fingerprint,
+            minimum_duration_ms=config.minimum_duration_ms,
         )
 
     return create
@@ -493,6 +496,12 @@ def _summarize_strategies(
                 ),
                 benchmark_requests=sum(
                     result.benchmark_calls.requests for result in runs
+                ),
+                low_confidence_steps=sum(
+                    step.timing_confident is False
+                    for result in completed
+                    if result.search_result is not None
+                    for step in result.search_result.steps
                 ),
                 total_elapsed_seconds=sum(result.elapsed_seconds for result in runs),
             )

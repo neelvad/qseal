@@ -14,6 +14,8 @@ class SearchStep(BaseModel):
     reward: float
     cumulative_reward: float
     verification_status: VerificationStatus
+    timing_confident: bool | None = None
+    confidence_reason: str | None = None
     terminated: bool
     truncated: bool
 

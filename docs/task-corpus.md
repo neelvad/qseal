@@ -33,9 +33,10 @@ uv run snowprove corpus run snowprove-runs/corpus-smoke \
 ```
 
 Useful controls include `--random-seed`, `--beam-width`, `--max-nodes`,
-`--reward-margin`, `--threads`, `--timeout`, `--manifest`, and `--report-file`.
-Fixture databases and content-addressed oracle caches are retained under the
-output directory, so repeated runs reuse both.
+`--reward-margin`, `--minimum-duration-ms`, `--threads`, `--timeout`,
+`--manifest`, and `--report-file`. Fixture databases and content-addressed
+oracle caches are retained under the output directory, so repeated runs reuse
+both.
 
 Use `--reward-margin` to require a meaningful cumulative improvement before
 greedy, beam, or exhaustive search prefers a longer path:
@@ -50,12 +51,28 @@ uv run snowprove corpus run snowprove-runs/corpus-margin \
 The measured rewards remain unchanged in artifacts. The margin only changes
 search selection. Fixed-order and random remain forced-rollout baselines.
 
+Use `--minimum-duration-ms` to amortize timer and scheduler noise for fast
+queries:
+
+```bash
+uv run snowprove corpus run snowprove-runs/corpus-confidence \
+  --minimum-duration-ms 5.0 \
+  --reward-margin 0.05
+```
+
+Snowprove calibrates each query independently, repeats it enough times to reach
+the target duration, and divides the batch time back into a per-execution
+latency. Artifacts record both batch timings and executions per sample. A
+transition receives zero reward only if the batching safety cap still cannot
+reach the requested duration.
+
 For repeated independent measurements and an automatic stability aggregate:
 
 ```bash
 uv run snowprove corpus repeat snowprove-runs/corpus-repeat \
   --runs 3 \
   --reward-margin 0.05 \
+  --minimum-duration-ms 5.0 \
   --warmups 2 \
   --repetitions 5
 ```

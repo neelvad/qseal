@@ -107,6 +107,7 @@ uv run snowprove corpus summarize snowprove-runs/corpus/corpus-run.json
 uv run snowprove corpus repeat snowprove-runs/corpus-repeat \
   --runs 3 \
   --reward-margin 0.05 \
+  --minimum-duration-ms 5.0 \
   --warmups 2 \
   --repetitions 5
 

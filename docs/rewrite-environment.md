@@ -51,7 +51,11 @@ reward = log(current_median / next_median)
 ```
 
 This is positive for speedups, negative for regressions, and additive across a
-rewrite sequence. Proven transitions without performance data receive zero.
+rewrite sequence. Fast queries are measured in calibrated execution batches to
+amortize timer noise. Low-confidence benchmark results receive zero reward if
+the batching safety cap cannot reach the configured sample duration. Raw
+timings and speedup remain in the benchmark artifact. Proven transitions
+without performance data also receive zero.
 `NOT_EQUIVALENT` receives `-1`; other unproven results receive `-0.25` and
 terminate the episode without advancing state.
 

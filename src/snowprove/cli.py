@@ -140,6 +140,13 @@ def corpus_group() -> None:
 )
 @click.option("--threads", type=click.IntRange(min=1), default=1, show_default=True)
 @click.option(
+    "--minimum-duration-ms",
+    type=click.FloatRange(min=0),
+    default=5.0,
+    show_default=True,
+    help="Minimum duration for each timed execution batch.",
+)
+@click.option(
     "--report-file",
     type=click.Path(dir_okay=False, path_type=Path),
     help="JSON report path. Defaults to OUTPUT_DIR/corpus-run.json.",
@@ -164,6 +171,7 @@ def corpus_run(
     repetitions: int,
     timeout_seconds: float,
     threads: int,
+    minimum_duration_ms: float,
     report_file: Path | None,
     output_format: str,
 ) -> None:
@@ -180,6 +188,7 @@ def corpus_run(
         "repetitions": repetitions,
         "timeout_seconds": timeout_seconds,
         "threads": threads,
+        "minimum_duration_ms": minimum_duration_ms,
     }
     if strategies:
         config_values["strategies"] = strategies
@@ -213,6 +222,7 @@ def corpus_run(
                 f"{summary.verification_requests} verifier requests, "
                 f"{summary.benchmark_requests} benchmark requests, "
                 f"{summary.benchmark_cache_misses} new benchmarks, "
+                f"{summary.low_confidence_steps} low-confidence steps, "
                 f"{summary.total_elapsed_seconds:.3f}s"
             )
     click.echo(f"Report file written: {report_file}", err=True)
@@ -270,6 +280,13 @@ def corpus_run(
 )
 @click.option("--threads", type=click.IntRange(min=1), default=1, show_default=True)
 @click.option(
+    "--minimum-duration-ms",
+    type=click.FloatRange(min=0),
+    default=5.0,
+    show_default=True,
+    help="Minimum duration for each timed execution batch.",
+)
+@click.option(
     "--neutral-threshold",
     type=click.FloatRange(min=0),
     default=0.01,
@@ -297,6 +314,7 @@ def corpus_repeat(
     repetitions: int,
     timeout_seconds: float,
     threads: int,
+    minimum_duration_ms: float,
     neutral_threshold: float,
     output_format: str,
 ) -> None:
@@ -312,6 +330,7 @@ def corpus_repeat(
         "repetitions": repetitions,
         "timeout_seconds": timeout_seconds,
         "threads": threads,
+        "minimum_duration_ms": minimum_duration_ms,
     }
     if strategies:
         config_values["strategies"] = strategies
@@ -594,6 +613,13 @@ def fixtures_create(
     help="DuckDB worker threads.",
 )
 @click.option(
+    "--minimum-duration-ms",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Minimum duration for each timed execution batch.",
+)
+@click.option(
     "--format",
     "output_format",
     type=OutputFormat,
@@ -615,6 +641,7 @@ def benchmark(
     repetitions: int,
     timeout_seconds: float,
     threads: int,
+    minimum_duration_ms: float,
     output_format: str,
     report_file: Path | None,
 ) -> None:
@@ -628,6 +655,7 @@ def benchmark(
         repetitions=repetitions,
         timeout_seconds=timeout_seconds,
         threads=threads,
+        minimum_duration_ms=minimum_duration_ms,
     ).model_copy(
         update={
             "inputs": {
