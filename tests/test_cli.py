@@ -208,6 +208,41 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert (output_dir / "fixtures" / "standard-small.duckdb").is_file()
     assert not (output_dir / "fixtures" / "low-skew-small.duckdb").exists()
 
+    trajectories_path = tmp_path / "trajectories.jsonl"
+    exported = CliRunner().invoke(
+        main,
+        [
+            "corpus",
+            "export-trajectories",
+            str(report_path),
+            "--manifest",
+            str(manifest_path),
+            "--output",
+            str(trajectories_path),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert exported.exit_code == 0, exported.output
+    export = json.loads(exported.output)
+    assert export["artifact_type"] == "corpus_trajectory_export"
+    assert export["record_count"] == 1
+    assert export["task_oracle_count"] == 1
+    records = [
+        json.loads(line)
+        for line in trajectories_path.read_text().splitlines()
+        if line.strip()
+    ]
+    assert len(records) == 1
+    assert records[0]["artifact_type"] == "corpus_trajectory_step"
+    assert records[0]["task_id"] == "redundant-distinct-users"
+    assert records[0]["available_action_ids"] == ["remove_redundant_distinct::query:distinct"]
+    assert records[0]["state_oracle_best_action_id"] == records[0]["action_id"]
+    assert records[0]["is_state_oracle_best_action"] is True
+    assert records[0]["task_oracle_strategy"] == "fixed_order"
+    assert records[0]["is_task_oracle_step"] is True
+
 
 def test_corpus_repeat_cli_runs_independent_measurements_and_aggregates(
     tmp_path,

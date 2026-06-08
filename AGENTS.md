@@ -391,12 +391,18 @@ Completed:
     changes, 3 uncertain tasks, and 1 path change. It used roughly twice the
     benchmark requests, so transition remains the default and state remains an
     experimental comparison mode.
+27. `snowprove corpus export-trajectories REPORT.json --output
+    trajectories.jsonl` exports completed corpus search paths as JSONL rows.
+    Rows include current SQL, available action IDs, chosen action, proposed and
+    next SQL, rewards, verifier/timing fields, state-level oracle-best labels
+    from observed suffix returns, and task-level oracle path labels.
 
 Next:
 
-1. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
+1. Use trajectory exports to build a simple supervised action-ranking baseline.
+2. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.
-2. Add a small learned action-ranking policy only after baseline measurements
+3. Add a small learned action-ranking policy only after baseline measurements
    are reproducible.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least

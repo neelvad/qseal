@@ -42,6 +42,13 @@ from snowprove.corpus.summary import (
     summarize_corpus_run,
     write_corpus_summary,
 )
+from snowprove.corpus.trajectories import (
+    CorpusTrajectoryExport,
+    CorpusTrajectoryRecord,
+    export_corpus_trajectories,
+    load_corpus_trajectory_records,
+    render_corpus_trajectory_export,
+)
 
 __all__ = [
     "AggregateStrategySummary",
@@ -57,6 +64,8 @@ __all__ = [
     "CorpusTaskDefinition",
     "CorpusTaskFamily",
     "CorpusTaskVariant",
+    "CorpusTrajectoryExport",
+    "CorpusTrajectoryRecord",
     "LoadedCorpusTask",
     "LoadedTaskCorpus",
     "OracleCallMetrics",
@@ -66,7 +75,9 @@ __all__ = [
     "RankedStrategySummary",
     "TaskSummary",
     "aggregate_corpus_runs",
+    "export_corpus_trajectories",
     "load_corpus_run_report",
+    "load_corpus_trajectory_records",
     "inspect_corpus_aggregate",
     "load_task_corpus",
     "materialize_corpus_fixtures",
@@ -75,6 +86,7 @@ __all__ = [
     "render_corpus_summary",
     "render_corpus_aggregate",
     "render_corpus_aggregate_inspection",
+    "render_corpus_trajectory_export",
     "summarize_corpus_run",
     "write_corpus_summary",
     "write_corpus_aggregate",

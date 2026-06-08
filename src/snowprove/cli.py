@@ -10,12 +10,14 @@ from snowprove.corpora import bundled_corpus_path
 from snowprove.corpus import (
     CorpusRunConfig,
     aggregate_corpus_runs,
+    export_corpus_trajectories,
     inspect_corpus_aggregate,
     load_corpus_run_report,
     load_task_corpus,
     render_corpus_aggregate,
     render_corpus_aggregate_inspection,
     render_corpus_summary,
+    render_corpus_trajectory_export,
     run_repeated_task_corpus,
     run_task_corpus,
     summarize_corpus_run,
@@ -518,6 +520,55 @@ def corpus_inspect_aggregate(
         click.echo(inspection.model_dump_json(indent=2))
     else:
         click.echo(render_corpus_aggregate_inspection(inspection))
+
+
+@corpus_group.command(name="export-trajectories")
+@click.argument(
+    "report_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--manifest",
+    "manifest_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Corpus manifest. Defaults to the bundled duckdb-v1 corpus.",
+)
+@click.option(
+    "--output",
+    "output_path",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write JSONL trajectory records to this path.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+)
+def corpus_export_trajectories(
+    report_path: Path,
+    manifest_path: Path | None,
+    output_path: Path,
+    output_format: str,
+) -> None:
+    """Export search paths as labeled JSONL trajectory rows."""
+    manifest_path = manifest_path or bundled_corpus_path()
+    try:
+        export = export_corpus_trajectories(
+            load_corpus_run_report(report_path),
+            load_task_corpus(manifest_path),
+            output_path,
+            source_report=str(report_path),
+        )
+    except ValueError as error:
+        raise click.ClickException(str(error)) from error
+
+    if output_format == "json":
+        click.echo(export.model_dump_json(indent=2))
+    else:
+        click.echo(render_corpus_trajectory_export(export))
 
 
 @fixtures_group.command(name="create")

@@ -216,6 +216,26 @@ unique verifier and benchmark executions.
 A failed strategy is recorded without aborting the remaining report; the CLI
 exits nonzero after writing the artifact if any strategy failed.
 
+## Trajectory Export
+
+`snowprove corpus export-trajectories REPORT.json --output trajectories.jsonl`
+converts a completed corpus run into JSONL training/evaluation rows. Each row
+captures one chosen search step with the current SQL, available action IDs,
+chosen action, proposed and next SQL, reward, suffix reward, verifier status,
+timing confidence, and oracle labels.
+
+The exporter reconstructs available actions from the corpus manifest, so pass
+`--manifest` when exporting a report produced from a copied or edited corpus.
+Labels are intentionally conservative:
+
+- `state_oracle_best_action_id` is the best observed action from that SQL state
+  across completed strategy paths in the report, ranked by suffix reward.
+- `task_oracle_*` fields describe the best completed strategy path for the
+  task, ranked by cumulative reward and then shorter path length.
+
+This is suitable for supervised action-ranking baselines before introducing
+learned or LLM-based candidate generation.
+
 ## Summarizing Runs
 
 Use the summary command after a corpus run:
