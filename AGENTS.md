@@ -158,6 +158,8 @@ Task corpus:
 - run artifacts include paths, rewards, explored nodes, isolated cache metrics,
   elapsed time, failures, and aggregate strategy summaries
 - repeated runs reuse fixture databases and content-addressed oracle caches
+- `snowprove corpus summarize REPORT.json` ranks strategies and classifies task
+  rewards, path/reward disagreement, partial errors, and trivial cases
 
 dbt workflows:
 
@@ -321,13 +323,15 @@ Completed:
    concrete tasks with stable content fingerprints.
 9. A corpus runner compares all five search strategies and writes versioned
    JSON reports with per-run and aggregate oracle/performance metrics.
+10. A corpus summary command ranks strategies and highlights task disagreement,
+    errors, and trivial cases.
 
 Next:
 
-1. Expand the corpus from 25 foundation tasks toward 50-200 systematic task
-   variations.
-2. Run and inspect repeated baseline comparisons to calibrate benchmark noise,
+1. Run and inspect repeated baseline comparisons to calibrate benchmark noise,
    task difficulty, and useful reward thresholds.
+2. Expand the corpus from 25 foundation tasks toward 50-200 systematic task
+   variations based on observed gaps.
 3. Add a small learned action-ranking policy only after baseline measurements
    are reproducible.
 

@@ -100,6 +100,8 @@ uv run snowprove corpus run snowprove-runs/corpus \
   --task distinct-and-not-null \
   --strategy greedy \
   --strategy beam
+
+uv run snowprove corpus summarize snowprove-runs/corpus/corpus-run.json
 ```
 
 Useful options:

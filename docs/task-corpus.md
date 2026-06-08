@@ -108,6 +108,32 @@ low miss counts because another strategy ran first. A failed strategy is
 recorded without aborting the remaining report; the CLI exits nonzero after
 writing the artifact if any strategy failed.
 
+## Summarizing Runs
+
+Use the summary command after a corpus run:
+
+```bash
+uv run snowprove corpus summarize snowprove-runs/corpus/corpus-run.json
+```
+
+To persist a machine-readable summary:
+
+```bash
+uv run snowprove corpus summarize snowprove-runs/corpus/corpus-run.json \
+  --summary-file snowprove-runs/corpus/corpus-summary.json \
+  --format json
+```
+
+The summary ranks strategies by task wins and mean cumulative reward, then
+reports explored-node, verifier-call, benchmark-call, and elapsed-time costs.
+Each task is classified as positive, neutral, negative, or errored.
+
+Path disagreement means completed strategies selected different action
+sequences. Reward disagreement means the best and worst completed rewards
+differ by more than `--neutral-threshold`, which defaults to `0.01`. A task is
+marked trivial when every completed strategy selects the same path and rewards
+remain within that threshold.
+
 ## Adding Tasks
 
 Prefer adding variations systematically rather than copying arbitrary SQL.

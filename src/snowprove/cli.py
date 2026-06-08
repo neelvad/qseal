@@ -7,7 +7,15 @@ from snowprove.benchmark import BenchmarkStatus, benchmark_query_pair
 from snowprove.candidates.bundle import load_candidate_metadata
 from snowprove.constraints.loader import load_constraint_catalog
 from snowprove.corpora import bundled_corpus_path
-from snowprove.corpus import CorpusRunConfig, load_task_corpus, run_task_corpus
+from snowprove.corpus import (
+    CorpusRunConfig,
+    load_corpus_run_report,
+    load_task_corpus,
+    render_corpus_summary,
+    run_task_corpus,
+    summarize_corpus_run,
+    write_corpus_summary,
+)
 from snowprove.dbt.project import DbtProjectDiscoveryError, discover_compiled_sql_path
 from snowprove.dbt.scan import scan_dbt_project
 from snowprove.dialects import DEFAULT_DIALECT, SUPPORTED_DIALECTS
@@ -197,6 +205,56 @@ def corpus_run(
 
     if any(summary.error_count for summary in report.strategy_summaries):
         raise click.exceptions.Exit(1)
+
+
+@corpus_group.command(name="summarize")
+@click.argument(
+    "report_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--neutral-threshold",
+    type=click.FloatRange(min=0),
+    default=0.01,
+    show_default=True,
+    help="Maximum reward difference treated as equivalent.",
+)
+@click.option(
+    "--summary-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the versioned JSON summary artifact to this file.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+)
+def corpus_summarize(
+    report_path: Path,
+    neutral_threshold: float,
+    summary_file: Path | None,
+    output_format: str,
+) -> None:
+    """Summarize strategy performance and task disagreement."""
+    try:
+        summary = summarize_corpus_run(
+            load_corpus_run_report(report_path),
+            source_report=str(report_path),
+            neutral_threshold=neutral_threshold,
+        )
+    except ValueError as error:
+        raise click.ClickException(str(error)) from error
+
+    if output_format == "json":
+        click.echo(summary.model_dump_json(indent=2))
+    else:
+        click.echo(render_corpus_summary(summary))
+
+    if summary_file is not None:
+        write_corpus_summary(summary, summary_file)
+        click.echo(f"Summary file written: {summary_file}", err=True)
 
 
 @fixtures_group.command(name="create")
