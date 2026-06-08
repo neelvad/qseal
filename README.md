@@ -104,6 +104,9 @@ uv run snowprove corpus run snowprove-runs/corpus \
 uv run snowprove corpus summarize snowprove-runs/corpus/corpus-run.json
 ```
 
+Corpus strategies share task-level verifier and benchmark results, ensuring
+identical SQL transitions receive identical rewards within a run.
+
 Useful options:
 
 ```bash

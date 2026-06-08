@@ -155,9 +155,11 @@ Task corpus:
 - fixture materialization generates one DuckDB database per named profile
 - loader rejects duplicate IDs, unknown rules/references, and unsafe paths
 - `snowprove corpus run OUTPUT_DIR` executes selected tasks and strategies
-- run artifacts include paths, rewards, explored nodes, isolated cache metrics,
-  elapsed time, failures, and aggregate strategy summaries
+- run artifacts include paths, rewards, explored nodes, task-shared cache
+  metrics, elapsed time, failures, and aggregate strategy summaries
 - repeated runs reuse fixture databases and content-addressed oracle caches
+- strategies share one task-level oracle result for each unique SQL transition,
+  while per-strategy metrics retain logical request and cache-hit counts
 - `snowprove corpus summarize REPORT.json` ranks strategies and classifies task
   rewards, path/reward disagreement, partial errors, and trivial cases
 

@@ -102,6 +102,8 @@ class CorpusTaskRun(BaseModel):
     enabled_rules: tuple[str, ...]
     tags: tuple[str, ...]
     results: tuple[StrategyRunResult, ...]
+    verification_executions: int = 0
+    benchmark_executions: int = 0
 
 
 class CorpusRunEnvironment(BaseModel):
@@ -121,6 +123,8 @@ class StrategyRunSummary(BaseModel):
     error_count: int
     mean_cumulative_reward: float | None
     total_explored_nodes: int
+    verification_requests: int = 0
+    benchmark_requests: int = 0
     verification_cache_misses: int
     benchmark_cache_misses: int
     total_elapsed_seconds: float
@@ -168,17 +172,22 @@ def run_task_corpus(
     for task in selected_tasks:
         database_path = output_dir / "fixtures" / f"{task.fixture.fixture_id}.duckdb"
         fixture_manifest = fixture_manifests[task.fixture.fixture_id]
+        verifier, evaluator = _task_oracles(
+            corpus,
+            task,
+            cache,
+            database_path,
+            fixture_manifest,
+            verifier_factory,
+            performance_evaluator_factory,
+        )
         strategy_results = tuple(
             _run_strategy(
-                corpus,
                 task,
                 strategy,
                 config,
-                cache,
-                database_path,
-                fixture_manifest,
-                verifier_factory,
-                performance_evaluator_factory,
+                verifier,
+                evaluator,
             )
             for strategy in config.strategies
         )
@@ -190,6 +199,8 @@ def run_task_corpus(
                 enabled_rules=task.definition.enabled_rules,
                 tags=task.definition.tags,
                 results=strategy_results,
+                verification_executions=verifier.misses,
+                benchmark_executions=evaluator.misses,
             )
         )
 
@@ -216,41 +227,15 @@ def run_task_corpus(
 
 
 def _run_strategy(
-    corpus: LoadedTaskCorpus,
     task: LoadedCorpusTask,
     strategy: SearchStrategy,
     config: CorpusRunConfig,
-    cache: JsonFileCache,
-    database_path: Path,
-    fixture_manifest: DuckDbFixtureManifest,
-    verifier_factory: VerifierFactory,
-    performance_evaluator_factory: PerformanceEvaluatorFactory,
+    verifier: CachedVerifier,
+    evaluator: CachedPerformanceEvaluator,
 ) -> StrategyRunResult:
-    namespace = (
-        f"corpus:{corpus.fingerprint}:task:{task.fingerprint}:strategy:{strategy}"
-    )
-    context = {
-        "corpus_fingerprint": corpus.fingerprint,
-        "task_fingerprint": task.fingerprint,
-        "fixture_id": task.fixture.fixture_id,
-        "fixture_tables": {
-            name: summary.fingerprint
-            for name, summary in fixture_manifest.tables.items()
-        },
-    }
-    verifier = CachedVerifier(
-        verifier_factory(task),
-        cache,
-        namespace=namespace,
-        context=context,
-    )
-    evaluator = CachedPerformanceEvaluator(
-        performance_evaluator_factory(task, database_path, fixture_manifest),
-        cache,
-        namespace=namespace,
-        context=context,
-    )
     rules = select_rules(task.definition.enabled_rules)
+    verifier_before = (verifier.hits, verifier.misses)
+    evaluator_before = (evaluator.hits, evaluator.misses)
 
     def environment_factory() -> RewriteEnvironment:
         return RewriteEnvironment(
@@ -272,8 +257,8 @@ def _run_strategy(
             strategy=strategy,
             status="ERROR",
             elapsed_seconds=time.perf_counter() - started,
-            verification_calls=_metrics(verifier.hits, verifier.misses),
-            benchmark_calls=_metrics(evaluator.hits, evaluator.misses),
+            verification_calls=_metrics_delta(verifier_before, verifier),
+            benchmark_calls=_metrics_delta(evaluator_before, evaluator),
             error=f"{type(error).__name__}: {error}",
         )
 
@@ -281,9 +266,44 @@ def _run_strategy(
         strategy=strategy,
         status="COMPLETED",
         elapsed_seconds=time.perf_counter() - started,
-        verification_calls=_metrics(verifier.hits, verifier.misses),
-        benchmark_calls=_metrics(evaluator.hits, evaluator.misses),
+        verification_calls=_metrics_delta(verifier_before, verifier),
+        benchmark_calls=_metrics_delta(evaluator_before, evaluator),
         search_result=result,
+    )
+
+
+def _task_oracles(
+    corpus: LoadedTaskCorpus,
+    task: LoadedCorpusTask,
+    cache: JsonFileCache,
+    database_path: Path,
+    fixture_manifest: DuckDbFixtureManifest,
+    verifier_factory: VerifierFactory,
+    performance_evaluator_factory: PerformanceEvaluatorFactory,
+) -> tuple[CachedVerifier, CachedPerformanceEvaluator]:
+    namespace = f"corpus:{corpus.fingerprint}:task:{task.fingerprint}"
+    context = {
+        "corpus_fingerprint": corpus.fingerprint,
+        "task_fingerprint": task.fingerprint,
+        "fixture_id": task.fixture.fixture_id,
+        "fixture_tables": {
+            name: summary.fingerprint
+            for name, summary in fixture_manifest.tables.items()
+        },
+    }
+    return (
+        CachedVerifier(
+            verifier_factory(task),
+            cache,
+            namespace=namespace,
+            context=context,
+        ),
+        CachedPerformanceEvaluator(
+            performance_evaluator_factory(task, database_path, fixture_manifest),
+            cache,
+            namespace=namespace,
+            context=context,
+        ),
     )
 
 
@@ -394,7 +414,12 @@ def _builtin_verifier(task: LoadedCorpusTask) -> VerifierBackend:
     return BuiltinVerifierBackend()
 
 
-def _metrics(hits: int, misses: int) -> OracleCallMetrics:
+def _metrics_delta(
+    before: tuple[int, int],
+    oracle: CachedVerifier | CachedPerformanceEvaluator,
+) -> OracleCallMetrics:
+    hits = oracle.hits - before[0]
+    misses = oracle.misses - before[1]
     return OracleCallMetrics(
         requests=hits + misses,
         cache_hits=hits,
@@ -450,6 +475,12 @@ def _summarize_strategies(
                 ),
                 benchmark_cache_misses=sum(
                     result.benchmark_calls.cache_misses for result in runs
+                ),
+                verification_requests=sum(
+                    result.verification_calls.requests for result in runs
+                ),
+                benchmark_requests=sum(
+                    result.benchmark_calls.requests for result in runs
                 ),
                 total_elapsed_seconds=sum(result.elapsed_seconds for result in runs),
             )

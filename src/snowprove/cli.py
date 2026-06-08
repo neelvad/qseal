@@ -197,8 +197,9 @@ def corpus_run(
             console.print(
                 f"  {summary.strategy}: {summary.completed_count}/"
                 f"{summary.run_count} completed, mean reward {reward}, "
-                f"{summary.verification_cache_misses} verifier calls, "
-                f"{summary.benchmark_cache_misses} benchmark calls, "
+                f"{summary.verification_requests} verifier requests, "
+                f"{summary.benchmark_requests} benchmark requests, "
+                f"{summary.benchmark_cache_misses} new benchmarks, "
                 f"{summary.total_elapsed_seconds:.3f}s"
             )
     click.echo(f"Report file written: {report_file}", err=True)

@@ -41,6 +41,7 @@ def test_summarizes_strategy_rankings_and_task_disagreement() -> None:
     ]
     assert [ranking.wins for ranking in summary.strategy_rankings] == [3, 1]
     assert summary.strategy_rankings[0].mean_explored_nodes == pytest.approx(2)
+    assert summary.strategy_rankings[0].benchmark_requests == 6
 
     tasks = {task.task_id: task for task in summary.tasks}
     assert tasks["different-paths"].winning_strategies == ("greedy",)
@@ -160,6 +161,8 @@ def _report() -> CorpusRunReport:
                 error_count=1,
                 mean_cumulative_reward=0.1,
                 total_explored_nodes=1,
+                verification_requests=2,
+                benchmark_requests=2,
                 verification_cache_misses=2,
                 benchmark_cache_misses=2,
                 total_elapsed_seconds=0.3,
@@ -171,6 +174,8 @@ def _report() -> CorpusRunReport:
                 error_count=0,
                 mean_cumulative_reward=1 / 30,
                 total_explored_nodes=6,
+                verification_requests=6,
+                benchmark_requests=6,
                 verification_cache_misses=6,
                 benchmark_cache_misses=6,
                 total_elapsed_seconds=0.6,

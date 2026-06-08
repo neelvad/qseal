@@ -102,11 +102,15 @@ The `corpus_search_run` JSON artifact records:
   metrics by strategy
 - corpus/task fingerprints and Python, DuckDB, and platform versions
 
-Cache namespaces are isolated by task and strategy. Search branches within one
-strategy share cached oracle work, but a strategy does not receive artificially
-low miss counts because another strategy ran first. A failed strategy is
-recorded without aborting the remaining report; the CLI exits nonzero after
-writing the artifact if any strategy failed.
+Cache namespaces are isolated by task and shared across strategies. Every
+unique SQL transition therefore receives one verifier result and one benchmark
+result per uncached corpus run, so strategies compare the same reward instead
+of independently remeasuring identical work. Per-strategy metrics still record
+logical requests, cache hits, and physical misses; each task also records total
+unique verifier and benchmark executions.
+
+A failed strategy is recorded without aborting the remaining report; the CLI
+exits nonzero after writing the artifact if any strategy failed.
 
 ## Summarizing Runs
 
@@ -125,7 +129,10 @@ uv run snowprove corpus summarize snowprove-runs/corpus/corpus-run.json \
 ```
 
 The summary ranks strategies by task wins and mean cumulative reward, then
-reports explored-node, verifier-call, benchmark-call, and elapsed-time costs.
+reports explored-node, logical verifier-request, logical benchmark-request, and
+elapsed-time costs. Physical cache misses remain in the JSON artifact but are
+not used to rank strategies because the first requester necessarily incurs
+them for later strategies.
 Each task is classified as positive, neutral, negative, or errored.
 
 Path disagreement means completed strategies selected different action

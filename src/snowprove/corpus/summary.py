@@ -38,6 +38,8 @@ class RankedStrategySummary(BaseModel):
     error_count: int
     mean_cumulative_reward: float | None
     mean_explored_nodes: float | None
+    verification_requests: int = 0
+    benchmark_requests: int = 0
     verification_cache_misses: int
     benchmark_cache_misses: int
     total_elapsed_seconds: float
@@ -107,6 +109,8 @@ def summarize_corpus_run(
                     if summary.completed_count
                     else None
                 ),
+                verification_requests=summary.verification_requests,
+                benchmark_requests=summary.benchmark_requests,
                 verification_cache_misses=summary.verification_cache_misses,
                 benchmark_cache_misses=summary.benchmark_cache_misses,
                 total_elapsed_seconds=summary.total_elapsed_seconds,
@@ -120,7 +124,7 @@ def summarize_corpus_run(
                 if item.mean_cumulative_reward is not None
                 else float("-inf")
             ),
-            item.benchmark_cache_misses,
+            item.benchmark_requests,
             item.strategy,
         ),
     )
@@ -170,7 +174,7 @@ def render_corpus_summary(summary: CorpusSummary) -> str:
         "Strategy ranking:",
         (
             f"{'RANK':>4} {'STRATEGY':<12} {'WINS':>4} {'MEAN REWARD':>11} "
-            f"{'MEAN NODES':>10} {'VERIFY':>7} {'BENCH':>5} {'SECONDS':>8}"
+            f"{'MEAN NODES':>10} {'VREQ':>5} {'BREQ':>5} {'SECONDS':>8}"
         ),
     ]
     for item in summary.strategy_rankings:
@@ -187,8 +191,8 @@ def render_corpus_summary(summary: CorpusSummary) -> str:
         lines.append(
             f"{item.rank:>4} {item.strategy:<12} {item.wins:>4} "
             f"{reward:>11} {nodes:>10} "
-            f"{item.verification_cache_misses:>7} "
-            f"{item.benchmark_cache_misses:>5} "
+            f"{item.verification_requests:>5} "
+            f"{item.benchmark_requests:>5} "
             f"{item.total_elapsed_seconds:>8.3f}"
         )
 

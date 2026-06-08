@@ -55,7 +55,16 @@ def test_runs_selected_tasks_and_strategies_with_comparison_summary(
         2 * 0.6931471805599453
     )
     assert summaries["exhaustive"].total_explored_nodes > 0
-    assert summaries["exhaustive"].verification_cache_misses > 0
+    assert summaries["fixed_order"].benchmark_requests > 0
+    assert summaries["exhaustive"].benchmark_requests > 0
+    assert task.verification_executions > 0
+    assert task.benchmark_executions > 0
+    assert sum(
+        result.verification_calls.cache_misses for result in task.results
+    ) == task.verification_executions
+    assert sum(
+        result.benchmark_calls.cache_misses for result in task.results
+    ) == task.benchmark_executions
 
     payload = json.loads(report_path.read_text())
     assert payload["artifact_type"] == "corpus_search_run"
@@ -92,6 +101,46 @@ def test_reuses_strategy_cache_on_repeated_run(tmp_path: Path) -> None:
     assert second_result.benchmark_calls.cache_misses == 0
     assert second_result.verification_calls.cache_hits == 1
     assert second_result.benchmark_calls.cache_hits == 1
+
+
+def test_strategies_share_identical_transition_rewards(tmp_path: Path) -> None:
+    corpus = _tiny_corpus(tmp_path)
+    evaluator = _ChangingPerformanceEvaluator()
+
+    def evaluator_factory(task, database_path, fixture_manifest):
+        del task, database_path, fixture_manifest
+        return evaluator
+
+    report = run_task_corpus(
+        corpus,
+        tmp_path / "run",
+        config=CorpusRunConfig(
+            task_ids=("redundant-distinct-users",),
+            strategies=("fixed_order", "random", "greedy", "beam", "exhaustive"),
+        ),
+        performance_evaluator_factory=evaluator_factory,
+    )
+
+    task = report.tasks[0]
+    rewards = {
+        result.search_result.cumulative_reward
+        for result in task.results
+        if result.search_result is not None
+    }
+    assert len(rewards) == 1
+    assert next(iter(rewards)) == pytest.approx(0.6931471805599453)
+    assert evaluator.calls == 1
+    assert task.benchmark_executions == 1
+    assert task.verification_executions == 1
+    assert task.results[0].benchmark_calls.cache_misses == 1
+    assert all(
+        result.benchmark_calls.cache_misses == 0
+        for result in task.results[1:]
+    )
+    assert all(
+        result.benchmark_calls.cache_hits == 1
+        for result in task.results[1:]
+    )
 
 
 def test_strategy_errors_are_recorded_without_aborting_report(tmp_path: Path) -> None:
@@ -211,3 +260,14 @@ class _FailingPerformanceEvaluator:
     def evaluate(self, original_sql: str, rewritten_sql: str) -> BenchmarkResult:
         del original_sql, rewritten_sql
         raise RuntimeError("benchmark failed")
+
+
+class _ChangingPerformanceEvaluator(_FixedPerformanceEvaluator):
+    def __init__(self) -> None:
+        super().__init__(speedup=2.0)
+        self.calls = 0
+
+    def evaluate(self, original_sql: str, rewritten_sql: str) -> BenchmarkResult:
+        self.calls += 1
+        self.speedup = float(self.calls + 1)
+        return super().evaluate(original_sql, rewritten_sql)
