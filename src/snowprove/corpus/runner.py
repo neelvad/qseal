@@ -85,7 +85,11 @@ class CorpusRunConfig(BaseModel):
     def validate_unique_values(self) -> CorpusRunConfig:
         _require_unique("strategies", self.strategies)
         _require_unique("task IDs", self.task_ids)
-        if "policy_baseline" in self.strategies and self.policy_model is None:
+        if (
+            "policy_baseline" in self.strategies
+            and self.policy_model is None
+            and self.policy_model_path is None
+        ):
             raise ValueError("policy_baseline strategy requires a policy model.")
         return self
 

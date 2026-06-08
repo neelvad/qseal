@@ -424,13 +424,22 @@ Completed:
     tasks with mean reward 0.114065, 117 verifier requests, 117 benchmark
     requests, 96 new benchmarks, and no low-confidence steps. The report was
     written to `/tmp/snowprove-policy-strategy-20260608/corpus-run.json`.
+34. A shared six-strategy comparison run was written to
+    `/tmp/snowprove-policy-comparison-20260608/corpus-run.json`. With
+    `--reward-margin 0.05` and 20 ms batches, greedy/beam/exhaustive won all
+    75 tasks with mean reward 0.111497. `policy_baseline` matched fixed/random
+    at mean reward 0.104772 and 68 wins, because the current policy rollout is
+    forced and cannot choose to stop when the best action is below the margin.
+35. Loading policy-baseline corpus reports now works with only
+    `policy_model_path` in the saved artifact; the in-memory policy model is
+    still required to execute a new `policy_baseline` run.
 
 Next:
 
 1. Run several held-out baseline policy splits and inspect accuracy/gap by
    fixture and tag.
-2. Compare `policy_baseline` against fixed/random/greedy/beam/exhaustive in a
-   shared multi-strategy full-corpus run and then in held-out train/eval runs.
+2. Add an abstaining policy strategy, or teach `policy_baseline` to stop when
+   the best scored action is not worth taking, then compare against greedy.
 3. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.
 4. Add a small learned action-ranking policy only after baseline measurements

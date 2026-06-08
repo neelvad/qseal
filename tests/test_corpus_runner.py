@@ -215,6 +215,16 @@ def test_run_config_requires_policy_model_for_policy_strategy() -> None:
         CorpusRunConfig(strategies=("policy_baseline",))
 
 
+def test_run_config_can_reload_policy_strategy_report_config() -> None:
+    config = CorpusRunConfig(
+        strategies=("policy_baseline",),
+        policy_model_path="/tmp/policy.json",
+    )
+
+    assert config.policy_model is None
+    assert config.policy_model_path == "/tmp/policy.json"
+
+
 def _tiny_corpus(tmp_path: Path):
     copied_root = copytree(
         bundled_corpus_path().parent,
