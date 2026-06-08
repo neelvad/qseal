@@ -43,12 +43,16 @@ To compare a trained baseline policy as a corpus strategy:
 ```bash
 uv run snowprove corpus run snowprove-runs/corpus-policy \
   --strategy policy_baseline \
+  --strategy policy_baseline_abstain \
   --policy-model policy.json
 ```
 
 The `policy_baseline` strategy scores available actions from the current SQL
 state and executes the highest-scoring action as a forced rollout. The run
 artifact records the `policy_model_path`, but not the full model contents.
+`policy_baseline_abstain` uses the same scorer but evaluates only the top
+policy action and stops when that action is not better than the current state
+under `--reward-margin`.
 
 Use `--reward-margin` to require a meaningful cumulative improvement before
 greedy, beam, or exhaustive search prefers a longer path:

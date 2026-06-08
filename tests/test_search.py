@@ -15,6 +15,7 @@ from snowprove.search import (
     exhaustive_search,
     fixed_order_search,
     greedy_search,
+    policy_baseline_abstain_search,
     policy_baseline_search,
     random_search,
 )
@@ -100,6 +101,41 @@ def test_policy_baseline_search_follows_highest_scored_action() -> None:
     assert result.action_ids[0] == "remove_redundant_not_null_filter::predicate:1"
     assert result.final_sql == FINAL_SQL
     assert result.explored_nodes == 3
+
+
+def test_policy_baseline_abstain_search_stops_when_top_action_does_not_improve() -> None:
+    result = policy_baseline_abstain_search(
+        _task(),
+        _factory(
+            {
+                (INITIAL_SQL, EMAIL_REMOVED_SQL): 0.9,
+                (INITIAL_SQL, DISPLAY_NAME_REMOVED_SQL): 2.0,
+            }
+        ),
+        lambda _observation, action_id: (
+            1.0 if action_id == "remove_redundant_not_null_filter::predicate:0" else 0.0
+        ),
+    )
+
+    assert result.strategy == "policy_baseline_abstain"
+    assert result.action_ids == ()
+    assert result.stopped_early is True
+    assert result.explored_nodes == 1
+
+
+def test_policy_baseline_abstain_search_takes_good_top_action() -> None:
+    result = policy_baseline_abstain_search(
+        _task(),
+        _factory(),
+        lambda _observation, action_id: (
+            1.0 if action_id == "remove_redundant_not_null_filter::predicate:1" else 0.0
+        ),
+    )
+
+    assert result.strategy == "policy_baseline_abstain"
+    assert result.action_ids[0] == "remove_redundant_not_null_filter::predicate:1"
+    assert result.final_sql == FINAL_SQL
+    assert result.explored_nodes == 2
 
 
 def test_greedy_selects_highest_immediate_reward() -> None:

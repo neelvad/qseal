@@ -433,13 +433,23 @@ Completed:
 35. Loading policy-baseline corpus reports now works with only
     `policy_model_path` in the saved artifact; the in-memory policy model is
     still required to execute a new `policy_baseline` run.
+36. `policy_baseline_abstain` is available as a corpus search strategy. It
+    scores available actions with the trained baseline policy, evaluates only
+    the top-scored action, and stops if that candidate does not beat the
+    current state under the configured `reward_margin`.
+37. A greedy/forced-policy/abstaining-policy comparison was written to
+    `/tmp/snowprove-policy-abstain-20260608/corpus-run.json`. With
+    `--reward-margin 0.05` and 20 ms batches, `policy_baseline_abstain` tied
+    greedy at mean reward 0.134872 and 74 wins while using fewer evaluations
+    (105 verifier/benchmark requests versus greedy's 118). Forced
+    `policy_baseline` reached mean reward 0.120825 and 68 wins.
 
 Next:
 
 1. Run several held-out baseline policy splits and inspect accuracy/gap by
    fixture and tag.
-2. Add an abstaining policy strategy, or teach `policy_baseline` to stop when
-   the best scored action is not worth taking, then compare against greedy.
+2. Run held-out train/eval experiments for `policy_baseline_abstain`, starting
+   with fixture and tag splits.
 3. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.
 4. Add a small learned action-ranking policy only after baseline measurements

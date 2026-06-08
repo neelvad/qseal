@@ -213,11 +213,13 @@ def test_run_config_rejects_duplicate_strategies() -> None:
 def test_run_config_requires_policy_model_for_policy_strategy() -> None:
     with pytest.raises(ValueError, match="requires a policy model"):
         CorpusRunConfig(strategies=("policy_baseline",))
+    with pytest.raises(ValueError, match="requires a policy model"):
+        CorpusRunConfig(strategies=("policy_baseline_abstain",))
 
 
 def test_run_config_can_reload_policy_strategy_report_config() -> None:
     config = CorpusRunConfig(
-        strategies=("policy_baseline",),
+        strategies=("policy_baseline", "policy_baseline_abstain"),
         policy_model_path="/tmp/policy.json",
     )
 

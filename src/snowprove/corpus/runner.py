@@ -29,6 +29,7 @@ from snowprove.search import (
     exhaustive_search,
     fixed_order_search,
     greedy_search,
+    policy_baseline_abstain_search,
     policy_baseline_search,
     random_search,
 )
@@ -42,6 +43,7 @@ SearchStrategy = Literal[
     "beam",
     "exhaustive",
     "policy_baseline",
+    "policy_baseline_abstain",
 ]
 RewardModel = Literal["transition", "state"]
 VerifierFactory = Callable[[LoadedCorpusTask], VerifierBackend]
@@ -85,10 +87,9 @@ class CorpusRunConfig(BaseModel):
     def validate_unique_values(self) -> CorpusRunConfig:
         _require_unique("strategies", self.strategies)
         _require_unique("task IDs", self.task_ids)
-        if (
-            "policy_baseline" in self.strategies
-            and self.policy_model is None
-            and self.policy_model_path is None
+        policy_strategies = {"policy_baseline", "policy_baseline_abstain"}
+        if policy_strategies.intersection(self.strategies) and (
+            self.policy_model is None and self.policy_model_path is None
         ):
             raise ValueError("policy_baseline strategy requires a policy model.")
         return self
@@ -356,6 +357,16 @@ def _search(
         if config.policy_model is None:
             raise ValueError("policy_baseline strategy requires a policy model.")
         return policy_baseline_search(
+            task.environment_task,
+            environment_factory,
+            _policy_scorer(task, config.policy_model),
+            reward_margin=config.reward_margin,
+            tie_policy=tie_policy,
+        )
+    if strategy == "policy_baseline_abstain":
+        if config.policy_model is None:
+            raise ValueError("policy_baseline_abstain strategy requires a policy model.")
+        return policy_baseline_abstain_search(
             task.environment_task,
             environment_factory,
             _policy_scorer(task, config.policy_model),

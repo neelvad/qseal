@@ -10,6 +10,9 @@ structured rewrite action space:
 - exhaustive search explores unique SQL states breadth-first up to a node limit
 - policy-baseline scores available actions with a trained baseline policy model
   and applies the highest-scoring action until the episode ends
+- policy-baseline-abstain scores available actions, evaluates only the top
+  action, and stops if that action does not beat the current state by the
+  reward margin
 
 These are library APIs rather than CLI commands. Each search accepts an
 `EnvironmentTask` and a factory that creates a fresh `RewriteEnvironment`:
@@ -51,7 +54,9 @@ transitions have negative reward. Fixed-order and random are forced-rollout
 baselines. Greedy stops early when its best immediate candidate does not
 increase cumulative reward. Policy-baseline is also a forced rollout, but its
 action order comes from the supplied policy model instead of registry order or
-random sampling.
+random sampling. Policy-baseline-abstain is closer to greedy, but evaluates
+only the top-scored policy action at each state instead of every immediate
+action.
 
 `reward_margin` sets the minimum cumulative reward improvement required to
 prefer a longer or more complex path. Rewards remain unmodified in artifacts;

@@ -303,6 +303,8 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
             "redundant-distinct-users",
             "--strategy",
             "policy_baseline",
+            "--strategy",
+            "policy_baseline_abstain",
             "--policy-model",
             str(model_path),
             "--minimum-duration-ms",
@@ -318,9 +320,15 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
 
     assert policy_run.exit_code == 0, policy_run.output
     policy_report = json.loads((policy_run_dir / "corpus-run.json").read_text())
-    assert policy_report["config"]["strategies"] == ["policy_baseline"]
+    assert policy_report["config"]["strategies"] == [
+        "policy_baseline",
+        "policy_baseline_abstain",
+    ]
     assert policy_report["config"]["policy_model_path"] == str(model_path)
-    assert policy_report["tasks"][0]["results"][0]["search_result"]["strategy"] == "policy_baseline"
+    assert [
+        result["search_result"]["strategy"]
+        for result in policy_report["tasks"][0]["results"]
+    ] == ["policy_baseline", "policy_baseline_abstain"]
     assert (
         policy_report["tasks"][0]["results"][0]["search_result"]["action_ids"]
         == ["remove_redundant_distinct::query:distinct"]

@@ -3,6 +3,7 @@ from snowprove.search.algorithms import (
     exhaustive_search,
     fixed_order_search,
     greedy_search,
+    policy_baseline_abstain_search,
     policy_baseline_search,
     random_search,
 )
@@ -15,6 +16,7 @@ __all__ = [
     "exhaustive_search",
     "fixed_order_search",
     "greedy_search",
+    "policy_baseline_abstain_search",
     "policy_baseline_search",
     "random_search",
 ]

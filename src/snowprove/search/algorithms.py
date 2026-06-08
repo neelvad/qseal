@@ -125,6 +125,53 @@ def policy_baseline_search(
     )
 
 
+def policy_baseline_abstain_search(
+    task: EnvironmentTask,
+    environment_factory: EnvironmentFactory,
+    scorer: ActionScorer,
+    *,
+    reward_margin: float = 0.0,
+    tie_policy: SearchTiePolicy = "shorter",
+) -> SearchResult:
+    _validate_reward_margin(reward_margin)
+    _validate_tie_policy(tie_policy)
+    node = _root_node(task, environment_factory)
+    explored = 0
+    stopped_early = False
+    while node.active():
+        action = sorted(
+            node.observation.actions,
+            key=lambda candidate: (
+                -scorer(node.observation, candidate.action_id),
+                candidate.action_id,
+            ),
+        )[0]
+        candidate = _run_sequence(
+            task,
+            environment_factory,
+            (*node.action_ids, action.action_id),
+        )
+        explored += 1
+        if _is_preferred_or_equal(
+            node,
+            candidate,
+            reward_margin,
+            tie_policy,
+        ):
+            stopped_early = True
+            break
+        node = candidate
+    return _result(
+        "policy_baseline_abstain",
+        task,
+        node,
+        explored_nodes=explored,
+        stopped_early=stopped_early,
+        reward_margin=reward_margin,
+        tie_policy=tie_policy,
+    )
+
+
 def greedy_search(
     task: EnvironmentTask,
     environment_factory: EnvironmentFactory,

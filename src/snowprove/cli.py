@@ -81,7 +81,15 @@ CheckFailOn = click.Choice(["none", "unproven"], case_sensitive=False)
 VerifierChoice = click.Choice(["builtin", "external", "sqlsolver"], case_sensitive=False)
 DialectChoice = click.Choice(SUPPORTED_DIALECTS, case_sensitive=False)
 SearchStrategyChoice = click.Choice(
-    ["fixed_order", "random", "greedy", "beam", "exhaustive", "policy_baseline"],
+    [
+        "fixed_order",
+        "random",
+        "greedy",
+        "beam",
+        "exhaustive",
+        "policy_baseline",
+        "policy_baseline_abstain",
+    ],
     case_sensitive=False,
 )
 RewardModelChoice = click.Choice(["transition", "state"], case_sensitive=False)
