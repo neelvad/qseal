@@ -15,6 +15,8 @@ from snowprove.policy import (
     PolicyDataFilter,
     evaluate_baseline_policy,
     inspect_baseline_policy,
+    inspect_policy_labels,
+    render_policy_label_inspection,
     train_baseline_policy,
     train_linear_policy,
 )
@@ -373,6 +375,79 @@ def test_renders_policy_holdout_evaluation(tmp_path) -> None:
     assert holdout.artifact_type == "policy_holdout_evaluation"
     assert "Policy holdout evaluation" in rendered
     assert "policy_baseline_abstain" in rendered
+
+
+def test_policy_label_inspection_groups_train_holdout_disagreements(tmp_path) -> None:
+    corpus = load_task_corpus(bundled_corpus_path())
+    train_task = corpus.task("choice-distinct-not-null-active-users-standard-small")
+    holdout_task = corpus.task("distinct-and-not-null")
+    trajectory_path = tmp_path / "trajectories.jsonl"
+    distinct_action = "remove_redundant_distinct::query:distinct"
+    not_null_action = "remove_redundant_not_null_filter::predicate:0"
+    train_report = _report(
+        corpus,
+        train_task.definition.task_id,
+        train_task.fingerprint,
+        train_task.fixture.fixture_id,
+        train_task.definition.enabled_rules,
+        train_task.definition.tags,
+        train_task.environment_task.sql,
+        distinct_action,
+        not_null_action,
+        first_reward=0.3,
+        second_reward=0.1,
+    )
+    holdout_report = _report(
+        corpus,
+        holdout_task.definition.task_id,
+        holdout_task.fingerprint,
+        holdout_task.fixture.fixture_id,
+        holdout_task.definition.enabled_rules,
+        holdout_task.definition.tags,
+        holdout_task.environment_task.sql,
+        distinct_action,
+        not_null_action,
+        first_reward=0.1,
+        second_reward=0.3,
+    )
+    export_corpus_trajectories(
+        CorpusRunReport(
+            generated_at=datetime.now(UTC),
+            corpus_id=corpus.manifest.corpus_id,
+            corpus_version=corpus.manifest.corpus_version,
+            corpus_fingerprint=corpus.fingerprint,
+            config=CorpusRunConfig(strategies=("fixed_order", "greedy")),
+            environment=CorpusRunEnvironment(
+                python_version="test",
+                duckdb_version="test",
+                platform="test",
+            ),
+            tasks=(train_report.tasks[0], holdout_report.tasks[0]),
+            strategy_summaries=(),
+        ),
+        corpus,
+        trajectory_path,
+    )
+
+    inspection = inspect_policy_labels(
+        trajectory_path,
+        train_filter=PolicyDataFilter(include_tags=("choice-calibration",)),
+        holdout_filter=PolicyDataFilter(include_tags=("multi-action",)),
+        group_by=("action_set",),
+        reward_margin=0.05,
+    )
+    rendered = render_policy_label_inspection(inspection)
+
+    assert inspection.artifact_type == "policy_label_inspection"
+    assert inspection.train_preference_count == 1
+    assert inspection.holdout_preference_count == 1
+    assert inspection.disagreement_group_count == 1
+    assert inspection.groups[0].disagreement_count == 1
+    assert inspection.groups[0].train_preferences == {distinct_action: 1}
+    assert inspection.groups[0].holdout_preferences == {not_null_action: 1}
+    assert inspection.groups[0].examples[0].reward_gap is not None
+    assert "Policy label inspection" in rendered
+    assert "Disagreement groups: 1" in rendered
 
 
 def _report(

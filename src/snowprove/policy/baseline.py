@@ -181,6 +181,50 @@ class PolicyHoldoutEvaluation(BaseModel):
     strategy_verifier_requests: dict[str, int]
 
 
+class PolicyPreferenceExample(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    task_id: str
+    fixture_id: str
+    tags: tuple[str, ...] = Field(default_factory=tuple)
+    state_sql: str
+    available_action_ids: tuple[str, ...]
+    preferred_action_id: str
+    alternative_action_id: str
+    reward_gap: float | None
+
+
+class PolicyPreferenceGroup(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    group_key: str
+    train_count: int
+    holdout_count: int
+    train_preferences: dict[str, int]
+    holdout_preferences: dict[str, int]
+    disagreement_count: int
+    mean_train_reward_gap: float | None
+    mean_holdout_reward_gap: float | None
+    examples: tuple[PolicyPreferenceExample, ...] = Field(default_factory=tuple)
+
+
+class PolicyLabelInspection(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    schema_version: Literal[1] = 1
+    artifact_type: Literal["policy_label_inspection"] = "policy_label_inspection"
+    source_trajectories: str | None = None
+    train_filter: PolicyDataFilter
+    holdout_filter: PolicyDataFilter
+    group_by: tuple[str, ...]
+    reward_margin: float = Field(ge=0)
+    train_preference_count: int
+    holdout_preference_count: int
+    group_count: int
+    disagreement_group_count: int
+    groups: tuple[PolicyPreferenceGroup, ...]
+
+
 @dataclass(frozen=True)
 class _StateExample:
     task_id: str
@@ -474,6 +518,96 @@ def inspect_baseline_policy(
     )
 
 
+def inspect_policy_labels(
+    trajectory_path: Path,
+    *,
+    source_trajectories: str | None = None,
+    train_filter: PolicyDataFilter | None = None,
+    holdout_filter: PolicyDataFilter | None = None,
+    group_by: tuple[str, ...] = ("action_set", "table"),
+    reward_margin: float = 0.0,
+    examples_per_group: int = 3,
+) -> PolicyLabelInspection:
+    if reward_margin < 0:
+        raise ValueError("reward_margin must be zero or greater.")
+    if examples_per_group < 0:
+        raise ValueError("examples_per_group must be zero or greater.")
+    train_filter = train_filter or PolicyDataFilter()
+    holdout_filter = holdout_filter or PolicyDataFilter()
+    examples = _state_examples(load_corpus_trajectory_records(trajectory_path))
+    train_preferences = _preference_examples(
+        _filter_examples(examples, train_filter),
+        reward_margin=reward_margin,
+    )
+    holdout_preferences = _preference_examples(
+        _filter_examples(examples, holdout_filter),
+        reward_margin=reward_margin,
+    )
+    group_lookup: dict[str, dict[str, list[PolicyPreferenceExample]]] = defaultdict(
+        lambda: {"train": [], "holdout": []}
+    )
+    for preference in train_preferences:
+        group_lookup[_preference_group_key(preference, group_by)]["train"].append(
+            preference
+        )
+    for preference in holdout_preferences:
+        group_lookup[_preference_group_key(preference, group_by)]["holdout"].append(
+            preference
+        )
+
+    groups = []
+    for group_key, split_preferences in group_lookup.items():
+        train_items = split_preferences["train"]
+        holdout_items = split_preferences["holdout"]
+        train_counts = _preference_counts(train_items)
+        holdout_counts = _preference_counts(holdout_items)
+        disagreement_count = _preference_disagreement_count(train_counts, holdout_counts)
+        groups.append(
+            PolicyPreferenceGroup(
+                group_key=group_key,
+                train_count=len(train_items),
+                holdout_count=len(holdout_items),
+                train_preferences=train_counts,
+                holdout_preferences=holdout_counts,
+                disagreement_count=disagreement_count,
+                mean_train_reward_gap=_mean_known_gap(train_items),
+                mean_holdout_reward_gap=_mean_known_gap(holdout_items),
+                examples=tuple(
+                    sorted(
+                        (*holdout_items, *train_items),
+                        key=_preference_example_sort_key,
+                    )[:examples_per_group]
+                ),
+            )
+        )
+
+    sorted_groups = tuple(
+        sorted(
+            groups,
+            key=lambda group: (
+                -group.disagreement_count,
+                -group.holdout_count,
+                -group.train_count,
+                group.group_key,
+            ),
+        )
+    )
+    return PolicyLabelInspection(
+        source_trajectories=source_trajectories,
+        train_filter=train_filter,
+        holdout_filter=holdout_filter,
+        group_by=group_by,
+        reward_margin=reward_margin,
+        train_preference_count=len(train_preferences),
+        holdout_preference_count=len(holdout_preferences),
+        group_count=len(sorted_groups),
+        disagreement_group_count=sum(
+            int(group.disagreement_count > 0) for group in sorted_groups
+        ),
+        groups=sorted_groups,
+    )
+
+
 def score_baseline_action(
     model: PolicyModel,
     context: PolicyActionContext,
@@ -652,6 +786,56 @@ def render_baseline_policy_inspection(
     return "\n".join(lines)
 
 
+def render_policy_label_inspection(
+    inspection: PolicyLabelInspection,
+    *,
+    limit: int | None = None,
+) -> str:
+    groups = inspection.groups[:limit] if limit is not None else inspection.groups
+    lines = [
+        "Policy label inspection",
+        f"Train preferences: {inspection.train_preference_count}",
+        f"Holdout preferences: {inspection.holdout_preference_count}",
+        f"Groups: {inspection.group_count}",
+        f"Disagreement groups: {inspection.disagreement_group_count}",
+        f"Rows shown: {len(groups)}/{inspection.group_count}",
+        f"Group by: {', '.join(inspection.group_by)}",
+        f"Reward margin: {inspection.reward_margin:.6f}",
+        f"Train filter: {_render_filter(inspection.train_filter)}",
+        f"Holdout filter: {_render_filter(inspection.holdout_filter)}",
+    ]
+    if not groups:
+        lines.append("")
+        lines.append("No matching preference groups.")
+        return "\n".join(lines)
+
+    for group in groups:
+        lines.extend(
+            [
+                "",
+                f"Group: {group.group_key}",
+                f"  Train count: {group.train_count}",
+                f"  Holdout count: {group.holdout_count}",
+                f"  Disagreements: {group.disagreement_count}",
+                f"  Train prefs: {_render_preference_counts(group.train_preferences)}",
+                f"  Holdout prefs: {_render_preference_counts(group.holdout_preferences)}",
+                f"  Mean train gap: {_render_optional_float(group.mean_train_reward_gap)}",
+                f"  Mean holdout gap: {_render_optional_float(group.mean_holdout_reward_gap)}",
+            ]
+        )
+        for example in group.examples:
+            gap = _render_optional_float(example.reward_gap)
+            lines.extend(
+                [
+                    f"  Example: {example.task_id} ({example.fixture_id})",
+                    f"    preferred={example.preferred_action_id}",
+                    f"    alternative={example.alternative_action_id}",
+                    f"    gap={gap}",
+                ]
+            )
+    return "\n".join(lines)
+
+
 def render_policy_holdout_evaluation(evaluation: PolicyHoldoutEvaluation) -> str:
     lines = [
         "Policy holdout evaluation",
@@ -734,6 +918,144 @@ def _matches_filter(example: _StateExample, data_filter: PolicyDataFilter) -> bo
     if data_filter.include_tags and not tags.intersection(data_filter.include_tags):
         return False
     return not tags.intersection(data_filter.exclude_tags)
+
+
+def _preference_examples(
+    examples: tuple[_StateExample, ...],
+    *,
+    reward_margin: float,
+) -> tuple[PolicyPreferenceExample, ...]:
+    preferences = []
+    for example in examples:
+        if example.oracle_action_id is None or len(example.available_action_ids) < 2:
+            continue
+        for action_id in example.available_action_ids:
+            if action_id == example.oracle_action_id:
+                continue
+            gap = _known_reward_gap(example, action_id)
+            if gap != float("inf") and gap < reward_margin:
+                continue
+            preferences.append(
+                PolicyPreferenceExample(
+                    task_id=example.task_id,
+                    fixture_id=example.fixture_id,
+                    tags=example.tags,
+                    state_sql=example.state_sql,
+                    available_action_ids=example.available_action_ids,
+                    preferred_action_id=example.oracle_action_id,
+                    alternative_action_id=action_id,
+                    reward_gap=None if gap == float("inf") else gap,
+                )
+            )
+    return tuple(preferences)
+
+
+def _preference_group_key(
+    preference: PolicyPreferenceExample,
+    group_by: tuple[str, ...],
+) -> str:
+    parts = []
+    for group_name in group_by:
+        if group_name == "action_set":
+            action_set = "+".join(sorted(preference.available_action_ids))
+            parts.append(f"action_set={action_set}")
+        elif group_name == "rule_pair":
+            rules = sorted(
+                {
+                    _rule_name(preference.preferred_action_id),
+                    _rule_name(preference.alternative_action_id),
+                }
+            )
+            parts.append(f"rule_pair={' vs '.join(rules)}")
+        elif group_name == "preferred_rule":
+            parts.append(f"preferred_rule={_rule_name(preference.preferred_action_id)}")
+        elif group_name == "alternative_rule":
+            parts.append(
+                f"alternative_rule={_rule_name(preference.alternative_action_id)}"
+            )
+        elif group_name == "table":
+            parts.append(f"table={_table_tag(preference.tags)}")
+        elif group_name == "fixture":
+            parts.append(f"fixture={preference.fixture_id}")
+        elif group_name == "target":
+            parts.append(f"target={_target_key(preference.preferred_action_id)}")
+        elif group_name == "target_pair":
+            parts.append(
+                "target_pair="
+                f"{_target_key(preference.preferred_action_id)}"
+                " vs "
+                f"{_target_key(preference.alternative_action_id)}"
+            )
+        else:
+            raise ValueError(f"Unsupported policy label group: {group_name}")
+    return " | ".join(parts) if parts else "all"
+
+
+def _table_tag(tags: tuple[str, ...]) -> str:
+    for tag in tags:
+        if tag.startswith("table:"):
+            return tag
+    return "table:none"
+
+
+def _target_key(action_id: str) -> str:
+    target_kind, target_index = _action_target(action_id)
+    if target_index is None:
+        return target_kind
+    return f"{target_kind}:{target_index}"
+
+
+def _preference_counts(
+    preferences: list[PolicyPreferenceExample],
+) -> dict[str, int]:
+    counts: dict[str, int] = defaultdict(int)
+    for preference in preferences:
+        counts[preference.preferred_action_id] += 1
+    return dict(sorted(counts.items()))
+
+
+def _preference_disagreement_count(
+    train_counts: dict[str, int],
+    holdout_counts: dict[str, int],
+) -> int:
+    train_majority = _majority_preference(train_counts)
+    if train_majority is None:
+        return 0
+    return sum(
+        count
+        for action_id, count in holdout_counts.items()
+        if action_id != train_majority
+    )
+
+
+def _majority_preference(counts: dict[str, int]) -> str | None:
+    if not counts:
+        return None
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
+
+
+def _mean_known_gap(preferences: list[PolicyPreferenceExample]) -> float | None:
+    gaps = [
+        preference.reward_gap
+        for preference in preferences
+        if preference.reward_gap is not None
+    ]
+    if not gaps:
+        return None
+    return sum(gaps) / len(gaps)
+
+
+def _preference_example_sort_key(
+    preference: PolicyPreferenceExample,
+) -> tuple[int, float, str, str, str]:
+    gap = preference.reward_gap if preference.reward_gap is not None else 0.0
+    return (
+        -int(preference.reward_gap is not None),
+        -gap,
+        preference.task_id,
+        preference.preferred_action_id,
+        preference.alternative_action_id,
+    )
 
 
 def _predict_policy(example: _StateExample, model: PolicyModel) -> str | None:
@@ -894,6 +1216,21 @@ def _render_filter(data_filter: PolicyDataFilter) -> str:
         if values:
             parts.append(f"{field_name}={','.join(values)}")
     return "; ".join(parts) if parts else "none"
+
+
+def _render_preference_counts(counts: dict[str, int]) -> str:
+    if not counts:
+        return "none"
+    return ", ".join(
+        f"{action_id}={count}"
+        for action_id, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    )
+
+
+def _render_optional_float(value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.6f}"
 
 
 def load_baseline_policy_evaluation(path: Path) -> BaselinePolicyEvaluation:

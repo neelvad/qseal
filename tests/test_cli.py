@@ -346,6 +346,33 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert inspection["rows"][0]["correct"] is True
     assert "Inspection file written" in inspected_policy.stderr
 
+    label_inspection_path = tmp_path / "policy-labels.json"
+    inspected_labels = CliRunner().invoke(
+        main,
+        [
+            "policy",
+            "inspect-labels",
+            str(trajectories_path),
+            "--report-file",
+            str(label_inspection_path),
+            "--holdout-include-fixture",
+            "standard-small",
+            "--group-by",
+            "action_set",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert inspected_labels.exit_code == 0, inspected_labels.output
+    label_inspection = json.loads(label_inspection_path.read_text())
+    assert label_inspection["artifact_type"] == "policy_label_inspection"
+    assert label_inspection["holdout_filter"]["include_fixtures"] == [
+        "standard-small"
+    ]
+    assert label_inspection["group_by"] == ["action_set"]
+    assert "Label inspection file written" in inspected_labels.stderr
+
     policy_run_dir = tmp_path / "policy-run"
     policy_run = CliRunner().invoke(
         main,

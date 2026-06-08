@@ -34,6 +34,7 @@ from snowprove.policy import (
     PolicyHoldoutEvaluation,
     evaluate_baseline_policy,
     inspect_baseline_policy,
+    inspect_policy_labels,
     load_baseline_policy,
     load_policy_model,
     render_baseline_policy_evaluation,
@@ -41,6 +42,7 @@ from snowprove.policy import (
     render_baseline_policy_training,
     render_linear_policy_training,
     render_policy_holdout_evaluation,
+    render_policy_label_inspection,
     train_baseline_policy,
     train_linear_policy,
     write_baseline_policy,
@@ -101,6 +103,19 @@ SearchStrategyChoice = click.Choice(
     case_sensitive=False,
 )
 RewardModelChoice = click.Choice(["transition", "state"], case_sensitive=False)
+PolicyLabelGroupChoice = click.Choice(
+    [
+        "action_set",
+        "rule_pair",
+        "preferred_rule",
+        "alternative_rule",
+        "table",
+        "fixture",
+        "target",
+        "target_pair",
+    ],
+    case_sensitive=False,
+)
 
 
 @click.group()
@@ -922,6 +937,121 @@ def policy_inspect_baseline(
         click.echo(render_baseline_policy_inspection(inspection, limit=limit))
     if report_file is not None:
         click.echo(f"Inspection file written: {report_file}", err=True)
+
+
+@policy_group.command(name="inspect-labels")
+@click.argument(
+    "trajectory_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--report-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the label inspection JSON artifact to this file.",
+)
+@click.option("--train-include-task", "train_include_tasks", multiple=True)
+@click.option("--train-exclude-task", "train_exclude_tasks", multiple=True)
+@click.option("--train-include-fixture", "train_include_fixtures", multiple=True)
+@click.option("--train-exclude-fixture", "train_exclude_fixtures", multiple=True)
+@click.option("--train-include-tag", "train_include_tags", multiple=True)
+@click.option("--train-exclude-tag", "train_exclude_tags", multiple=True)
+@click.option("--holdout-include-task", "holdout_include_tasks", multiple=True)
+@click.option("--holdout-exclude-task", "holdout_exclude_tasks", multiple=True)
+@click.option("--holdout-include-fixture", "holdout_include_fixtures", multiple=True)
+@click.option("--holdout-exclude-fixture", "holdout_exclude_fixtures", multiple=True)
+@click.option("--holdout-include-tag", "holdout_include_tags", multiple=True)
+@click.option("--holdout-exclude-tag", "holdout_exclude_tags", multiple=True)
+@click.option(
+    "--group-by",
+    "group_by",
+    multiple=True,
+    type=PolicyLabelGroupChoice,
+    help=(
+        "Preference grouping dimension. Defaults to action_set and table. "
+        "Can be passed more than once."
+    ),
+)
+@click.option(
+    "--reward-margin",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Skip known preference gaps below this margin.",
+)
+@click.option(
+    "--examples-per-group",
+    type=click.IntRange(min=0),
+    default=3,
+    show_default=True,
+    help="Number of example preferences retained per group.",
+)
+@click.option(
+    "--limit",
+    type=click.IntRange(min=1),
+    help="Limit text output groups. JSON reports always include every group.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+)
+def policy_inspect_labels(
+    trajectory_path: Path,
+    report_file: Path | None,
+    train_include_tasks: tuple[str, ...],
+    train_exclude_tasks: tuple[str, ...],
+    train_include_fixtures: tuple[str, ...],
+    train_exclude_fixtures: tuple[str, ...],
+    train_include_tags: tuple[str, ...],
+    train_exclude_tags: tuple[str, ...],
+    holdout_include_tasks: tuple[str, ...],
+    holdout_exclude_tasks: tuple[str, ...],
+    holdout_include_fixtures: tuple[str, ...],
+    holdout_exclude_fixtures: tuple[str, ...],
+    holdout_include_tags: tuple[str, ...],
+    holdout_exclude_tags: tuple[str, ...],
+    group_by: tuple[str, ...],
+    reward_margin: float,
+    examples_per_group: int,
+    limit: int | None,
+    output_format: str,
+) -> None:
+    """Compare train and holdout oracle preference labels from trajectories."""
+    inspection = inspect_policy_labels(
+        trajectory_path,
+        source_trajectories=str(trajectory_path),
+        train_filter=PolicyDataFilter(
+            include_tasks=train_include_tasks,
+            exclude_tasks=train_exclude_tasks,
+            include_fixtures=train_include_fixtures,
+            exclude_fixtures=train_exclude_fixtures,
+            include_tags=train_include_tags,
+            exclude_tags=train_exclude_tags,
+        ),
+        holdout_filter=PolicyDataFilter(
+            include_tasks=holdout_include_tasks,
+            exclude_tasks=holdout_exclude_tasks,
+            include_fixtures=holdout_include_fixtures,
+            exclude_fixtures=holdout_exclude_fixtures,
+            include_tags=holdout_include_tags,
+            exclude_tags=holdout_exclude_tags,
+        ),
+        group_by=group_by or ("action_set", "table"),
+        reward_margin=reward_margin,
+        examples_per_group=examples_per_group,
+    )
+    if report_file is not None:
+        report_file.parent.mkdir(parents=True, exist_ok=True)
+        report_file.write_text(inspection.model_dump_json(indent=2))
+
+    if output_format == "json":
+        click.echo(inspection.model_dump_json(indent=2))
+    else:
+        click.echo(render_policy_label_inspection(inspection, limit=limit))
+    if report_file is not None:
+        click.echo(f"Label inspection file written: {report_file}", err=True)
 
 
 @policy_group.command(name="holdout-evaluate")

@@ -630,15 +630,28 @@ Completed:
     at `/tmp/snowprove-policy-120-holdout-standard-medium-ranker-margin005-20260608`
     kept 43/44 offline exact/adjusted accuracy and tied greedy search at
     reward 0.085962 and 28 wins while using 44 oracle calls versus greedy's 56.
+60. `snowprove policy inspect-labels` now compares train and holdout oracle
+    preference labels from trajectory JSONL without running benchmarks. It can
+    group preference counts by action set, rule pair, table tag, fixture, and
+    target context, then reports where holdout labels disagree with the train
+    majority.
+61. Running:
+    `uv run snowprove policy inspect-labels /tmp/snowprove-policy-120-20260608/trajectories.jsonl --train-exclude-tag multi-action --holdout-include-tag multi-action --reward-margin 0.055 --group-by action_set --group-by table --limit 8`
+    found 18 train preferences, 28 holdout preferences, 7 groups, and 5
+    disagreement groups. The largest disagreement was double not-null on
+    `table:orders`; other disagreements were distinct-vs-not-null choices on
+    events, orders, and users. This confirms the current ranker issue is
+    train/holdout label conflict in specific action contexts, not only a model
+    capacity problem.
 
 Next:
 
-1. Inspect label disagreement between choice-calibration tasks and
-   multi-action tasks, especially `DISTINCT + IS NOT NULL` and predicate-0 vs
-   predicate-1 ordering.
-2. Add a label-disagreement inspection helper that compares train-split choice
-   preferences against held-out misses by action set, rule pair, table tag, and
-   fixture.
+1. Use `policy inspect-labels` with narrower grouping such as
+   `--group-by action_set --group-by fixture` and
+   `--group-by rule_pair --group-by table --group-by target_pair` to decide
+   whether to add more targeted calibration tasks or richer policy features.
+2. Consider adding context features that distinguish table/fixture/action-set
+   conflicts before adding more model complexity.
 3. Keep using `policy inspect-baseline` after each experiment to distinguish
    harmless near-ties from real search-reward regressions.
 
