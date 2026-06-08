@@ -455,16 +455,28 @@ Completed:
     18/18 with zero mean known reward gap. Held-out corpus search tied greedy
     reward/wins at 0.096018 and 15 wins, while `policy_baseline_abstain` used
     21 verifier/benchmark requests versus greedy's 24.
+40. Three additional holdout experiments completed:
+    - `/tmp/snowprove-policy-holdout-duplicate-heavy-20260608`: held out
+      `duplicate-heavy-small`, trained on 75 states, held out 22 states across
+      17 tasks, offline accuracy 22/22, tied greedy at reward 0.086410 and
+      17 wins, using 23 verifier/benchmark requests versus greedy's 26.
+    - `/tmp/snowprove-policy-holdout-events-20260608`: held out
+      `table:events`, trained on 73 states, held out 24 states across 20 tasks,
+      offline accuracy 24/24, tied greedy at reward 0.132048 and 20 wins,
+      using 28 verifier/benchmark requests versus greedy's 32.
+    - `/tmp/snowprove-policy-holdout-multiaction-20260608`: held out
+      `multi-action`, trained on 54 states, held out 43 states across 21 tasks,
+      offline accuracy 42/43 with mean known reward gap 0.001192, tied greedy
+      at reward 0.180552 and 21 wins, using 47 verifier/benchmark requests
+      versus greedy's 60.
 
 Next:
 
-1. Run several held-out baseline policy splits and inspect accuracy/gap by
-   fixture and tag.
-2. Run held-out train/eval experiments for `policy_baseline_abstain`, starting
-   with fixture and tag splits via `policy holdout-evaluate`.
-3. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
+1. Inspect the multi-action holdout miss and decide whether policy features or
+   corpus coverage need to change.
+2. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.
-4. Add a small learned action-ranking policy only after baseline measurements
+3. Add a small learned action-ranking policy only after baseline measurements
    are reproducible.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least
