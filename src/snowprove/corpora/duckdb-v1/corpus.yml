@@ -1,7 +1,7 @@
 schema_version: 1
 artifact_type: rewrite_task_corpus
 corpus_id: duckdb-foundations
-corpus_version: "3"
+corpus_version: "4"
 dialect: duckdb
 
 fixtures:
@@ -176,6 +176,10 @@ task_families:
         query_path: queries/redundant-distinct-orders.sql
         tags:
           - table:orders
+      - variant_id: events
+        query_path: queries/redundant-distinct-events.sql
+        tags:
+          - table:events
 
   - family_id: not-null
     constraints_path: schema.yml
@@ -202,6 +206,10 @@ task_families:
         query_path: queries/redundant-not-null-order-id.sql
         tags:
           - table:orders
+      - variant_id: events
+        query_path: queries/redundant-not-null-event-id.sql
+        tags:
+          - table:events
 
   - family_id: unused-left-join
     constraints_path: schema.yml
@@ -285,6 +293,10 @@ task_families:
         query_path: queries/distinct-and-not-null-orders.sql
         tags:
           - table:orders
+      - variant_id: events
+        query_path: queries/distinct-and-not-null-events.sql
+        tags:
+          - table:events
 
   - family_id: predicate-pushdown
     constraints_path: schema.yml
@@ -293,6 +305,7 @@ task_families:
       - low-skew-small
       - active-heavy-small
       - duplicate-heavy-small
+      - standard-medium
     max_steps: 2
     enabled_rules:
       - predicate_pushdown
@@ -311,6 +324,38 @@ task_families:
           - selectivity:fixture-controlled
       - variant_id: high-value-orders
         query_path: queries/predicate-pushdown-high-value-orders.sql
+        tags:
+          - table:orders
+          - selectivity:high
+
+  - family_id: not-null-pushdown
+    constraints_path: schema.yml
+    fixture_ids:
+      - standard-small
+      - low-skew-small
+      - active-heavy-small
+      - duplicate-heavy-small
+    max_steps: 4
+    enabled_rules:
+      - remove_redundant_not_null_filter
+      - predicate_pushdown
+    tags:
+      - filter
+      - nullability
+      - subquery
+      - predicate-pushdown
+      - multi-action
+      - order-sensitive
+    expected_verifiers:
+      - builtin
+    variants:
+      - variant_id: users
+        query_path: queries/not-null-pushdown-users.sql
+        tags:
+          - table:users
+          - selectivity:fixture-controlled
+      - variant_id: orders
+        query_path: queries/not-null-pushdown-orders.sql
         tags:
           - table:orders
           - selectivity:high

@@ -325,9 +325,9 @@ Completed:
    avoid repeated oracle work and preserve experiment data.
 7. Fixed-order, seeded random, greedy, beam-search, and bounded exhaustive
    baselines explore the verified rewrite environment.
-8. A versioned DuckDB corpus defines six seeded fixture profiles and 53
+8. A versioned DuckDB corpus defines six seeded fixture profiles and 75
    concrete tasks with stable content fingerprints, including table-scale and
-   predicate-pushdown variations.
+   multi-action predicate-pushdown variations.
 9. A corpus runner compares all five search strategies and writes versioned
    JSON reports with per-run and aggregate oracle/performance metrics.
 10. A corpus summary command ranks strategies and highlights task disagreement,
@@ -377,6 +377,20 @@ Completed:
 23. Aggregate reports now include uncertainty-adjusted reward classes. Raw
     reward-class flips are preserved, but near-threshold repeated measurements
     are marked `uncertain` with an uncertainty band and reason.
+24. The bundled corpus is now version 4 with 75 tasks. The expansion added
+    event-table variants for redundant `DISTINCT`, redundant non-null filters,
+    and combined `DISTINCT` plus non-null-filter tasks; it also added medium
+    predicate-pushdown coverage and supported non-null plus pushdown
+    multi-action tasks.
+25. A three-run, 20 ms, 75-task transition repeat completed with 5 winner
+    changes, 3 reward-class changes, 0 uncertainty-adjusted reward-class
+    changes, 3 uncertain tasks, and 6 path changes. The aggregate artifact was
+    written to `/tmp/snowprove-corpus-75-transition-20260608/corpus-aggregate.json`.
+26. A matching three-run, 20 ms, 75-task state repeat completed with 2 winner
+    changes, 3 reward-class changes, 0 uncertainty-adjusted reward-class
+    changes, 3 uncertain tasks, and 1 path change. It used roughly twice the
+    benchmark requests, so transition remains the default and state remains an
+    experimental comparison mode.
 
 Next:
 

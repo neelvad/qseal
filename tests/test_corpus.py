@@ -17,11 +17,11 @@ def test_loads_versioned_duckdb_corpus() -> None:
     corpus = load_task_corpus(CORPUS_PATH)
 
     assert corpus.manifest.corpus_id == "duckdb-foundations"
-    assert corpus.manifest.corpus_version == "3"
+    assert corpus.manifest.corpus_version == "4"
     assert corpus.manifest.dialect == "duckdb"
     assert len(corpus.manifest.fixtures) == 6
-    assert len(corpus.manifest.task_families) == 6
-    assert len(corpus.tasks) == 53
+    assert len(corpus.manifest.task_families) == 7
+    assert len(corpus.tasks) == 75
     assert [task.definition.task_id for task in corpus.tasks[:5]] == [
         "redundant-distinct-users",
         "redundant-not-null-user-id",
@@ -36,7 +36,7 @@ def test_loads_versioned_duckdb_corpus() -> None:
     assert task.environment_task.max_steps == 4
     assert task.environment_task.metadata == {
         "corpus_id": "duckdb-foundations",
-        "corpus_version": "3",
+        "corpus_version": "4",
         "fixture_id": "standard-small",
         "tags": ["distinct", "filter", "multi-action", "order-sensitive"],
     }
@@ -48,7 +48,7 @@ def test_loads_versioned_duckdb_corpus() -> None:
     assert generated.definition.variant_id == "orders"
     assert generated.environment_task.metadata == {
         "corpus_id": "duckdb-foundations",
-        "corpus_version": "3",
+        "corpus_version": "4",
         "fixture_id": "duplicate-heavy-small",
         "tags": [
             "distinct",
@@ -64,12 +64,13 @@ def test_loads_versioned_duckdb_corpus() -> None:
     assert Counter(
         task.definition.family_id for task in corpus.tasks if task.definition.family_id
     ) == {
-        "distinct": 8,
-        "not-null": 8,
+        "distinct": 12,
+        "not-null": 12,
         "unused-left-join": 8,
         "join-distinct-exists": 8,
-        "distinct-not-null": 8,
-        "predicate-pushdown": 8,
+        "distinct-not-null": 12,
+        "predicate-pushdown": 10,
+        "not-null-pushdown": 8,
     }
 
 
