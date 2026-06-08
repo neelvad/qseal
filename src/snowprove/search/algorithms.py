@@ -13,6 +13,7 @@ from snowprove.environment import (
 from snowprove.search.model import SearchResult, SearchStep, SearchTiePolicy
 
 EnvironmentFactory = Callable[[], RewriteEnvironment]
+ActionScorer = Callable[[EnvironmentObservation, str], float]
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,42 @@ def random_search(
         node,
         explored_nodes=explored,
         seed=seed,
+        reward_margin=reward_margin,
+        tie_policy=tie_policy,
+    )
+
+
+def policy_baseline_search(
+    task: EnvironmentTask,
+    environment_factory: EnvironmentFactory,
+    scorer: ActionScorer,
+    *,
+    reward_margin: float = 0.0,
+    tie_policy: SearchTiePolicy = "shorter",
+) -> SearchResult:
+    _validate_reward_margin(reward_margin)
+    _validate_tie_policy(tie_policy)
+    node = _root_node(task, environment_factory)
+    explored = 0
+    while node.active():
+        ranked_actions = sorted(
+            node.observation.actions,
+            key=lambda action: (
+                -scorer(node.observation, action.action_id),
+                action.action_id,
+            ),
+        )
+        explored += len(ranked_actions)
+        node = _run_sequence(
+            task,
+            environment_factory,
+            (*node.action_ids, ranked_actions[0].action_id),
+        )
+    return _result(
+        "policy_baseline",
+        task,
+        node,
+        explored_nodes=explored,
         reward_margin=reward_margin,
         tie_policy=tie_policy,
     )

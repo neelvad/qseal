@@ -8,6 +8,8 @@ structured rewrite action space:
 - greedy evaluates every immediate action and stops when none improves reward
 - beam search retains the best cumulative paths at each depth
 - exhaustive search explores unique SQL states breadth-first up to a node limit
+- policy-baseline scores available actions with a trained baseline policy model
+  and applies the highest-scoring action until the episode ends
 
 These are library APIs rather than CLI commands. Each search accepts an
 `EnvironmentTask` and a factory that creates a fresh `RewriteEnvironment`:
@@ -47,7 +49,9 @@ Beam and exhaustive search treat the unchanged root query as a valid result.
 They can therefore conclude that no rewrite is better when all explored
 transitions have negative reward. Fixed-order and random are forced-rollout
 baselines. Greedy stops early when its best immediate candidate does not
-increase cumulative reward.
+increase cumulative reward. Policy-baseline is also a forced rollout, but its
+action order comes from the supplied policy model instead of registry order or
+random sampling.
 
 `reward_margin` sets the minimum cumulative reward improvement required to
 prefer a longer or more complex path. Rewards remain unmodified in artifacts;

@@ -290,6 +290,42 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert evaluation["accuracy"] == 1.0
     assert evaluation["data_filter"]["include_fixtures"] == ["standard-small"]
 
+    policy_run_dir = tmp_path / "policy-run"
+    policy_run = CliRunner().invoke(
+        main,
+        [
+            "corpus",
+            "run",
+            str(policy_run_dir),
+            "--manifest",
+            str(manifest_path),
+            "--task",
+            "redundant-distinct-users",
+            "--strategy",
+            "policy_baseline",
+            "--policy-model",
+            str(model_path),
+            "--minimum-duration-ms",
+            "10000",
+            "--warmups",
+            "0",
+            "--repetitions",
+            "1",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert policy_run.exit_code == 0, policy_run.output
+    policy_report = json.loads((policy_run_dir / "corpus-run.json").read_text())
+    assert policy_report["config"]["strategies"] == ["policy_baseline"]
+    assert policy_report["config"]["policy_model_path"] == str(model_path)
+    assert policy_report["tasks"][0]["results"][0]["search_result"]["strategy"] == "policy_baseline"
+    assert (
+        policy_report["tasks"][0]["results"][0]["search_result"]["action_ids"]
+        == ["remove_redundant_distinct::query:distinct"]
+    )
+
 
 def test_corpus_repeat_cli_runs_independent_measurements_and_aggregates(
     tmp_path,

@@ -81,7 +81,7 @@ CheckFailOn = click.Choice(["none", "unproven"], case_sensitive=False)
 VerifierChoice = click.Choice(["builtin", "external", "sqlsolver"], case_sensitive=False)
 DialectChoice = click.Choice(SUPPORTED_DIALECTS, case_sensitive=False)
 SearchStrategyChoice = click.Choice(
-    ["fixed_order", "random", "greedy", "beam", "exhaustive"],
+    ["fixed_order", "random", "greedy", "beam", "exhaustive", "policy_baseline"],
     case_sensitive=False,
 )
 RewardModelChoice = click.Choice(["transition", "state"], case_sensitive=False)
@@ -173,6 +173,12 @@ def policy_group() -> None:
     help="Minimum duration for each timed execution batch.",
 )
 @click.option(
+    "--policy-model",
+    "policy_model_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Baseline policy model JSON artifact for the policy_baseline strategy.",
+)
+@click.option(
     "--report-file",
     type=click.Path(dir_okay=False, path_type=Path),
     help="JSON report path. Defaults to OUTPUT_DIR/corpus-run.json.",
@@ -199,6 +205,7 @@ def corpus_run(
     timeout_seconds: float,
     threads: int,
     minimum_duration_ms: float,
+    policy_model_path: Path | None,
     report_file: Path | None,
     output_format: str,
 ) -> None:
@@ -218,6 +225,9 @@ def corpus_run(
         "threads": threads,
         "minimum_duration_ms": minimum_duration_ms,
     }
+    if policy_model_path is not None:
+        config_values["policy_model_path"] = str(policy_model_path)
+        config_values["policy_model"] = load_baseline_policy(policy_model_path)
     if strategies:
         config_values["strategies"] = strategies
 
@@ -322,6 +332,12 @@ def corpus_run(
     help="Minimum duration for each timed execution batch.",
 )
 @click.option(
+    "--policy-model",
+    "policy_model_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Baseline policy model JSON artifact for the policy_baseline strategy.",
+)
+@click.option(
     "--neutral-threshold",
     type=click.FloatRange(min=0),
     default=0.01,
@@ -351,6 +367,7 @@ def corpus_repeat(
     timeout_seconds: float,
     threads: int,
     minimum_duration_ms: float,
+    policy_model_path: Path | None,
     neutral_threshold: float,
     output_format: str,
 ) -> None:
@@ -369,6 +386,9 @@ def corpus_repeat(
         "threads": threads,
         "minimum_duration_ms": minimum_duration_ms,
     }
+    if policy_model_path is not None:
+        config_values["policy_model_path"] = str(policy_model_path)
+        config_values["policy_model"] = load_baseline_policy(policy_model_path)
     if strategies:
         config_values["strategies"] = strategies
 

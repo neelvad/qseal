@@ -9,7 +9,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from snowprove.corpus import CorpusTrajectoryRecord, load_corpus_trajectory_records
+from snowprove.corpus.trajectories import (
+    CorpusTrajectoryRecord,
+    load_corpus_trajectory_records,
+)
 
 
 class PolicyDataFilter(BaseModel):
@@ -30,6 +33,15 @@ class FeatureStat(BaseModel):
     appearances: int = Field(ge=0)
     oracle_count: int = Field(ge=0)
     win_rate: float
+
+
+class PolicyActionContext(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    fixture_id: str
+    tags: tuple[str, ...] = Field(default_factory=tuple)
+    step_index: int = Field(ge=0)
+    available_action_ids: tuple[str, ...] = Field(default_factory=tuple)
 
 
 class BaselinePolicyModel(BaseModel):
@@ -197,6 +209,27 @@ def evaluate_baseline_policy(
     )
 
 
+def score_baseline_action(
+    model: BaselinePolicyModel,
+    context: PolicyActionContext,
+    action_id: str,
+) -> float:
+    scores = {stat.feature: stat.win_rate for stat in model.feature_stats}
+    values = [
+        scores[feature]
+        for feature in _feature_values(
+            fixture_id=context.fixture_id,
+            tags=context.tags,
+            step_index=context.step_index,
+            action_id=action_id,
+        )
+        if feature in scores
+    ]
+    if not values:
+        return model.default_score
+    return sum(values) / len(values)
+
+
 def write_baseline_policy(model: BaselinePolicyModel, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(model.model_dump_json(indent=2))
@@ -328,20 +361,39 @@ def _score(
     scores: dict[str, float],
     default_score: float,
 ) -> float:
-    values = [scores[feature] for feature in _features(example, action_id) if feature in scores]
+    values = [
+        scores[feature]
+        for feature in _features(example, action_id)
+        if feature in scores
+    ]
     if not values:
         return default_score
     return sum(values) / len(values)
 
 
 def _features(example: _StateExample, action_id: str) -> tuple[str, ...]:
+    return _feature_values(
+        fixture_id=example.fixture_id,
+        tags=example.tags,
+        step_index=example.step_index,
+        action_id=action_id,
+    )
+
+
+def _feature_values(
+    *,
+    fixture_id: str,
+    tags: tuple[str, ...],
+    step_index: int,
+    action_id: str,
+) -> tuple[str, ...]:
     rule_name = _rule_name(action_id)
     return (
         f"action:{action_id}",
         f"rule:{rule_name}",
-        f"fixture_action:{example.fixture_id}:{action_id}",
-        f"step_action:{example.step_index}:{action_id}",
-        *(f"tag_action:{tag}:{action_id}" for tag in example.tags),
+        f"fixture_action:{fixture_id}:{action_id}",
+        f"step_action:{step_index}:{action_id}",
+        *(f"tag_action:{tag}:{action_id}" for tag in tags),
     )
 
 

@@ -210,6 +210,11 @@ def test_run_config_rejects_duplicate_strategies() -> None:
         CorpusRunConfig(strategies=("greedy", "greedy"))
 
 
+def test_run_config_requires_policy_model_for_policy_strategy() -> None:
+    with pytest.raises(ValueError, match="requires a policy model"):
+        CorpusRunConfig(strategies=("policy_baseline",))
+
+
 def _tiny_corpus(tmp_path: Path):
     copied_root = copytree(
         bundled_corpus_path().parent,

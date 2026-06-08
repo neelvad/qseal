@@ -415,12 +415,22 @@ Completed:
     trajectories excluding `standard-medium` and evaluated only
     `standard-medium`: 18/18 top-1 state accuracy with zero mean known reward
     gap. This is still a small split, but confirms the filter workflow works.
+32. `policy_baseline` is available as a corpus search strategy:
+    `snowprove corpus run OUT --strategy policy_baseline --policy-model
+    policy.json`. It scores current available actions with the trained baseline
+    model and executes the highest-scoring action as a forced rollout.
+33. A policy-only full-corpus smoke run using
+    `/tmp/snowprove-policy-baseline-20260608/policy.json` completed 75/75
+    tasks with mean reward 0.114065, 117 verifier requests, 117 benchmark
+    requests, 96 new benchmarks, and no low-confidence steps. The report was
+    written to `/tmp/snowprove-policy-strategy-20260608/corpus-run.json`.
 
 Next:
 
 1. Run several held-out baseline policy splits and inspect accuracy/gap by
    fixture and tag.
-2. Plug baseline policy scores into corpus search as an additional strategy.
+2. Compare `policy_baseline` against fixed/random/greedy/beam/exhaustive in a
+   shared multi-strategy full-corpus run and then in held-out train/eval runs.
 3. Expand toward 100-200 tasks based on measured gaps rather than arbitrary
    variations.
 4. Add a small learned action-ranking policy only after baseline measurements

@@ -38,6 +38,18 @@ Useful controls include `--random-seed`, `--beam-width`, `--max-nodes`,
 content-addressed oracle caches are retained under the output directory, so
 repeated runs reuse both.
 
+To compare a trained baseline policy as a corpus strategy:
+
+```bash
+uv run snowprove corpus run snowprove-runs/corpus-policy \
+  --strategy policy_baseline \
+  --policy-model policy.json
+```
+
+The `policy_baseline` strategy scores available actions from the current SQL
+state and executes the highest-scoring action as a forced rollout. The run
+artifact records the `policy_model_path`, but not the full model contents.
+
 Use `--reward-margin` to require a meaningful cumulative improvement before
 greedy, beam, or exhaustive search prefers a longer path:
 

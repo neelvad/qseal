@@ -15,6 +15,7 @@ from snowprove.search import (
     exhaustive_search,
     fixed_order_search,
     greedy_search,
+    policy_baseline_search,
     random_search,
 )
 
@@ -84,6 +85,21 @@ def test_random_search_is_reproducible_for_a_seed() -> None:
     assert first.final_sql == second.final_sql
     assert first.cumulative_reward == second.cumulative_reward
     assert first.seed == 7
+
+
+def test_policy_baseline_search_follows_highest_scored_action() -> None:
+    result = policy_baseline_search(
+        _task(),
+        _factory(),
+        lambda _observation, action_id: (
+            1.0 if action_id == "remove_redundant_not_null_filter::predicate:1" else 0.0
+        ),
+    )
+
+    assert result.strategy == "policy_baseline"
+    assert result.action_ids[0] == "remove_redundant_not_null_filter::predicate:1"
+    assert result.final_sql == FINAL_SQL
+    assert result.explored_nodes == 3
 
 
 def test_greedy_selects_highest_immediate_reward() -> None:

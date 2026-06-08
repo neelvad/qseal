@@ -63,7 +63,9 @@ semantic equivalence and performance measurement separate.
 5. A framework-neutral environment returning solver status, benchmark results,
    reward, and termination state.
 6. Content-addressed caches and JSONL or Parquet trajectory artifacts.
-7. Fixed-order, random, greedy, beam-search, and exhaustive-search baselines.
-8. A small learned ranking or rule-selection policy.
+7. Fixed-order, random, greedy, beam-search, exhaustive-search, and baseline
+   policy search strategies.
+8. A small learned ranking or rule-selection policy beyond the feature-mean
+   baseline.
 9. SFT and verifier-guided RL for SQL generation only after structured-policy
    experiments demonstrate useful generalization.

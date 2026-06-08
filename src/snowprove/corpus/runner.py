@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 import duckdb
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -17,6 +17,7 @@ from snowprove.environment import (
     CachedPerformanceEvaluator,
     CachedVerifier,
     DuckDbPerformanceEvaluator,
+    EnvironmentObservation,
     RewriteEnvironment,
 )
 from snowprove.environment.core import PerformanceEvaluator
@@ -28,12 +29,20 @@ from snowprove.search import (
     exhaustive_search,
     fixed_order_search,
     greedy_search,
+    policy_baseline_search,
     random_search,
 )
 from snowprove.verifier.backends import BuiltinVerifierBackend
 from snowprove.verifier.backends.base import VerifierBackend
 
-SearchStrategy = Literal["fixed_order", "random", "greedy", "beam", "exhaustive"]
+SearchStrategy = Literal[
+    "fixed_order",
+    "random",
+    "greedy",
+    "beam",
+    "exhaustive",
+    "policy_baseline",
+]
 RewardModel = Literal["transition", "state"]
 VerifierFactory = Callable[[LoadedCorpusTask], VerifierBackend]
 
@@ -69,11 +78,15 @@ class CorpusRunConfig(BaseModel):
     threads: int = Field(default=1, ge=1)
     minimum_duration_ms: float = Field(default=5.0, ge=0)
     reward_model: RewardModel = "transition"
+    policy_model_path: str | None = None
+    policy_model: Any = Field(default=None, exclude=True)
 
     @model_validator(mode="after")
     def validate_unique_values(self) -> CorpusRunConfig:
         _require_unique("strategies", self.strategies)
         _require_unique("task IDs", self.task_ids)
+        if "policy_baseline" in self.strategies and self.policy_model is None:
+            raise ValueError("policy_baseline strategy requires a policy model.")
         return self
 
 
@@ -335,6 +348,16 @@ def _search(
             reward_margin=config.reward_margin,
             tie_policy=tie_policy,
         )
+    if strategy == "policy_baseline":
+        if config.policy_model is None:
+            raise ValueError("policy_baseline strategy requires a policy model.")
+        return policy_baseline_search(
+            task.environment_task,
+            environment_factory,
+            _policy_scorer(task, config.policy_model),
+            reward_margin=config.reward_margin,
+            tie_policy=tie_policy,
+        )
     if strategy == "greedy":
         return greedy_search(
             task.environment_task,
@@ -357,6 +380,29 @@ def _search(
         reward_margin=config.reward_margin,
         tie_policy=tie_policy,
     )
+
+
+def _policy_scorer(
+    task: LoadedCorpusTask,
+    model: Any,
+) -> Callable[[EnvironmentObservation, str], float]:
+    from snowprove.policy import PolicyActionContext, score_baseline_action
+
+    def score(observation: EnvironmentObservation, action_id: str) -> float:
+        return score_baseline_action(
+            model,
+            PolicyActionContext(
+                fixture_id=task.fixture.fixture_id,
+                tags=task.definition.tags,
+                step_index=observation.step_index,
+                available_action_ids=tuple(
+                    action.action_id for action in observation.actions
+                ),
+            ),
+            action_id,
+        )
+
+    return score
 
 
 def _ensure_fixtures(
