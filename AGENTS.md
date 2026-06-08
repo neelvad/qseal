@@ -167,6 +167,21 @@ Task corpus:
 - `snowprove corpus aggregate REPORT...` measures reward variance, winner and
   reward-class changes, and per-strategy path stability across compatible runs
 
+Policy workflows:
+
+- `snowprove corpus export-trajectories REPORT.json --output trajectories.jsonl`
+  writes labeled trajectory rows from corpus search reports
+- `snowprove policy train-baseline trajectories.jsonl --model-file policy.json`
+  trains the current feature-mean action ranker
+- `snowprove policy evaluate-baseline trajectories.jsonl --model-file
+  policy.json` reports aggregate offline accuracy and reward gaps
+- `snowprove policy inspect-baseline trajectories.jsonl --model-file
+  policy.json` reports per-state predictions, misses, unacceptable rows, action
+  scores, reward gaps, and state SQL
+- `snowprove policy holdout-evaluate trajectories.jsonl OUT --include-fixture
+  standard-medium` trains excluding a held-out split, evaluates offline labels,
+  and compares greedy against policy-abstain on held-out corpus tasks
+
 dbt workflows:
 
 - scans `models/**/*.sql`
@@ -517,15 +532,26 @@ Completed:
       50.
     The offline misses are concentrated in redundant non-null action ordering;
     so far they do not translate into worse held-out corpus search rewards.
+47. `snowprove policy inspect-baseline TRAJECTORIES --model-file policy.json`
+    now recomputes per-state policy predictions and emits a structured
+    `baseline_policy_inspection` artifact. It supports the same include/exclude
+    split filters as training/evaluation, `--reward-margin`, `--mode
+    misses|unacceptable|all`, text/JSON output, `--limit`, and `--report-file`.
+    Running it on the 102-task multi-action holdout showed three exact misses:
+    `distinct-not-null-orders-standard-medium`,
+    `double-not-null-events-standard-medium`, and `distinct-and-not-null`.
+    All inspected misses had tied action scores, so the next improvement should
+    focus on action-context features or additional corpus examples that break
+    redundant-not-null ordering ties.
 
 Next:
 
-1. Inspect the 102-task offline holdout misses automatically instead of
-   manually, especially redundant non-null action-order mistakes.
-2. Decide whether to add policy features for competing action context or more
-   corpus examples that break redundant-not-null ties.
-3. If policy-abstain continues to tie greedy after that inspection, move on to
-   the first small learned action-ranking policy.
+1. Add policy features for competing action context, or add targeted corpus
+   examples that break redundant-not-null ordering ties.
+2. Rerun the 102-task multi-action holdout and inspect whether exact/adjusted
+   offline misses improve without hurting policy-abstain search rewards.
+3. If policy-abstain continues to tie greedy after that, move on to the first
+   small learned action-ranking policy.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least
 five structured actions, solver-backed equivalence rewards, repeatable latency

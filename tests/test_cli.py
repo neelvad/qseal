@@ -290,6 +290,35 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert evaluation["accuracy"] == 1.0
     assert evaluation["data_filter"]["include_fixtures"] == ["standard-small"]
 
+    inspection_path = tmp_path / "policy-inspection.json"
+    inspected_policy = CliRunner().invoke(
+        main,
+        [
+            "policy",
+            "inspect-baseline",
+            str(trajectories_path),
+            "--model-file",
+            str(model_path),
+            "--report-file",
+            str(inspection_path),
+            "--include-fixture",
+            "standard-small",
+            "--mode",
+            "all",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert inspected_policy.exit_code == 0, inspected_policy.output
+    inspection = json.loads(inspection_path.read_text())
+    assert inspection["artifact_type"] == "baseline_policy_inspection"
+    assert inspection["state_count"] == 1
+    assert inspection["row_count"] == 1
+    assert inspection["miss_count"] == 0
+    assert inspection["rows"][0]["correct"] is True
+    assert "Inspection file written" in inspected_policy.stderr
+
     policy_run_dir = tmp_path / "policy-run"
     policy_run = CliRunner().invoke(
         main,

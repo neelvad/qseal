@@ -93,6 +93,43 @@ class BaselinePolicyEvaluation(BaseModel):
     per_oracle_rule: tuple[RuleAccuracy, ...]
 
 
+class BaselinePolicyInspectionRow(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    task_id: str
+    fixture_id: str
+    tags: tuple[str, ...] = Field(default_factory=tuple)
+    step_index: int = Field(ge=0)
+    state_sql: str
+    available_action_ids: tuple[str, ...]
+    oracle_action_id: str
+    predicted_action_id: str
+    correct: bool
+    acceptable: bool
+    reward_gap: float | None
+    oracle_suffix_reward: float | None
+    predicted_suffix_reward: float | None
+    action_scores: dict[str, float]
+
+
+class BaselinePolicyInspection(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    schema_version: Literal[1] = 1
+    artifact_type: Literal["baseline_policy_inspection"] = "baseline_policy_inspection"
+    model_type: str
+    source_trajectories: str | None = None
+    model_path: str | None = None
+    data_filter: PolicyDataFilter = Field(default_factory=PolicyDataFilter)
+    reward_margin: float = Field(default=0.0, ge=0)
+    state_count: int
+    predicted_state_count: int
+    row_count: int
+    miss_count: int
+    unacceptable_count: int
+    rows: tuple[BaselinePolicyInspectionRow, ...]
+
+
 class PolicyHoldoutEvaluation(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -248,6 +285,96 @@ def evaluate_baseline_policy(
     )
 
 
+def inspect_baseline_policy(
+    trajectory_path: Path,
+    model: BaselinePolicyModel,
+    *,
+    source_trajectories: str | None = None,
+    model_path: str | None = None,
+    data_filter: PolicyDataFilter | None = None,
+    reward_margin: float = 0.0,
+    mode: Literal["misses", "unacceptable", "all"] = "misses",
+) -> BaselinePolicyInspection:
+    if reward_margin < 0:
+        raise ValueError("reward_margin must be zero or greater.")
+    if mode not in ("misses", "unacceptable", "all"):
+        raise ValueError(f"Unknown inspection mode: {mode}.")
+
+    data_filter = data_filter or PolicyDataFilter()
+    examples = [
+        example
+        for example in _filter_examples(
+            _state_examples(load_corpus_trajectory_records(trajectory_path)),
+            data_filter,
+        )
+        if example.oracle_action_id is not None
+    ]
+    scores = {stat.feature: stat.win_rate for stat in model.feature_stats}
+    rows = []
+    predicted = 0
+    miss_count = 0
+    unacceptable_count = 0
+
+    for example in examples:
+        prediction = _predict(example, scores, model.default_score)
+        if prediction is None:
+            continue
+        predicted += 1
+        assert example.oracle_action_id is not None
+        correct = prediction == example.oracle_action_id
+        miss_count += int(not correct)
+
+        oracle_reward = example.observed_suffix_rewards.get(example.oracle_action_id)
+        predicted_reward = example.observed_suffix_rewards.get(prediction)
+        reward_gap = None
+        acceptable = correct
+        if oracle_reward is not None and predicted_reward is not None:
+            reward_gap = oracle_reward - predicted_reward
+            acceptable = reward_gap <= reward_margin
+        unacceptable_count += int(not acceptable)
+
+        if mode == "misses" and correct:
+            continue
+        if mode == "unacceptable" and acceptable:
+            continue
+
+        rows.append(
+            BaselinePolicyInspectionRow(
+                task_id=example.task_id,
+                fixture_id=example.fixture_id,
+                tags=example.tags,
+                step_index=example.step_index,
+                state_sql=example.state_sql,
+                available_action_ids=example.available_action_ids,
+                oracle_action_id=example.oracle_action_id,
+                predicted_action_id=prediction,
+                correct=correct,
+                acceptable=acceptable,
+                reward_gap=reward_gap,
+                oracle_suffix_reward=oracle_reward,
+                predicted_suffix_reward=predicted_reward,
+                action_scores={
+                    action_id: _score(example, action_id, scores, model.default_score)
+                    for action_id in example.available_action_ids
+                },
+            )
+        )
+
+    return BaselinePolicyInspection(
+        model_type=model.model_type,
+        source_trajectories=source_trajectories,
+        model_path=model_path,
+        data_filter=data_filter,
+        reward_margin=reward_margin,
+        state_count=len(examples),
+        predicted_state_count=predicted,
+        row_count=len(rows),
+        miss_count=miss_count,
+        unacceptable_count=unacceptable_count,
+        rows=tuple(sorted(rows, key=_inspection_sort_key)),
+    )
+
+
 def score_baseline_action(
     model: BaselinePolicyModel,
     context: PolicyActionContext,
@@ -328,6 +455,56 @@ def render_baseline_policy_evaluation(evaluation: BaselinePolicyEvaluation) -> s
                 f"({rule.accuracy:.4f}), adjusted={rule.acceptable_count}/"
                 f"{rule.state_count} ({adjusted})"
             )
+    return "\n".join(lines)
+
+
+def render_baseline_policy_inspection(
+    inspection: BaselinePolicyInspection,
+    *,
+    limit: int | None = None,
+) -> str:
+    rows = inspection.rows[:limit] if limit is not None else inspection.rows
+    lines = [
+        "Baseline policy inspection",
+        f"Model: {inspection.model_type}",
+        f"States: {inspection.state_count}",
+        f"Predicted states: {inspection.predicted_state_count}",
+        f"Misses: {inspection.miss_count}",
+        f"Unacceptable: {inspection.unacceptable_count}",
+        f"Rows shown: {len(rows)}/{inspection.row_count}",
+        f"Reward margin: {inspection.reward_margin:.6f}",
+        f"Filter: {_render_filter(inspection.data_filter)}",
+    ]
+    if not rows:
+        lines.append("")
+        lines.append("No matching policy states.")
+        return "\n".join(lines)
+
+    for row in rows:
+        gap = "n/a" if row.reward_gap is None else f"{row.reward_gap:.6f}"
+        lines.extend(
+            [
+                "",
+                f"Task: {row.task_id}",
+                f"  Fixture: {row.fixture_id}",
+                f"  Step: {row.step_index}",
+                f"  Tags: {', '.join(row.tags) if row.tags else 'none'}",
+                f"  Oracle: {row.oracle_action_id}",
+                f"  Predicted: {row.predicted_action_id}",
+                f"  Correct: {row.correct}",
+                f"  Acceptable: {row.acceptable}",
+                f"  Reward gap: {gap}",
+                "  Scores:",
+            ]
+        )
+        for action_id, score in sorted(
+            row.action_scores.items(),
+            key=lambda item: (-item[1], item[0]),
+        ):
+            lines.append(f"    {action_id}: {score:.6f}")
+        lines.append("  SQL:")
+        lines.extend(f"    {line}" for line in row.state_sql.splitlines())
+
     return "\n".join(lines)
 
 
@@ -445,6 +622,16 @@ def _score(
     if not values:
         return default_score
     return sum(values) / len(values)
+
+
+def _inspection_sort_key(row: BaselinePolicyInspectionRow) -> tuple[int, float, str, int]:
+    reward_gap = row.reward_gap if row.reward_gap is not None else 0.0
+    return (
+        int(row.acceptable),
+        -reward_gap,
+        row.task_id,
+        row.step_index,
+    )
 
 
 def _features(example: _StateExample, action_id: str) -> tuple[str, ...]:

@@ -11,9 +11,15 @@ from snowprove.corpus import (
     export_corpus_trajectories,
     load_task_corpus,
 )
-from snowprove.policy import PolicyDataFilter, evaluate_baseline_policy, train_baseline_policy
+from snowprove.policy import (
+    PolicyDataFilter,
+    evaluate_baseline_policy,
+    inspect_baseline_policy,
+    train_baseline_policy,
+)
 from snowprove.policy.baseline import (
     PolicyHoldoutEvaluation,
+    render_baseline_policy_inspection,
     render_policy_holdout_evaluation,
 )
 from snowprove.rewrites.base import VerificationStatus
@@ -144,6 +150,58 @@ def test_baseline_policy_adjusted_accuracy_accepts_margin_gap(tmp_path) -> None:
     assert adjusted.acceptable_count == 1
     assert adjusted.accuracy == 0.0
     assert adjusted.adjusted_accuracy == 1.0
+
+
+def test_baseline_policy_inspection_reports_misses_and_unacceptable_rows(tmp_path) -> None:
+    corpus = load_task_corpus(bundled_corpus_path())
+    task = corpus.task("distinct-and-not-null")
+    trajectory_path = tmp_path / "trajectories.jsonl"
+    distinct_action = "remove_redundant_distinct::query:distinct"
+    not_null_action = "remove_redundant_not_null_filter::predicate:0"
+    export_corpus_trajectories(
+        _report(
+            corpus,
+            task.definition.task_id,
+            task.fingerprint,
+            task.fixture.fixture_id,
+            task.definition.enabled_rules,
+            task.definition.tags,
+            task.environment_task.sql,
+            distinct_action,
+            not_null_action,
+        ),
+        corpus,
+        trajectory_path,
+    )
+    model = train_baseline_policy(
+        trajectory_path,
+        data_filter=PolicyDataFilter(exclude_fixtures=("standard-small",)),
+    )
+
+    misses = inspect_baseline_policy(trajectory_path, model, reward_margin=0.0)
+    acceptable = inspect_baseline_policy(
+        trajectory_path,
+        model,
+        reward_margin=0.5,
+        mode="unacceptable",
+    )
+    rendered = render_baseline_policy_inspection(misses)
+
+    assert misses.artifact_type == "baseline_policy_inspection"
+    assert misses.state_count == 1
+    assert misses.predicted_state_count == 1
+    assert misses.miss_count == 1
+    assert misses.unacceptable_count == 1
+    assert misses.row_count == 1
+    assert misses.rows[0].task_id == task.definition.task_id
+    assert misses.rows[0].oracle_action_id == not_null_action
+    assert misses.rows[0].predicted_action_id == distinct_action
+    assert misses.rows[0].reward_gap is not None
+    assert abs(misses.rows[0].reward_gap - 0.2) < 0.000001
+    assert set(misses.rows[0].action_scores) == {distinct_action, not_null_action}
+    assert acceptable.row_count == 0
+    assert "Baseline policy inspection" in rendered
+    assert "Reward gap: 0.200000" in rendered
 
 
 def test_renders_policy_holdout_evaluation(tmp_path) -> None:

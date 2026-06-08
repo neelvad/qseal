@@ -33,8 +33,10 @@ from snowprove.policy import (
     PolicyDataFilter,
     PolicyHoldoutEvaluation,
     evaluate_baseline_policy,
+    inspect_baseline_policy,
     load_baseline_policy,
     render_baseline_policy_evaluation,
+    render_baseline_policy_inspection,
     render_baseline_policy_training,
     render_policy_holdout_evaluation,
     train_baseline_policy,
@@ -747,6 +749,98 @@ def policy_evaluate_baseline(
         click.echo(render_baseline_policy_evaluation(evaluation))
     if report_file is not None:
         click.echo(f"Evaluation file written: {report_file}", err=True)
+
+
+@policy_group.command(name="inspect-baseline")
+@click.argument(
+    "trajectory_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--model-file",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Baseline policy model JSON artifact.",
+)
+@click.option(
+    "--report-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the inspection JSON artifact to this file.",
+)
+@click.option("--include-task", "include_tasks", multiple=True)
+@click.option("--exclude-task", "exclude_tasks", multiple=True)
+@click.option("--include-fixture", "include_fixtures", multiple=True)
+@click.option("--exclude-fixture", "exclude_fixtures", multiple=True)
+@click.option("--include-tag", "include_tags", multiple=True)
+@click.option("--exclude-tag", "exclude_tags", multiple=True)
+@click.option(
+    "--reward-margin",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Reward gap tolerated when classifying acceptable predictions.",
+)
+@click.option(
+    "--mode",
+    type=click.Choice(("misses", "unacceptable", "all")),
+    default="misses",
+    show_default=True,
+    help="Which prediction rows to show.",
+)
+@click.option(
+    "--limit",
+    type=click.IntRange(min=1),
+    help="Limit text output rows. JSON reports always include every selected row.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+)
+def policy_inspect_baseline(
+    trajectory_path: Path,
+    model_file: Path,
+    report_file: Path | None,
+    include_tasks: tuple[str, ...],
+    exclude_tasks: tuple[str, ...],
+    include_fixtures: tuple[str, ...],
+    exclude_fixtures: tuple[str, ...],
+    include_tags: tuple[str, ...],
+    exclude_tags: tuple[str, ...],
+    reward_margin: float,
+    mode: str,
+    limit: int | None,
+    output_format: str,
+) -> None:
+    """Inspect per-state baseline policy predictions and misses."""
+    inspection = inspect_baseline_policy(
+        trajectory_path,
+        load_baseline_policy(model_file),
+        source_trajectories=str(trajectory_path),
+        model_path=str(model_file),
+        data_filter=PolicyDataFilter(
+            include_tasks=include_tasks,
+            exclude_tasks=exclude_tasks,
+            include_fixtures=include_fixtures,
+            exclude_fixtures=exclude_fixtures,
+            include_tags=include_tags,
+            exclude_tags=exclude_tags,
+        ),
+        reward_margin=reward_margin,
+        mode=mode,
+    )
+    if report_file is not None:
+        report_file.parent.mkdir(parents=True, exist_ok=True)
+        report_file.write_text(inspection.model_dump_json(indent=2))
+
+    if output_format == "json":
+        click.echo(inspection.model_dump_json(indent=2))
+    else:
+        click.echo(render_baseline_policy_inspection(inspection, limit=limit))
+    if report_file is not None:
+        click.echo(f"Inspection file written: {report_file}", err=True)
 
 
 @policy_group.command(name="holdout-evaluate")
