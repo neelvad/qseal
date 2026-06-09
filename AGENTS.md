@@ -662,13 +662,38 @@ Completed:
     `corpus run`, and direct environment inspection confirmed the initial
     action sets include `query:distinct` vs `predicate:0` and `predicate:0` vs
     `predicate:1`.
+64. A full v7, one-run, 20 ms transition corpus run completed at
+    `/tmp/snowprove-corpus-138-transition-20260609/corpus-run.json`. All five
+    strategies completed all 138 tasks. Mean rewards were fixed/random
+    0.108453, greedy 0.114144, and beam/exhaustive 0.122630. Fresh
+    trajectories were exported to
+    `/tmp/snowprove-policy-138-20260609/trajectories.jsonl`: 640 rows, 223
+    labeled states, and oracle paths for all 138 tasks.
+65. Rerunning `policy inspect-labels` on v7 reduced the target-pair
+    multi-action split from 6 holdout-only groups to 2 holdout-only groups.
+    Train preferences increased from 18 to 35. Remaining gaps are primarily
+    order-key distinct-vs-not-null contexts where the holdout oracle prefers
+    `remove_redundant_not_null_filter::predicate:0` over
+    `remove_redundant_distinct::query:distinct`.
+66. Rerunning the multi-action holdout with the v7 trajectories and ranker at
+    `/tmp/snowprove-policy-138-holdout-multiaction-ranker-20260609` improved
+    offline exact/adjusted accuracy from the v6 84/90 to 86/89 (0.9663). It
+    did not fully improve search: policy-abstain reached reward 0.109150 and
+    42 wins versus greedy reward 0.110957 and 43 wins, while using 69 oracle
+    calls versus greedy's 99. The three remaining unacceptable misses are
+    distinct-not-null users/orders key queries where the ranker still strongly
+    prefers removing DISTINCT first. Changing ranker epochs from 1 to 20 did
+    not change the offline result.
 
 Next:
 
-1. Rerun the full v7 corpus measurements and export fresh trajectories.
-2. Rerun `policy inspect-labels` and the ranker holdout on the v7 trajectories
-   to see whether the inverse calibration tasks reduce holdout-only groups and
-   improve multi-action offline accuracy.
+1. Add even more targeted non-`multi-action` calibration tasks for key-column
+   distinct-vs-not-null contexts, especially orders on duplicate-heavy and
+   standard-medium-like distributions, without duplicating existing
+   query/fixture/rule signatures.
+2. Alternatively add a small diagnostic for preference-label class balance by
+   group so the corpus can show when a strong action-level prior overwhelms a
+   sparse context-specific inverse example.
 3. Keep using `policy inspect-baseline` after each experiment to distinguish
    harmless near-ties from real search-reward regressions.
 
