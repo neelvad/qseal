@@ -441,6 +441,8 @@ def test_policy_label_inspection_groups_train_holdout_disagreements(tmp_path) ->
     assert inspection.artifact_type == "policy_label_inspection"
     assert inspection.train_preference_count == 1
     assert inspection.holdout_preference_count == 1
+    assert inspection.train_preferences == {distinct_action: 1}
+    assert inspection.holdout_preferences == {not_null_action: 1}
     assert inspection.disagreement_group_count == 1
     assert inspection.train_only_group_count == 0
     assert inspection.holdout_only_group_count == 0
@@ -448,9 +450,14 @@ def test_policy_label_inspection_groups_train_holdout_disagreements(tmp_path) ->
     assert inspection.groups[0].disagreement_count == 1
     assert inspection.groups[0].train_preferences == {distinct_action: 1}
     assert inspection.groups[0].holdout_preferences == {not_null_action: 1}
+    assert inspection.groups[0].train_majority_preference == distinct_action
+    assert inspection.groups[0].holdout_majority_preference == not_null_action
+    assert inspection.groups[0].train_majority_ratio == 1.0
+    assert inspection.groups[0].holdout_majority_ratio == 1.0
     assert inspection.groups[0].examples[0].reward_gap is not None
     assert "Policy label inspection" in rendered
     assert "Disagreement groups: 1" in rendered
+    assert "Global train prefs:" in rendered
 
 
 def _report(

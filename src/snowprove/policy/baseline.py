@@ -203,6 +203,10 @@ class PolicyPreferenceGroup(BaseModel):
     holdout_count: int
     train_preferences: dict[str, int]
     holdout_preferences: dict[str, int]
+    train_majority_preference: str | None
+    holdout_majority_preference: str | None
+    train_majority_ratio: float | None
+    holdout_majority_ratio: float | None
     disagreement_count: int
     mean_train_reward_gap: float | None
     mean_holdout_reward_gap: float | None
@@ -221,6 +225,8 @@ class PolicyLabelInspection(BaseModel):
     reward_margin: float = Field(ge=0)
     train_preference_count: int
     holdout_preference_count: int
+    train_preferences: dict[str, int]
+    holdout_preferences: dict[str, int]
     group_count: int
     disagreement_group_count: int
     train_only_group_count: int
@@ -576,6 +582,10 @@ def inspect_policy_labels(
                 holdout_count=len(holdout_items),
                 train_preferences=train_counts,
                 holdout_preferences=holdout_counts,
+                train_majority_preference=_majority_preference(train_counts),
+                holdout_majority_preference=_majority_preference(holdout_counts),
+                train_majority_ratio=_majority_ratio(train_counts),
+                holdout_majority_ratio=_majority_ratio(holdout_counts),
                 disagreement_count=disagreement_count,
                 mean_train_reward_gap=_mean_known_gap(train_items),
                 mean_holdout_reward_gap=_mean_known_gap(holdout_items),
@@ -608,6 +618,8 @@ def inspect_policy_labels(
         reward_margin=reward_margin,
         train_preference_count=len(train_preferences),
         holdout_preference_count=len(holdout_preferences),
+        train_preferences=_preference_counts(list(train_preferences)),
+        holdout_preferences=_preference_counts(list(holdout_preferences)),
         group_count=len(sorted_groups),
         disagreement_group_count=sum(
             int(group.disagreement_count > 0) for group in sorted_groups
@@ -819,6 +831,8 @@ def render_policy_label_inspection(
         f"Reward margin: {inspection.reward_margin:.6f}",
         f"Train filter: {_render_filter(inspection.train_filter)}",
         f"Holdout filter: {_render_filter(inspection.holdout_filter)}",
+        f"Global train prefs: {_render_preference_counts(inspection.train_preferences)}",
+        f"Global holdout prefs: {_render_preference_counts(inspection.holdout_preferences)}",
     ]
     if not groups:
         lines.append("")
@@ -836,6 +850,13 @@ def render_policy_label_inspection(
                 f"  Disagreements: {group.disagreement_count}",
                 f"  Train prefs: {_render_preference_counts(group.train_preferences)}",
                 f"  Holdout prefs: {_render_preference_counts(group.holdout_preferences)}",
+                "  Train majority: "
+                f"{_render_majority(group.train_majority_preference, group.train_majority_ratio)}",
+                "  Holdout majority: "
+                f"{_render_majority(
+                    group.holdout_majority_preference,
+                    group.holdout_majority_ratio,
+                )}",
                 f"  Mean train gap: {_render_optional_float(group.mean_train_reward_gap)}",
                 f"  Mean holdout gap: {_render_optional_float(group.mean_holdout_reward_gap)}",
             ]
@@ -1063,6 +1084,16 @@ def _majority_preference(counts: dict[str, int]) -> str | None:
     return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
 
 
+def _majority_ratio(counts: dict[str, int]) -> float | None:
+    if not counts:
+        return None
+    total = sum(counts.values())
+    if total == 0:
+        return None
+    majority = max(counts.values())
+    return majority / total
+
+
 def _mean_known_gap(preferences: list[PolicyPreferenceExample]) -> float | None:
     gaps = [
         preference.reward_gap
@@ -1254,6 +1285,12 @@ def _render_preference_counts(counts: dict[str, int]) -> str:
         f"{action_id}={count}"
         for action_id, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
     )
+
+
+def _render_majority(action_id: str | None, ratio: float | None) -> str:
+    if action_id is None or ratio is None:
+        return "none"
+    return f"{action_id} ({ratio:.4f})"
 
 
 def _render_optional_float(value: float | None) -> str:

@@ -684,6 +684,16 @@ Completed:
     distinct-not-null users/orders key queries where the ranker still strongly
     prefers removing DISTINCT first. Changing ranker epochs from 1 to 20 did
     not change the offline result.
+67. `policy inspect-labels` now reports global train/holdout preference counts
+    plus per-group majority preferences and majority ratios. On the v7
+    multi-action split, global train preferences were reasonably balanced:
+    non-null predicate 0 had 18 preferences, DISTINCT had 16, and predicate 1
+    had 1. The problematic local groups are not balanced: orders
+    `DISTINCT + IS NOT NULL` has train prefs 6/6 for DISTINCT while holdout is
+    split 2 DISTINCT vs 2 non-null; users has train 5 DISTINCT vs 1 non-null
+    while holdout is 3 DISTINCT vs 1 non-null. This confirms the remaining
+    misses are local group-balance issues, not a simple global action-prior
+    issue.
 
 Next:
 
@@ -691,9 +701,9 @@ Next:
    distinct-vs-not-null contexts, especially orders on duplicate-heavy and
    standard-medium-like distributions, without duplicating existing
    query/fixture/rule signatures.
-2. Alternatively add a small diagnostic for preference-label class balance by
-   group so the corpus can show when a strong action-level prior overwhelms a
-   sparse context-specific inverse example.
+2. Consider adding policy features or weighting that let sparse local
+   group-balance evidence matter more than broad action/rule priors, but only
+   after the targeted calibration coverage is improved.
 3. Keep using `policy inspect-baseline` after each experiment to distinguish
    harmless near-ties from real search-reward regressions.
 
