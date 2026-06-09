@@ -198,6 +198,7 @@ class PolicyPreferenceGroup(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     group_key: str
+    coverage_status: Literal["matched", "train_only", "holdout_only"]
     train_count: int
     holdout_count: int
     train_preferences: dict[str, int]
@@ -222,6 +223,8 @@ class PolicyLabelInspection(BaseModel):
     holdout_preference_count: int
     group_count: int
     disagreement_group_count: int
+    train_only_group_count: int
+    holdout_only_group_count: int
     groups: tuple[PolicyPreferenceGroup, ...]
 
 
@@ -565,6 +568,10 @@ def inspect_policy_labels(
         groups.append(
             PolicyPreferenceGroup(
                 group_key=group_key,
+                coverage_status=_preference_coverage_status(
+                    train_count=len(train_items),
+                    holdout_count=len(holdout_items),
+                ),
                 train_count=len(train_items),
                 holdout_count=len(holdout_items),
                 train_preferences=train_counts,
@@ -586,6 +593,7 @@ def inspect_policy_labels(
             groups,
             key=lambda group: (
                 -group.disagreement_count,
+                int(group.coverage_status != "holdout_only"),
                 -group.holdout_count,
                 -group.train_count,
                 group.group_key,
@@ -603,6 +611,12 @@ def inspect_policy_labels(
         group_count=len(sorted_groups),
         disagreement_group_count=sum(
             int(group.disagreement_count > 0) for group in sorted_groups
+        ),
+        train_only_group_count=sum(
+            int(group.coverage_status == "train_only") for group in sorted_groups
+        ),
+        holdout_only_group_count=sum(
+            int(group.coverage_status == "holdout_only") for group in sorted_groups
         ),
         groups=sorted_groups,
     )
@@ -798,6 +812,8 @@ def render_policy_label_inspection(
         f"Holdout preferences: {inspection.holdout_preference_count}",
         f"Groups: {inspection.group_count}",
         f"Disagreement groups: {inspection.disagreement_group_count}",
+        f"Train-only groups: {inspection.train_only_group_count}",
+        f"Holdout-only groups: {inspection.holdout_only_group_count}",
         f"Rows shown: {len(groups)}/{inspection.group_count}",
         f"Group by: {', '.join(inspection.group_by)}",
         f"Reward margin: {inspection.reward_margin:.6f}",
@@ -814,6 +830,7 @@ def render_policy_label_inspection(
             [
                 "",
                 f"Group: {group.group_key}",
+                f"  Coverage: {group.coverage_status}",
                 f"  Train count: {group.train_count}",
                 f"  Holdout count: {group.holdout_count}",
                 f"  Disagreements: {group.disagreement_count}",
@@ -1026,6 +1043,18 @@ def _preference_disagreement_count(
         for action_id, count in holdout_counts.items()
         if action_id != train_majority
     )
+
+
+def _preference_coverage_status(
+    *,
+    train_count: int,
+    holdout_count: int,
+) -> Literal["matched", "train_only", "holdout_only"]:
+    if train_count > 0 and holdout_count > 0:
+        return "matched"
+    if holdout_count > 0:
+        return "holdout_only"
+    return "train_only"
 
 
 def _majority_preference(counts: dict[str, int]) -> str | None:

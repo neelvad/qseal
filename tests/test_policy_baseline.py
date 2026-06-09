@@ -442,6 +442,9 @@ def test_policy_label_inspection_groups_train_holdout_disagreements(tmp_path) ->
     assert inspection.train_preference_count == 1
     assert inspection.holdout_preference_count == 1
     assert inspection.disagreement_group_count == 1
+    assert inspection.train_only_group_count == 0
+    assert inspection.holdout_only_group_count == 0
+    assert inspection.groups[0].coverage_status == "matched"
     assert inspection.groups[0].disagreement_count == 1
     assert inspection.groups[0].train_preferences == {distinct_action: 1}
     assert inspection.groups[0].holdout_preferences == {not_null_action: 1}

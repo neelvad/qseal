@@ -371,6 +371,7 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
         "standard-small"
     ]
     assert label_inspection["group_by"] == ["action_set"]
+    assert label_inspection["holdout_only_group_count"] == 0
     assert "Label inspection file written" in inspected_labels.stderr
 
     policy_run_dir = tmp_path / "policy-run"

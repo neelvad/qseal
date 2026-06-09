@@ -643,15 +643,25 @@ Completed:
     events, orders, and users. This confirms the current ranker issue is
     train/holdout label conflict in specific action contexts, not only a model
     capacity problem.
+62. `policy inspect-labels` now reports `coverage_status`,
+    `train_only_group_count`, and `holdout_only_group_count`, so missing train
+    coverage is visible separately from true train-vs-holdout disagreement.
+    Rerunning the v6 multi-action split with
+    `--group-by rule_pair --group-by table --group-by target_pair` showed 0
+    disagreement groups but 6 holdout-only groups. These include
+    `predicate:1 vs predicate:0` for not-null ordering on orders/users and
+    `predicate:0 vs query` for distinct-vs-not-null cases on events/orders/users.
+    The next policy improvement should probably add targeted calibration tasks
+    for these inverse contexts before adding model complexity.
 
 Next:
 
-1. Use `policy inspect-labels` with narrower grouping such as
-   `--group-by action_set --group-by fixture` and
-   `--group-by rule_pair --group-by table --group-by target_pair` to decide
-   whether to add more targeted calibration tasks or richer policy features.
-2. Consider adding context features that distinguish table/fixture/action-set
-   conflicts before adding more model complexity.
+1. Add targeted choice-calibration tasks for the holdout-only inverse contexts
+   surfaced by `policy inspect-labels`, especially `predicate:1 vs predicate:0`
+   and `predicate:0 vs query`.
+2. Rerun the v6 trajectory export and ranker holdout after the calibration
+   tasks exist, then compare whether offline multi-action accuracy improves
+   without hurting the standard-medium holdout.
 3. Keep using `policy inspect-baseline` after each experiment to distinguish
    harmless near-ties from real search-reward regressions.
 
