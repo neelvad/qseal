@@ -709,13 +709,24 @@ Completed:
     `/tmp/snowprove-policy-138-holdout-multiaction-ranker-unknown025-20260609`
     tied greedy at reward 0.104679 and 43 wins while using 73 oracle calls
     versus greedy's 101.
+71. The same `--unknown-preference-scale 0.25` regressed the standard-medium
+    holdout at
+    `/tmp/snowprove-policy-138-holdout-standard-medium-ranker-unknown025-20260609`:
+    offline exact/adjusted accuracy fell to 47/56 and 48/56, and policy-abstain
+    reached only 25 wins versus greedy's 34. The default scale 1.0 on the same
+    v7 split at
+    `/tmp/snowprove-policy-138-holdout-standard-medium-ranker-default-20260609`
+    reached 54/56 exact and 55/56 adjusted accuracy, with 33 wins versus
+    greedy's 34. The 0.25 scale is therefore useful for the multi-action split
+    but not a safe global recommendation.
 
 Next:
 
-1. Try `--unknown-preference-scale 0.25` on the standard-medium holdout to
-   confirm it does not regress that split.
-2. Consider making 0.25 the recommended ranker setting in docs only after one
-   more split confirms the behavior.
+1. Add a small comparison/report helper for policy holdout artifacts so runs
+   like default vs unknown-scale 0.25 can be compared without manual JSON/text
+   inspection.
+2. Investigate whether unknown preference scaling should be feature- or
+   group-aware rather than a single global scalar.
 3. Keep using `policy inspect-baseline` after each experiment to distinguish
    harmless near-ties from real search-reward regressions.
 
