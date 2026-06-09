@@ -734,12 +734,26 @@ Completed:
     explicit grouping, the default is `action_set, table`. This enables
     experiments that downweight only selected unknown-reward preference groups
     instead of changing the global unknown preference scale.
+74. Targeted group-scaling experiments were run against v7 trajectories for
+    the distinct-vs-not-null `orders` and `users` groups:
+    `/tmp/snowprove-policy-138-holdout-multiaction-ranker-group025-20260609`
+    and
+    `/tmp/snowprove-policy-138-holdout-standard-medium-ranker-group025-20260609`.
+    The result was not good enough to keep as a recommendation. Multi-action
+    stayed at 86/89 offline accuracy but reached only 42 wins and reward
+    0.098211 versus greedy's 43 wins and reward 0.110216. Standard-medium
+    regressed to 47/56 exact, 48/56 adjusted, 27 wins, and reward 0.038146.
+    `inspect-baseline` showed the standard-medium misses are distinct-vs-null
+    choice tasks where the ranker now over-prefers removing `IS NOT NULL`
+    before DISTINCT. The multi-action misses remain the previous compact and
+    duplicate-heavy cases where DISTINCT is still preferred too strongly.
 
 Next:
 
-1. Run targeted holdouts with group-specific unknown preference scales for the
-   distinct-vs-not-null orders/users groups, then compare them against both
-   global scale 1.0 and 0.25.
+1. Avoid more scalar unknown-preference tuning for now; it is too blunt. The
+   next better step is richer ranking features that can distinguish selected
+   columns, predicate columns, and whether the DISTINCT key and not-null column
+   are the same.
 2. Keep using `policy compare-holdouts` and `policy inspect-baseline` after
    each experiment to distinguish oracle savings, harmless near-ties, and real
    search-reward regressions.
