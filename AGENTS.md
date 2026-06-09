@@ -768,11 +768,24 @@ Completed:
     `SOLVER_PROVEN_EQUIVALENT` / `sqlsolver`. Suggestion, dbt scan, and patch
     metadata now include `required_tests` derived from trusted assumptions, for
     example `dbt test: unique on dim_users.user_id`.
+77. Fresh real-project scans were run after the reporting changes:
+    `/snowprove-runs/real-projects/20260609T184252Z-raw-post-claims`,
+    `/snowprove-runs/real-projects/20260609T184426Z-duckdb-compiled-post-claims`,
+    and
+    `/snowprove-runs/real-projects/20260609T184557Z-kestra-compiled-post-claims`.
+    Raw scans across seven cloned dbt projects found 10 model SQL files, 8
+    unsupported Jinja/block-syntax results, and 0 proven/apply-ready findings.
+    Compiled scans for `dbt-labs/jaffle_shop_duckdb` and `kestra-io/dbt-demo`
+    each found 5 proven redundant-not-null rewrites, but all were dbt-generated
+    test SQL under `target/compiled/.../models/schema.yml/...`, not source model
+    SQL. They are useful evidence that guard metadata works, but not real
+    optimization opportunities.
 
 Next:
 
-1. Re-run real-project scans and evaluate whether apply-ready, constraint-
-   dependent findings appear often enough to drive the next rule investment.
+1. Improve compiled dbt scanning so `--use-compiled` can distinguish model SQL
+   from dbt-generated test SQL before using real-project results to guide rule
+   investment.
 2. Keep using `policy compare-holdouts` and `policy inspect-baseline` after
    each experiment to distinguish oracle savings, harmless near-ties, and real
    search-reward regressions.
