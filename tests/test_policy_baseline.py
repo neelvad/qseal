@@ -11,6 +11,7 @@ from snowprove.corpus import (
     export_corpus_trajectories,
     load_task_corpus,
 )
+from snowprove.corpus.trajectories import load_corpus_trajectory_records
 from snowprove.policy import (
     PolicyDataFilter,
     evaluate_baseline_policy,
@@ -183,8 +184,10 @@ def test_linear_policy_trains_and_evaluates_choice_states(tmp_path) -> None:
     assert model.model_type == "linear_action_ranker"
     assert model.choice_state_count == 1
     assert model.training_margin == 0.0
+    assert model.unknown_preference_scale == 1.0
     assert model.update_count >= 1
     assert model.skipped_preference_count == 0
+    assert model.skipped_unknown_preference_count == 0
     assert model.feature_weights
     assert evaluation.correct_count == 1
     assert evaluation.accuracy == 1.0
@@ -193,6 +196,66 @@ def test_linear_policy_trains_and_evaluates_choice_states(tmp_path) -> None:
     assert filtered_model.update_count == 0
     assert filtered_model.skipped_preference_count == 3
     assert filtered_model.feature_weights == ()
+
+
+def test_linear_policy_can_skip_unknown_reward_preferences(tmp_path) -> None:
+    corpus = load_task_corpus(bundled_corpus_path())
+    task = corpus.task("distinct-and-not-null")
+    trajectory_path = tmp_path / "trajectories.jsonl"
+    distinct_action = "remove_redundant_distinct::query:distinct"
+    not_null_action = "remove_redundant_not_null_filter::predicate:0"
+    export_corpus_trajectories(
+        CorpusRunReport(
+            generated_at=datetime.now(UTC),
+            corpus_id=corpus.manifest.corpus_id,
+            corpus_version=corpus.manifest.corpus_version,
+            corpus_fingerprint=corpus.fingerprint,
+            config=CorpusRunConfig(strategies=("fixed_order",)),
+            environment=CorpusRunEnvironment(
+                python_version="test",
+                duckdb_version="test",
+                platform="test",
+            ),
+            tasks=(
+                CorpusTaskRun(
+                    task_id=task.definition.task_id,
+                    task_fingerprint=task.fingerprint,
+                    fixture_id=task.fixture.fixture_id,
+                    enabled_rules=task.definition.enabled_rules,
+                    tags=task.definition.tags,
+                    results=(
+                        _result(
+                            "fixed_order",
+                            task.definition.task_id,
+                            task.environment_task.sql,
+                            distinct_action,
+                            "SELECT user_id\nFROM users\nWHERE user_id IS NOT NULL;",
+                            reward=0.2,
+                        ),
+                    ),
+                ),
+            ),
+            strategy_summaries=(),
+        ),
+        corpus,
+        trajectory_path,
+    )
+
+    model = train_linear_policy(
+        trajectory_path,
+        epochs=3,
+        unknown_preference_scale=0.0,
+    )
+
+    assert model.choice_state_count == 1
+    assert model.unknown_preference_scale == 0.0
+    assert model.update_count == 0
+    assert model.skipped_unknown_preference_count == 3
+    assert model.feature_weights == ()
+    assert not_null_action in next(
+        record.available_action_ids
+        for record in load_corpus_trajectory_records(trajectory_path)
+    )
 
 
 def test_baseline_policy_filters_train_and_evaluation_splits(tmp_path) -> None:

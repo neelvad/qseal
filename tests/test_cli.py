@@ -290,6 +290,8 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert ranker["state_count"] == 1
     assert ranker["choice_state_count"] == 0
     assert ranker["training_margin"] == 0.2
+    assert ranker["unknown_preference_scale"] == 1.0
+    assert ranker["skipped_unknown_preference_count"] == 0
     assert "Model file written" in trained_ranker.stderr
 
     evaluation_path = tmp_path / "policy-eval.json"

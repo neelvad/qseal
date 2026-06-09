@@ -725,6 +725,13 @@ def policy_train_baseline(
     help="Skip ranker training preferences whose known reward gap is below this margin.",
 )
 @click.option(
+    "--unknown-preference-scale",
+    type=click.FloatRange(min=0),
+    default=1.0,
+    show_default=True,
+    help="Training scale for preferences whose alternative reward was not observed.",
+)
+@click.option(
     "--format",
     "output_format",
     type=OutputFormat,
@@ -743,6 +750,7 @@ def policy_train_ranker(
     epochs: int,
     learning_rate: float,
     training_margin: float,
+    unknown_preference_scale: float,
     output_format: str,
 ) -> None:
     """Train a small linear action ranker from trajectory oracle labels."""
@@ -760,6 +768,7 @@ def policy_train_ranker(
         epochs=epochs,
         learning_rate=learning_rate,
         training_margin=training_margin,
+        unknown_preference_scale=unknown_preference_scale,
     )
     write_policy_model(model, model_file)
 
@@ -1090,6 +1099,13 @@ def policy_inspect_labels(
     show_default=True,
     help="Skip ranker training preferences whose known reward gap is below this margin.",
 )
+@click.option(
+    "--unknown-preference-scale",
+    type=click.FloatRange(min=0),
+    default=1.0,
+    show_default=True,
+    help="Training scale for preferences whose alternative reward was not observed.",
+)
 @click.option("--reward-margin", type=click.FloatRange(min=0), default=0.05, show_default=True)
 @click.option(
     "--label-margin",
@@ -1140,6 +1156,7 @@ def policy_holdout_evaluate(
     epochs: int,
     learning_rate: float,
     training_margin: float,
+    unknown_preference_scale: float,
     reward_margin: float,
     label_margin: float | None,
     reward_model: str,
@@ -1189,6 +1206,7 @@ def policy_holdout_evaluate(
             epochs=epochs,
             learning_rate=learning_rate,
             training_margin=training_margin,
+            unknown_preference_scale=unknown_preference_scale,
         )
     else:
         model = train_baseline_policy(

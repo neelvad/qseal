@@ -694,16 +694,28 @@ Completed:
     while holdout is 3 DISTINCT vs 1 non-null. This confirms the remaining
     misses are local group-balance issues, not a simple global action-prior
     issue.
+68. A attempted v8 key-column calibration expansion was tested but not kept:
+    the candidate tasks did not reliably label the intended non-null action
+    under the real corpus runner. The better next move was ranker weighting.
+69. `train-ranker` and `holdout-evaluate --policy-kind ranker` now support
+    `--unknown-preference-scale`. This scales training preferences whose
+    alternative action reward was not observed; the default remains 1.0 for
+    backward-compatible behavior. `unknown-preference-scale 0` skips those
+    labels and records `skipped_unknown_preference_count`.
+70. On the v7 trajectories, fully skipping unknown preferences was too
+    aggressive: offline multi-action accuracy dropped to 0.7191. Scaling
+    unknown preferences to 0.25 kept offline exact/adjusted accuracy at
+    86/89 (0.9663), but restored held-out search parity:
+    `/tmp/snowprove-policy-138-holdout-multiaction-ranker-unknown025-20260609`
+    tied greedy at reward 0.104679 and 43 wins while using 73 oracle calls
+    versus greedy's 101.
 
 Next:
 
-1. Add even more targeted non-`multi-action` calibration tasks for key-column
-   distinct-vs-not-null contexts, especially orders on duplicate-heavy and
-   standard-medium-like distributions, without duplicating existing
-   query/fixture/rule signatures.
-2. Consider adding policy features or weighting that let sparse local
-   group-balance evidence matter more than broad action/rule priors, but only
-   after the targeted calibration coverage is improved.
+1. Try `--unknown-preference-scale 0.25` on the standard-medium holdout to
+   confirm it does not regress that split.
+2. Consider making 0.25 the recommended ranker setting in docs only after one
+   more split confirms the behavior.
 3. Keep using `policy inspect-baseline` after each experiment to distinguish
    harmless near-ties from real search-reward regressions.
 
