@@ -726,11 +726,20 @@ Completed:
     split, unknown scale 0.25 tied greedy with 43 wins and used 56 fewer oracle
     calls; on the standard-medium split, it regressed to 25 wins versus
     greedy's 34 despite using 72 fewer oracle calls.
+73. `train-ranker` and `holdout-evaluate --policy-kind ranker` now support
+    group-specific unknown preference scaling via
+    `--unknown-preference-group-scale GROUP SCALE`, with optional
+    `--unknown-preference-group-by`. Group keys reuse the same format emitted
+    by `policy inspect-labels`; when group scales are supplied without an
+    explicit grouping, the default is `action_set, table`. This enables
+    experiments that downweight only selected unknown-reward preference groups
+    instead of changing the global unknown preference scale.
 
 Next:
 
-1. Investigate whether unknown preference scaling should be feature- or
-   group-aware rather than a single global scalar.
+1. Run targeted holdouts with group-specific unknown preference scales for the
+   distinct-vs-not-null orders/users groups, then compare them against both
+   global scale 1.0 and 0.25.
 2. Keep using `policy compare-holdouts` and `policy inspect-baseline` after
    each experiment to distinguish oracle savings, harmless near-ties, and real
    search-reward regressions.

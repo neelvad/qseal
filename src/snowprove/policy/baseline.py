@@ -82,6 +82,8 @@ class LinearPolicyModel(BaseModel):
     learning_rate: float = Field(gt=0)
     training_margin: float = Field(default=0.0, ge=0)
     unknown_preference_scale: float = Field(default=1.0, ge=0)
+    unknown_preference_group_by: tuple[str, ...] = Field(default_factory=tuple)
+    unknown_preference_group_scales: dict[str, float] = Field(default_factory=dict)
     update_count: int = Field(ge=0)
     skipped_preference_count: int = Field(default=0, ge=0)
     skipped_unknown_preference_count: int = Field(default=0, ge=0)
@@ -332,6 +334,8 @@ def train_linear_policy(
     learning_rate: float = 1.0,
     training_margin: float = 0.0,
     unknown_preference_scale: float = 1.0,
+    unknown_preference_group_by: tuple[str, ...] = (),
+    unknown_preference_group_scales: dict[str, float] | None = None,
 ) -> LinearPolicyModel:
     if epochs < 1:
         raise ValueError("epochs must be one or greater.")
@@ -341,6 +345,15 @@ def train_linear_policy(
         raise ValueError("training_margin must be zero or greater.")
     if unknown_preference_scale < 0:
         raise ValueError("unknown_preference_scale must be zero or greater.")
+    unknown_preference_group_scales = unknown_preference_group_scales or {}
+    for group_key, group_scale in unknown_preference_group_scales.items():
+        if group_scale < 0:
+            raise ValueError(
+                f"Unknown preference scale for group {group_key!r} "
+                "must be zero or greater."
+            )
+    if unknown_preference_group_scales and not unknown_preference_group_by:
+        unknown_preference_group_by = ("action_set", "table")
 
     data_filter = data_filter or PolicyDataFilter()
     records = load_corpus_trajectory_records(trajectory_path)
@@ -367,10 +380,16 @@ def train_linear_policy(
             for action_id in non_oracle_actions:
                 reward_gap = _known_reward_gap(example, action_id)
                 if reward_gap == float("inf"):
-                    if unknown_preference_scale == 0:
+                    scale = _unknown_preference_scale(
+                        example,
+                        action_id,
+                        group_by=unknown_preference_group_by,
+                        group_scales=unknown_preference_group_scales,
+                        default_scale=unknown_preference_scale,
+                    )
+                    if scale == 0:
                         skipped_unknown_preference_count += 1
                         continue
-                    scale = unknown_preference_scale
                 elif reward_gap < training_margin:
                     skipped_preference_count += 1
                     continue
@@ -393,6 +412,8 @@ def train_linear_policy(
         learning_rate=learning_rate,
         training_margin=training_margin,
         unknown_preference_scale=unknown_preference_scale,
+        unknown_preference_group_by=unknown_preference_group_by,
+        unknown_preference_group_scales=dict(sorted(unknown_preference_group_scales.items())),
         update_count=update_count,
         skipped_preference_count=skipped_preference_count,
         skipped_unknown_preference_count=skipped_unknown_preference_count,
@@ -761,6 +782,11 @@ def render_linear_policy_training(model: LinearPolicyModel) -> str:
             f"Learning rate: {model.learning_rate:.6f}",
             f"Training margin: {model.training_margin:.6f}",
             f"Unknown preference scale: {model.unknown_preference_scale:.6f}",
+            f"Unknown preference group by: {_render_tuple(model.unknown_preference_group_by)}",
+            (
+                "Unknown preference group scales: "
+                f"{_render_group_scales(model.unknown_preference_group_scales)}"
+            ),
             f"Updates: {model.update_count}",
             f"Skipped preferences: {model.skipped_preference_count}",
             f"Skipped unknown preferences: {model.skipped_unknown_preference_count}",
@@ -768,6 +794,7 @@ def render_linear_policy_training(model: LinearPolicyModel) -> str:
             f"Filter: {_render_filter(model.data_filter)}",
         ]
     )
+
 
 def render_baseline_policy_evaluation(evaluation: BaselinePolicyEvaluation) -> str:
     accuracy = "n/a" if evaluation.accuracy is None else f"{evaluation.accuracy:.4f}"
@@ -1329,6 +1356,33 @@ def _preference_scale(
     return max(0.0, (oracle_reward - action_reward) / reward_span)
 
 
+def _unknown_preference_scale(
+    example: _StateExample,
+    action_id: str,
+    *,
+    group_by: tuple[str, ...],
+    group_scales: dict[str, float],
+    default_scale: float,
+) -> float:
+    if not group_scales:
+        return default_scale
+    assert example.oracle_action_id is not None
+    preference = PolicyPreferenceExample(
+        task_id=example.task_id,
+        fixture_id=example.fixture_id,
+        tags=example.tags,
+        state_sql=example.state_sql,
+        available_action_ids=example.available_action_ids,
+        preferred_action_id=example.oracle_action_id,
+        alternative_action_id=action_id,
+        reward_gap=None,
+    )
+    return group_scales.get(
+        _preference_group_key(preference, group_by),
+        default_scale,
+    )
+
+
 def _known_reward_gap(example: _StateExample, action_id: str) -> float:
     oracle_reward = example.observed_suffix_rewards.get(example.oracle_action_id or "")
     action_reward = example.observed_suffix_rewards.get(action_id)
@@ -1434,6 +1488,18 @@ def _render_filter(data_filter: PolicyDataFilter) -> str:
         if values:
             parts.append(f"{field_name}={','.join(values)}")
     return "; ".join(parts) if parts else "none"
+
+
+def _render_tuple(values: tuple[str, ...]) -> str:
+    return ",".join(values) if values else "none"
+
+
+def _render_group_scales(scales: dict[str, float]) -> str:
+    if not scales:
+        return "none"
+    return ", ".join(
+        f"{group_key}={scale:.6f}" for group_key, scale in sorted(scales.items())
+    )
 
 
 def _render_preference_counts(counts: dict[str, int]) -> str:

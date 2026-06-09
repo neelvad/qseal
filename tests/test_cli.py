@@ -278,6 +278,11 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
             "3",
             "--training-margin",
             "0.2",
+            "--unknown-preference-group-by",
+            "action_set",
+            "--unknown-preference-group-scale",
+            "action_set=example",
+            "0.25",
             "--format",
             "json",
         ],
@@ -291,6 +296,8 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert ranker["choice_state_count"] == 0
     assert ranker["training_margin"] == 0.2
     assert ranker["unknown_preference_scale"] == 1.0
+    assert ranker["unknown_preference_group_by"] == ["action_set"]
+    assert ranker["unknown_preference_group_scales"] == {"action_set=example": 0.25}
     assert ranker["skipped_unknown_preference_count"] == 0
     assert "Model file written" in trained_ranker.stderr
 

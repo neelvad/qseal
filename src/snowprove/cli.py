@@ -734,6 +734,24 @@ def policy_train_baseline(
     help="Training scale for preferences whose alternative reward was not observed.",
 )
 @click.option(
+    "--unknown-preference-group-by",
+    multiple=True,
+    help=(
+        "Grouping dimension for unknown preference scale overrides. "
+        "Defaults to action_set and table when group scales are supplied."
+    ),
+)
+@click.option(
+    "--unknown-preference-group-scale",
+    nargs=2,
+    multiple=True,
+    metavar="GROUP SCALE",
+    help=(
+        "Override unknown preference scale for a group key from "
+        "`policy inspect-labels`."
+    ),
+)
+@click.option(
     "--format",
     "output_format",
     type=OutputFormat,
@@ -753,9 +771,15 @@ def policy_train_ranker(
     learning_rate: float,
     training_margin: float,
     unknown_preference_scale: float,
+    unknown_preference_group_by: tuple[str, ...],
+    unknown_preference_group_scale: tuple[tuple[str, str], ...],
     output_format: str,
 ) -> None:
     """Train a small linear action ranker from trajectory oracle labels."""
+    group_by, group_scales = _unknown_preference_group_options(
+        unknown_preference_group_by,
+        unknown_preference_group_scale,
+    )
     model = train_linear_policy(
         trajectory_path,
         source_trajectories=str(trajectory_path),
@@ -771,6 +795,8 @@ def policy_train_ranker(
         learning_rate=learning_rate,
         training_margin=training_margin,
         unknown_preference_scale=unknown_preference_scale,
+        unknown_preference_group_by=group_by,
+        unknown_preference_group_scales=group_scales,
     )
     write_policy_model(model, model_file)
 
@@ -1108,6 +1134,24 @@ def policy_inspect_labels(
     show_default=True,
     help="Training scale for preferences whose alternative reward was not observed.",
 )
+@click.option(
+    "--unknown-preference-group-by",
+    multiple=True,
+    help=(
+        "Grouping dimension for unknown preference scale overrides. "
+        "Defaults to action_set and table when group scales are supplied."
+    ),
+)
+@click.option(
+    "--unknown-preference-group-scale",
+    nargs=2,
+    multiple=True,
+    metavar="GROUP SCALE",
+    help=(
+        "Override unknown preference scale for a group key from "
+        "`policy inspect-labels`."
+    ),
+)
 @click.option("--reward-margin", type=click.FloatRange(min=0), default=0.05, show_default=True)
 @click.option(
     "--label-margin",
@@ -1159,6 +1203,8 @@ def policy_holdout_evaluate(
     learning_rate: float,
     training_margin: float,
     unknown_preference_scale: float,
+    unknown_preference_group_by: tuple[str, ...],
+    unknown_preference_group_scale: tuple[tuple[str, str], ...],
     reward_margin: float,
     label_margin: float | None,
     reward_model: str,
@@ -1177,6 +1223,10 @@ def policy_holdout_evaluate(
         )
     if output_dir.exists():
         raise click.ClickException(f"Output directory already exists: {output_dir}")
+    group_by, group_scales = _unknown_preference_group_options(
+        unknown_preference_group_by,
+        unknown_preference_group_scale,
+    )
 
     manifest_path = manifest_path or bundled_corpus_path()
     corpus = load_task_corpus(manifest_path)
@@ -1209,6 +1259,8 @@ def policy_holdout_evaluate(
             learning_rate=learning_rate,
             training_margin=training_margin,
             unknown_preference_scale=unknown_preference_scale,
+            unknown_preference_group_by=group_by,
+            unknown_preference_group_scales=group_scales,
         )
     else:
         model = train_baseline_policy(
@@ -2429,6 +2481,29 @@ def _select_policy_holdout_tasks(corpus, data_filter: PolicyDataFilter) -> tuple
             continue
         selected.append(task.definition.task_id)
     return tuple(selected)
+
+
+def _unknown_preference_group_options(
+    group_by: tuple[str, ...],
+    raw_group_scales: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, ...], dict[str, float]]:
+    if not raw_group_scales:
+        return group_by, {}
+    resolved_group_by = group_by or ("action_set", "table")
+    group_scales = {}
+    for group_key, raw_scale in raw_group_scales:
+        try:
+            scale = float(raw_scale)
+        except ValueError as error:
+            raise click.ClickException(
+                f"Invalid unknown preference group scale {raw_scale!r}."
+            ) from error
+        if scale < 0:
+            raise click.ClickException(
+                f"Unknown preference group scale must be zero or greater: {raw_scale}."
+            )
+        group_scales[group_key] = scale
+    return resolved_group_by, group_scales
 
 
 def _strategy_wins(report) -> dict[str, int]:

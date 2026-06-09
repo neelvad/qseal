@@ -248,12 +248,29 @@ def test_linear_policy_can_skip_unknown_reward_preferences(tmp_path) -> None:
         epochs=3,
         unknown_preference_scale=0.0,
     )
+    group_key = (
+        "action_set="
+        "remove_redundant_distinct::query:distinct+"
+        "remove_redundant_not_null_filter::predicate:0 | table=table:none"
+    )
+    group_skipped_model = train_linear_policy(
+        trajectory_path,
+        epochs=3,
+        unknown_preference_scale=1.0,
+        unknown_preference_group_scales={group_key: 0.0},
+    )
 
     assert model.choice_state_count == 1
     assert model.unknown_preference_scale == 0.0
     assert model.update_count == 0
     assert model.skipped_unknown_preference_count == 3
     assert model.feature_weights == ()
+    assert group_skipped_model.unknown_preference_scale == 1.0
+    assert group_skipped_model.unknown_preference_group_by == ("action_set", "table")
+    assert group_skipped_model.unknown_preference_group_scales == {group_key: 0.0}
+    assert group_skipped_model.update_count == 0
+    assert group_skipped_model.skipped_unknown_preference_count == 3
+    assert group_skipped_model.feature_weights == ()
     assert not_null_action in next(
         record.available_action_ids
         for record in load_corpus_trajectory_records(trajectory_path)
