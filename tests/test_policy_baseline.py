@@ -14,9 +14,11 @@ from snowprove.corpus import (
 from snowprove.corpus.trajectories import load_corpus_trajectory_records
 from snowprove.policy import (
     PolicyDataFilter,
+    compare_policy_holdouts,
     evaluate_baseline_policy,
     inspect_baseline_policy,
     inspect_policy_labels,
+    render_policy_holdout_comparison,
     render_policy_label_inspection,
     train_baseline_policy,
     train_linear_policy,
@@ -438,6 +440,85 @@ def test_renders_policy_holdout_evaluation(tmp_path) -> None:
     assert holdout.artifact_type == "policy_holdout_evaluation"
     assert "Policy holdout evaluation" in rendered
     assert "policy_baseline_abstain" in rendered
+
+
+def test_compares_policy_holdout_evaluations(tmp_path) -> None:
+    corpus = load_task_corpus(bundled_corpus_path())
+    task = corpus.task("distinct-and-not-null")
+    trajectory_path = tmp_path / "trajectories.jsonl"
+    distinct_action = "remove_redundant_distinct::query:distinct"
+    not_null_action = "remove_redundant_not_null_filter::predicate:0"
+    export_corpus_trajectories(
+        _report(
+            corpus,
+            task.definition.task_id,
+            task.fingerprint,
+            task.fixture.fixture_id,
+            task.definition.enabled_rules,
+            task.definition.tags,
+            task.environment_task.sql,
+            distinct_action,
+            not_null_action,
+        ),
+        corpus,
+        trajectory_path,
+    )
+    evaluation = evaluate_baseline_policy(
+        trajectory_path,
+        train_baseline_policy(trajectory_path),
+    )
+    first_path = tmp_path / "first.json"
+    second_path = tmp_path / "second.json"
+    first_path.write_text(
+        PolicyHoldoutEvaluation(
+            generated_at=datetime.now(UTC),
+            source_trajectories=str(trajectory_path),
+            train_filter=PolicyDataFilter(),
+            holdout_filter=PolicyDataFilter(include_tags=("multi-action",)),
+            trained_state_count=1,
+            heldout_state_count=1,
+            offline_evaluation=evaluation,
+            corpus_report_path="/tmp/corpus-run.json",
+            heldout_task_ids=(task.definition.task_id,),
+            strategy_rewards={"greedy": 1.0, "policy_baseline_abstain": 0.9},
+            strategy_wins={"greedy": 1, "policy_baseline_abstain": 0},
+            strategy_benchmark_requests={"greedy": 4, "policy_baseline_abstain": 2},
+            strategy_verifier_requests={"greedy": 3, "policy_baseline_abstain": 1},
+        ).model_dump_json(indent=2)
+    )
+    second_path.write_text(
+        PolicyHoldoutEvaluation(
+            generated_at=datetime.now(UTC),
+            source_trajectories=str(trajectory_path),
+            train_filter=PolicyDataFilter(),
+            holdout_filter=PolicyDataFilter(include_tags=("multi-action",)),
+            trained_state_count=1,
+            heldout_state_count=1,
+            offline_evaluation=evaluation,
+            corpus_report_path="/tmp/corpus-run.json",
+            heldout_task_ids=(task.definition.task_id,),
+            strategy_rewards={"greedy": 1.0, "policy_baseline_abstain": 1.1},
+            strategy_wins={"greedy": 1, "policy_baseline_abstain": 1},
+            strategy_benchmark_requests={"greedy": 4, "policy_baseline_abstain": 3},
+            strategy_verifier_requests={"greedy": 3, "policy_baseline_abstain": 2},
+        ).model_dump_json(indent=2)
+    )
+
+    comparison = compare_policy_holdouts(
+        (first_path, second_path),
+        labels=("default", "scaled"),
+    )
+    rendered = render_policy_holdout_comparison(comparison)
+
+    assert comparison.artifact_type == "policy_holdout_comparison"
+    assert comparison.baseline_label == "default"
+    assert abs(comparison.rows[0].reward_delta_vs_greedy + 0.1) < 0.000001
+    assert comparison.rows[0].oracle_request_delta_vs_greedy == -4
+    assert abs(comparison.rows[1].reward_delta_vs_greedy - 0.1) < 0.000001
+    assert comparison.rows[1].win_delta_vs_greedy == 0
+    assert "Policy holdout comparison" in rendered
+    assert "default" in rendered
+    assert "scaled" in rendered
 
 
 def test_policy_label_inspection_groups_train_holdout_disagreements(tmp_path) -> None:

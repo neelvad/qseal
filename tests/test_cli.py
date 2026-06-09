@@ -468,6 +468,32 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
         "policy_baseline_abstain",
     ]
 
+    comparison_path = tmp_path / "policy-holdout-comparison.json"
+    compared = CliRunner().invoke(
+        main,
+        [
+            "policy",
+            "compare-holdouts",
+            str(holdout_dir / "holdout-evaluation.json"),
+            str(holdout_dir / "holdout-evaluation.json"),
+            "--label",
+            "first",
+            "--label",
+            "second",
+            "--report-file",
+            str(comparison_path),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert compared.exit_code == 0, compared.output
+    comparison = json.loads(comparison_path.read_text())
+    assert comparison["artifact_type"] == "policy_holdout_comparison"
+    assert comparison["baseline_label"] == "first"
+    assert [row["label"] for row in comparison["rows"]] == ["first", "second"]
+    assert "Holdout comparison file written" in compared.stderr
+
 
 def test_corpus_repeat_cli_runs_independent_measurements_and_aggregates(
     tmp_path,

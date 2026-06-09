@@ -49,6 +49,7 @@ uv run snowprove dbt scan . --report-file snowprove-report.json
 uv run snowprove dbt scan . --write-patches snowprove-patches
 uv run snowprove dbt scan . --apply-patches
 uv run snowprove dbt scan . --use-compiled
+uv run snowprove policy compare-holdouts HOLDOUT.json HOLDOUT.json --label default --label candidate
 ```
 
 Snowflake is the compatibility default. SQL-facing commands accept
@@ -719,16 +720,22 @@ Completed:
     reached 54/56 exact and 55/56 adjusted accuracy, with 33 wins versus
     greedy's 34. The 0.25 scale is therefore useful for the multi-action split
     but not a safe global recommendation.
+72. `snowprove policy compare-holdouts` compares holdout artifacts by offline
+    exact/adjusted accuracy, greedy/policy reward, win deltas, and oracle
+    request deltas. It confirmed the tradeoff above: on the multi-action
+    split, unknown scale 0.25 tied greedy with 43 wins and used 56 fewer oracle
+    calls; on the standard-medium split, it regressed to 25 wins versus
+    greedy's 34 despite using 72 fewer oracle calls.
 
 Next:
 
-1. Add a small comparison/report helper for policy holdout artifacts so runs
-   like default vs unknown-scale 0.25 can be compared without manual JSON/text
-   inspection.
-2. Investigate whether unknown preference scaling should be feature- or
+1. Investigate whether unknown preference scaling should be feature- or
    group-aware rather than a single global scalar.
-3. Keep using `policy inspect-baseline` after each experiment to distinguish
-   harmless near-ties from real search-reward regressions.
+2. Keep using `policy compare-holdouts` and `policy inspect-baseline` after
+   each experiment to distinguish oracle savings, harmless near-ties, and real
+   search-reward regressions.
+3. Keep using `policy inspect-labels` to identify which action-set/table groups
+   need calibration before adding more corpus variations.
 
 The initial readiness milestone is 50-200 reproducible DuckDB tasks, at least
 five structured actions, solver-backed equivalence rewards, repeatable latency

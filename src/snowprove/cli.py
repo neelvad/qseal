@@ -32,6 +32,7 @@ from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.policy import (
     PolicyDataFilter,
     PolicyHoldoutEvaluation,
+    compare_policy_holdouts,
     evaluate_baseline_policy,
     inspect_baseline_policy,
     inspect_policy_labels,
@@ -41,6 +42,7 @@ from snowprove.policy import (
     render_baseline_policy_inspection,
     render_baseline_policy_training,
     render_linear_policy_training,
+    render_policy_holdout_comparison,
     render_policy_holdout_evaluation,
     render_policy_label_inspection,
     train_baseline_policy,
@@ -1273,6 +1275,58 @@ def policy_holdout_evaluate(
     else:
         click.echo(render_policy_holdout_evaluation(holdout))
     click.echo(f"Holdout evaluation file written: {holdout_report_path}", err=True)
+
+
+@policy_group.command(name="compare-holdouts")
+@click.argument(
+    "holdout_paths",
+    nargs=-1,
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--label",
+    "labels",
+    multiple=True,
+    help="Label for a holdout artifact. Must be supplied once per path if used.",
+)
+@click.option(
+    "--report-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the comparison JSON artifact to this file.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+)
+def policy_compare_holdouts(
+    holdout_paths: tuple[Path, ...],
+    labels: tuple[str, ...],
+    report_file: Path | None,
+    output_format: str,
+) -> None:
+    """Compare policy holdout evaluation artifacts."""
+    try:
+        comparison = compare_policy_holdouts(
+            holdout_paths,
+            labels=labels,
+        )
+    except ValueError as error:
+        raise click.ClickException(str(error)) from error
+
+    if report_file is not None:
+        report_file.parent.mkdir(parents=True, exist_ok=True)
+        report_file.write_text(comparison.model_dump_json(indent=2))
+
+    if output_format == "json":
+        click.echo(comparison.model_dump_json(indent=2))
+    else:
+        click.echo(render_policy_holdout_comparison(comparison))
+    if report_file is not None:
+        click.echo(f"Holdout comparison file written: {report_file}", err=True)
 
 
 @fixtures_group.command(name="create")
