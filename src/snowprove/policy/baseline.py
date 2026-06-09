@@ -13,6 +13,9 @@ from snowprove.corpus.trajectories import (
     CorpusTrajectoryRecord,
     load_corpus_trajectory_records,
 )
+from snowprove.dialects import DEFAULT_DIALECT, SqlDialect
+from snowprove.ir.model import Predicate, SelectQuery
+from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 
 
 class PolicyDataFilter(BaseModel):
@@ -49,6 +52,8 @@ class PolicyActionContext(BaseModel):
     tags: tuple[str, ...] = Field(default_factory=tuple)
     step_index: int = Field(ge=0)
     available_action_ids: tuple[str, ...] = Field(default_factory=tuple)
+    state_sql: str | None = None
+    dialect: SqlDialect = DEFAULT_DIALECT
 
 
 class BaselinePolicyModel(BaseModel):
@@ -719,6 +724,8 @@ def score_policy_action(
         step_index=context.step_index,
         action_id=action_id,
         available_action_ids=context.available_action_ids,
+        state_sql=context.state_sql,
+        dialect=context.dialect,
     )
     return _score_features(model, features)
 
@@ -1408,6 +1415,7 @@ def _features(example: _StateExample, action_id: str) -> tuple[str, ...]:
         step_index=example.step_index,
         action_id=action_id,
         available_action_ids=example.available_action_ids,
+        state_sql=example.state_sql,
     )
 
 
@@ -1418,6 +1426,8 @@ def _feature_values(
     step_index: int,
     action_id: str,
     available_action_ids: tuple[str, ...] = (),
+    state_sql: str | None = None,
+    dialect: SqlDialect = DEFAULT_DIALECT,
 ) -> tuple[str, ...]:
     rule_name = _rule_name(action_id)
     target_kind, target_index = _action_target(action_id)
@@ -1454,6 +1464,13 @@ def _feature_values(
             else ()
         ),
         *(f"tag_action:{tag}:{action_id}" for tag in tags),
+        *_sql_context_features(
+            state_sql=state_sql,
+            dialect=dialect,
+            action_id=action_id,
+            rule_name=rule_name,
+            target_index=target_index,
+        ),
     )
 
 
@@ -1472,6 +1489,113 @@ def _action_target(action_id: str) -> tuple[str, int | None]:
         return target_kind, int(raw_index)
     except ValueError:
         return target_kind, None
+
+
+def _sql_context_features(
+    *,
+    state_sql: str | None,
+    dialect: SqlDialect,
+    action_id: str,
+    rule_name: str,
+    target_index: int | None,
+) -> tuple[str, ...]:
+    if state_sql is None:
+        return ()
+    try:
+        query = parse_select(state_sql, dialect=dialect)
+    except UnsupportedSqlError:
+        return ()
+
+    projection_columns = _direct_projection_columns(query)
+    not_null_columns = _not_null_predicate_columns(query)
+    action_column = _action_column(
+        query,
+        rule_name=rule_name,
+        target_index=target_index,
+    )
+    projection_key = "+".join(projection_columns) if projection_columns else "none"
+    not_null_key = "+".join(not_null_columns) if not_null_columns else "none"
+    features = [
+        f"state_projection_columns:{projection_key}",
+        f"state_not_null_columns:{not_null_key}",
+        f"state_distinct:{str(query.distinct).lower()}",
+        f"state_projection_count:{len(projection_columns)}",
+        f"action_projection_columns:{action_id}:{projection_key}",
+        f"action_not_null_columns:{action_id}:{not_null_key}",
+        f"rule_projection_columns:{rule_name}:{projection_key}",
+        f"rule_not_null_columns:{rule_name}:{not_null_key}",
+    ]
+
+    if query.distinct:
+        has_not_null_on_projection = bool(set(projection_columns) & set(not_null_columns))
+        features.extend(
+            [
+                (
+                    "state_distinct_has_not_null_projection:"
+                    f"{str(has_not_null_on_projection).lower()}"
+                ),
+                (
+                    "rule_distinct_has_not_null_projection:"
+                    f"{rule_name}:{str(has_not_null_on_projection).lower()}"
+                ),
+            ]
+        )
+
+    if action_column is not None:
+        action_column_projected = action_column in projection_columns
+        action_column_is_only_projection = projection_columns == (action_column,)
+        features.extend(
+            [
+                f"action_column:{action_id}:{action_column}",
+                f"rule_action_column:{rule_name}:{action_column}",
+                f"target_column:{action_column}",
+                f"action_column_projected:{action_id}:{str(action_column_projected).lower()}",
+                f"rule_action_column_projected:{rule_name}:{str(action_column_projected).lower()}",
+                (
+                    "rule_action_column_is_only_projection:"
+                    f"{rule_name}:{str(action_column_is_only_projection).lower()}"
+                ),
+            ]
+        )
+
+    return tuple(features)
+
+
+def _direct_projection_columns(query: SelectQuery) -> tuple[str, ...]:
+    return tuple(
+        projection.name
+        for projection in query.projections
+        if projection.is_direct_column()
+    )
+
+
+def _not_null_predicate_columns(query: SelectQuery) -> tuple[str, ...]:
+    return tuple(
+        predicate.left.name
+        for predicate in query.predicates
+        if isinstance(predicate, Predicate) and predicate.operator == "IS NOT NULL"
+    )
+
+
+def _action_column(
+    query: SelectQuery,
+    *,
+    rule_name: str,
+    target_index: int | None,
+) -> str | None:
+    if rule_name == "remove_redundant_distinct":
+        projection_columns = _direct_projection_columns(query)
+        if len(projection_columns) == 1:
+            return projection_columns[0]
+        return None
+    if rule_name != "remove_redundant_not_null_filter" or target_index is None:
+        return None
+    if target_index < 0 or target_index >= len(query.predicates):
+        return None
+    predicate = query.predicates[target_index]
+    if not isinstance(predicate, Predicate) or predicate.operator != "IS NOT NULL":
+        return None
+    return predicate.left.name
 
 
 def _render_filter(data_filter: PolicyDataFilter) -> str:

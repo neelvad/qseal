@@ -191,6 +191,22 @@ def test_linear_policy_trains_and_evaluates_choice_states(tmp_path) -> None:
     assert model.skipped_preference_count == 0
     assert model.skipped_unknown_preference_count == 0
     assert model.feature_weights
+    feature_weights = {item.feature: item.weight for item in model.feature_weights}
+    assert (
+        "action_projection_columns:"
+        "remove_redundant_not_null_filter::predicate:1:event_id+user_id"
+        in feature_weights
+    )
+    assert (
+        "action_not_null_columns:"
+        "remove_redundant_not_null_filter::predicate:1:event_id+user_id"
+        in feature_weights
+    )
+    assert (
+        "rule_action_column:remove_redundant_not_null_filter:user_id"
+        in feature_weights
+    )
+    assert "target_column:user_id" in feature_weights
     assert evaluation.correct_count == 1
     assert evaluation.accuracy == 1.0
     assert inspection.rows[0].predicted_action_id == second_predicate

@@ -747,13 +747,24 @@ Completed:
     choice tasks where the ranker now over-prefers removing `IS NOT NULL`
     before DISTINCT. The multi-action misses remain the previous compact and
     duplicate-heavy cases where DISTINCT is still preferred too strongly.
+75. The ranker now extracts SQL column-context features from each state SQL
+    during both trajectory training/evaluation and live corpus policy scoring.
+    These features include direct projection columns, `IS NOT NULL` predicate
+    columns, action-specific target columns, and whether an action column is
+    projected. A v7 smoke holdout with global unknown scale 1.0 improved the
+    practical tradeoff without scalar tuning:
+    `/tmp/snowprove-policy-138-holdout-standard-medium-ranker-richfeatures-20260609`
+    tied greedy at 34 wins and reward 0.095288 while using 112 oracle calls
+    versus greedy's 148, with 54/56 exact and 55/56 adjusted offline accuracy.
+    `/tmp/snowprove-policy-138-holdout-multiaction-ranker-richfeatures-20260609`
+    tied greedy at 43 wins and reward 0.091774 while using 146 oracle calls
+    versus greedy's 202, with 86/89 exact/adjusted offline accuracy. This
+    looks better than global or group-specific unknown-preference scaling.
 
 Next:
 
-1. Avoid more scalar unknown-preference tuning for now; it is too blunt. The
-   next better step is richer ranking features that can distinguish selected
-   columns, predicate columns, and whether the DISTINCT key and not-null column
-   are the same.
+1. Inspect the remaining rich-feature misses and decide whether to add one more
+   small feature family or move to a repeated holdout run for stability.
 2. Keep using `policy compare-holdouts` and `policy inspect-baseline` after
    each experiment to distinguish oracle savings, harmless near-ties, and real
    search-reward regressions.

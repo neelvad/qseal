@@ -413,6 +413,8 @@ def _policy_scorer(
                 available_action_ids=tuple(
                     action.action_id for action in observation.actions
                 ),
+                state_sql=observation.current_sql,
+                dialect=task.environment_task.dialect,
             ),
             action_id,
         )
