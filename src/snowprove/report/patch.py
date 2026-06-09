@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 from snowprove.dbt.scan import DbtScanResult
 from snowprove.report.diff import render_rewrite_diff
+from snowprove.report.guards import required_guarding_tests
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 
 
@@ -22,6 +23,7 @@ class PatchWriteResult(BaseModel):
     path: Path
     model_path: Path
     rule_name: str
+    required_tests: tuple[str, ...] = ()
 
 
 def write_dbt_scan_patches(scan_result: DbtScanResult, output_dir: Path) -> tuple[Path, ...]:
@@ -53,6 +55,7 @@ def write_dbt_scan_patch_results(
                     path=patch_path,
                     model_path=result.display_path(),
                     rule_name=suggestion.rule_name,
+                    required_tests=required_guarding_tests(suggestion),
                 )
             )
 

@@ -5,6 +5,7 @@ from typing import Any
 from snowprove.benchmark.model import BenchmarkResult
 from snowprove.dialects import DEFAULT_DIALECT
 from snowprove.fixtures.model import DuckDbFixtureManifest
+from snowprove.report.guards import required_guarding_tests
 from snowprove.report.patch import PatchWriteResult
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.verifier.model import VerificationResult
@@ -19,6 +20,7 @@ def render_suggestion_json(
     payload["schema_version"] = 1
     payload["artifact_type"] = "suggestion"
     payload["dialect"] = dialect
+    payload["required_tests"] = list(required_guarding_tests(suggestion))
     return _dumps(payload)
 
 
@@ -37,7 +39,7 @@ def render_suggestions_json(
             "schema_version": 1,
             "artifact_type": "suggestions",
             "dialect": dialect,
-            "results": [suggestion.model_dump(mode="json") for suggestion in visible],
+            "results": [_suggestion_payload(suggestion) for suggestion in visible],
         }
     )
 
@@ -158,6 +160,10 @@ def render_dbt_scan_json(
         payload["results"][index]["apply_ready"] = result.apply_ready()
         payload["results"][index]["apply_blocker"] = result.apply_blocker()
         payload["results"][index]["patches"] = patches_by_model.get(str(result.display_path()), [])
+        payload["results"][index]["suggestions"] = [
+            _suggestion_payload(suggestion)
+            for suggestion in result.suggestions
+        ]
     payload["summary"] = scan_result.summary()
     return _dumps(payload)
 
@@ -171,9 +177,16 @@ def _patches_by_model(
             {
                 "path": str(result.path),
                 "rule_name": result.rule_name,
+                "required_tests": list(result.required_tests),
             }
         )
     return patches
+
+
+def _suggestion_payload(suggestion: RewriteSuggestion) -> dict[str, Any]:
+    payload = suggestion.model_dump(mode="json")
+    payload["required_tests"] = list(required_guarding_tests(suggestion))
+    return payload
 
 
 def _dumps(payload: Any) -> str:

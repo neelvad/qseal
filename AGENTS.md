@@ -760,11 +760,19 @@ Completed:
     tied greedy at 43 wins and reward 0.091774 while using 146 oracle calls
     versus greedy's 202, with 86/89 exact/adjusted offline accuracy. This
     looks better than global or group-specific unknown-preference scaling.
+76. Reporting now distinguishes the trust basis of safe verification results.
+    The compatibility status remains `PROVEN_EQUIVALENT`, but JSON/text
+    verification artifacts include `safety_claim` and `verification_method`.
+    Builtin checks report `VERIFIED_BY_RULE` /
+    `builtin_rule_replay`; SQLSolver EQ results report
+    `SOLVER_PROVEN_EQUIVALENT` / `sqlsolver`. Suggestion, dbt scan, and patch
+    metadata now include `required_tests` derived from trusted assumptions, for
+    example `dbt test: unique on dim_users.user_id`.
 
 Next:
 
-1. Inspect the remaining rich-feature misses and decide whether to add one more
-   small feature family or move to a repeated holdout run for stability.
+1. Re-run real-project scans and evaluate whether apply-ready, constraint-
+   dependent findings appear often enough to drive the next rule investment.
 2. Keep using `policy compare-holdouts` and `policy inspect-baseline` after
    each experiment to distinguish oracle savings, harmless near-ties, and real
    search-reward regressions.

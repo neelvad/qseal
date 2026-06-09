@@ -49,6 +49,8 @@ def test_render_verification_json() -> None:
     assert payload["status"] == "UNKNOWN"
     assert payload["inputs"]["original_path"] == "original.sql"
     assert payload["reason"] == "No rule applies."
+    assert payload["safety_claim"] is None
+    assert payload["verification_method"] is None
 
 
 def test_render_suggestions_json_omits_not_applicable_results() -> None:
@@ -146,6 +148,7 @@ def test_render_dbt_scan_json_includes_patch_paths() -> None:
     assert payload["results"][0]["patches"] == [
         {
             "path": "/tmp/project/patches/models/users.sql.remove.patch",
+            "required_tests": [],
             "rule_name": "remove_redundant_distinct",
         }
     ]

@@ -36,4 +36,28 @@ class BuiltinVerifierBackend:
                 reason=f"Rewritten query unsupported: {error}",
             )
 
-        return check_equivalence(original, rewritten, constraints)
+        result = check_equivalence(original, rewritten, constraints)
+        if result.status == VerificationStatus.PROVEN_EQUIVALENT:
+            method = (
+                "builtin_normalized_identity"
+                if result.rule_name == "normalized_identity"
+                else "builtin_rule_replay"
+            )
+            claim = (
+                "NORMALIZED_IDENTITY"
+                if result.rule_name == "normalized_identity"
+                else "VERIFIED_BY_RULE"
+            )
+            reason = result.reason
+            if result.rule_name != "normalized_identity" and reason:
+                reason = f"Builtin verifier matched a supported rewrite rule. {reason}"
+            elif result.rule_name != "normalized_identity":
+                reason = "Builtin verifier matched a supported rewrite rule."
+            return result.model_copy(
+                update={
+                    "verification_method": method,
+                    "safety_claim": claim,
+                    "reason": reason,
+                }
+            )
+        return result.model_copy(update={"verification_method": "builtin_rule_replay"})

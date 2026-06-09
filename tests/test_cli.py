@@ -832,6 +832,8 @@ tables:
     assert payload["artifact_type"] == "verification"
     assert payload["proven"] is True
     assert payload["status"] == "PROVEN_EQUIVALENT"
+    assert payload["safety_claim"] == "VERIFIED_BY_RULE"
+    assert payload["verification_method"] == "builtin_rule_replay"
     assert payload["rule_name"] == "remove_redundant_distinct"
     assert payload["inputs"]["original_path"] == str(original)
     assert payload["inputs"]["rewritten_path"] == str(rewritten)
@@ -1981,8 +1983,12 @@ models:
     assert payload["results"][0]["patches"] == [
         {
             "path": str(patch_path),
+            "required_tests": ["dbt test: unique on dim_users.user_id"],
             "rule_name": "remove_redundant_distinct",
         }
+    ]
+    assert payload["results"][0]["suggestions"][0]["required_tests"] == [
+        "dbt test: unique on dim_users.user_id"
     ]
 
 

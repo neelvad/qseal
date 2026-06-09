@@ -2,12 +2,26 @@
 
 Verified-safe SQL rewrites for a constrained Snowflake and DuckDB SQL subset.
 
-Snowprove is an early CLI-first project. The goal is narrow: prove that small,
-hand-written SQL rewrite rules are semantically safe under explicit schema
-constraints, then leave performance validation to engine plans or benchmarks.
+Snowprove's product wedge is that dbt tests can encode constraints a warehouse
+optimizer cannot safely assume. For example, Snowflake may store unenforced
+`UNIQUE` metadata and cannot generally remove a defensive `DISTINCT`, but a dbt
+`unique` test or an explicit Snowprove schema contract can be treated as a
+trusted project assumption. Snowprove uses those assumptions to propose
+reviewable SQL simplifications and emits the guarding tests that must keep
+running in CI.
+
+Snowprove is an early CLI-first project. The goal is narrow: verify that small,
+hand-written SQL rewrite rules are safe under explicit schema constraints, then
+leave performance validation to engine plans or benchmarks.
 
 It does **not** claim that a rewrite is always faster. It claims that a supported
 rewrite returns the same rows under the declared assumptions.
+
+For the builtin verifier, "safe" means the rewritten query matches the output of
+one of Snowprove's supported rewrite rules after IR normalization. That is
+rule-replay over hand-written Python rules, not an independent theorem proof.
+External solver backends such as SQLSolver are reported separately when they
+prove equivalence.
 
 ## Install
 
@@ -155,21 +169,24 @@ uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.
 uv run snowprove dbt scan examples/dbt_project
 ```
 
-`check --fail-on unproven` exits nonzero unless Snowprove proves the query pair
-equivalent. This is the intended contract for future untrusted candidate
-generators, including LLM-generated rewrites.
+`check --fail-on unproven` exits nonzero unless Snowprove can certify the query
+pair as safe. With the default builtin backend, JSON artifacts report
+`safety_claim: VERIFIED_BY_RULE` for rule-replay results. With SQLSolver,
+successful EQ results report `safety_claim: SOLVER_PROVEN_EQUIVALENT`. This is
+the intended contract for future untrusted candidate generators, including
+LLM-generated rewrites.
 
 `candidates generate` is the trusted-rule candidate source: it runs Snowprove's
 rewrite rules and writes proven rewritten SQL files such as
 `001_remove_redundant_distinct.sql`. `candidates check` is the batch verification
 form: it loads the original query once, verifies each candidate SQL file
-independently, and reports only `PROVEN_EQUIVALENT` candidates as safe. It
+independently, and reports only certified candidates as safe. It
 accepts explicit candidate paths or `--candidates-dir candidates/`. `candidates
 run` combines generation and verification into one JSON-friendly command, which
 is the intended CI shape before LLM candidate generation exists. Use
 `--report-file` to write the `candidate_run` JSON artifact while keeping normal
 text output on stdout. The default verifier backend is `builtin`, which wraps
-Snowprove's internal rule-based verifier. `sqlsolver` can call an external
+Snowprove's internal rule-replay verifier. `sqlsolver` can call an external
 SQLSolver command and maps `EQ`, `NEQ`, `UNKNOWN`, and `TIMEOUT` into Snowprove
 statuses. `external` remains a generic stub for future solver integrations.
 
@@ -364,6 +381,12 @@ uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.
 
 The `unique` test becomes a trusted unique-key constraint. The `not_null` test
 becomes trusted `nullable: false` metadata.
+
+Those assumptions are time-varying data contracts. If Snowprove removes a
+defensive `DISTINCT` because `user_id` is unique, the corresponding dbt
+`unique` test must keep running; otherwise future data drift can invalidate the
+rewrite. JSON and text reports include `required_tests` / "Required ongoing
+tests" for constraint-dependent rewrites.
 
 ### Redundant NOT NULL Filter Removal
 

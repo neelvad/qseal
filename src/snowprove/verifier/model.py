@@ -10,6 +10,8 @@ class VerificationResult(BaseModel):
     original_sql: str
     rewritten_sql: str
     rule_name: str | None = None
+    verification_method: str | None = None
+    safety_claim: str | None = None
     assumptions: tuple[str, ...] = Field(default_factory=tuple)
     reason: str | None = None
     counterexample: str | None = None

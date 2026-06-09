@@ -5,8 +5,9 @@ when the parser, rewrite rule, and verifier all support the relevant SQL shape.
 
 ## Result Statuses
 
-- `PROVEN_EQUIVALENT`: Snowprove proved the rewrite safe under the displayed
-  assumptions.
+- `PROVEN_EQUIVALENT`: Snowprove certified the rewrite safe under the displayed
+  assumptions. Check `safety_claim` and `verification_method` to distinguish
+  builtin rule replay from external solver proof.
 - `NOT_EQUIVALENT`: Snowprove found a rule-specific reason the rewrite can
   change results.
 - `UNKNOWN`: the SQL parsed, but no verifier rule could prove or disprove the
@@ -29,6 +30,9 @@ artifact types are:
 The `verification` artifact also includes:
 
 - `proven`: boolean shortcut for `status == PROVEN_EQUIVALENT`
+- `safety_claim`: for example `VERIFIED_BY_RULE` for builtin rule replay or
+  `SOLVER_PROVEN_EQUIVALENT` for an external solver EQ result
+- `verification_method`: backend/method that produced the safety claim
 - `rule_name`: verifier rule that proved or disproved the pair, when available
 - `inputs`: original, rewritten, schema path, and schema format metadata
 
@@ -45,10 +49,12 @@ For full artifact notes, see `docs/artifacts.md`.
 
 `snowprove check` and `snowprove candidates check` route verification through a
 backend interface. `builtin` uses Snowprove's internal parser and rule-specific
-equivalence checks. `sqlsolver` writes one-line SQL pair files plus a schema file,
-executes a user-provided SQLSolver command, and maps `EQ` to
-`PROVEN_EQUIVALENT`, `NEQ` to `NOT_EQUIVALENT`, and `UNKNOWN`/`TIMEOUT` to
-`UNKNOWN`. `external` is a generic stub for future solver integrations.
+rewrite replay; approved pairs report `safety_claim: VERIFIED_BY_RULE`.
+`sqlsolver` writes one-line SQL pair files plus a schema file, executes a
+user-provided SQLSolver command, and maps `EQ` to `PROVEN_EQUIVALENT` with
+`safety_claim: SOLVER_PROVEN_EQUIVALENT`, `NEQ` to `NOT_EQUIVALENT`, and
+`UNKNOWN`/`TIMEOUT` to `UNKNOWN`. `external` is a generic stub for future solver
+integrations.
 
 The external adapter contract is represented by `ExternalSolverRequest`, which
 contains original SQL, rewritten SQL, trusted constraints, solver command
@@ -78,6 +84,8 @@ Currently supported dbt tests:
 
 These dbt tests are still treated as assumptions. Snowprove does not run dbt
 tests or verify that they passed.
+Reports include `required_tests` / "Required ongoing tests" for assumptions
+that map directly to dbt-style guard tests.
 
 ## Supported Rewrite Rules
 

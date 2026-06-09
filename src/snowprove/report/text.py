@@ -3,6 +3,7 @@ from rich.text import Text
 from snowprove.benchmark.model import BenchmarkResult, BenchmarkStatus
 from snowprove.fixtures.model import DuckDbFixtureManifest
 from snowprove.report.diff import render_rewrite_diff
+from snowprove.report.guards import required_guarding_tests
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.verifier.model import VerificationResult
 
@@ -52,6 +53,11 @@ def render_suggestion_report(suggestion: RewriteSuggestion) -> Text:
         output.append("Assumptions:\n", style="bold")
         for assumption in suggestion.assumptions:
             output.append(f"  - {assumption}\n")
+        tests = required_guarding_tests(suggestion)
+        if tests:
+            output.append("Required ongoing tests:\n", style="bold")
+            for test in tests:
+                output.append(f"  - {test}\n")
 
     if suggestion.reason:
         output.append("Reason: ", style="bold")
@@ -97,6 +103,12 @@ def render_verification_report(result: VerificationResult) -> Text:
     if result.rule_name:
         output.append("Verifier rule: ", style="bold")
         output.append(f"{result.rule_name}\n")
+    if result.safety_claim:
+        output.append("Safety claim: ", style="bold")
+        output.append(f"{result.safety_claim}\n")
+    if result.verification_method:
+        output.append("Verification method: ", style="bold")
+        output.append(f"{result.verification_method}\n")
 
     if result.assumptions:
         output.append("Assumptions:\n", style="bold")
@@ -131,6 +143,10 @@ def render_candidate_verifications_report(results: list[VerificationResult]) -> 
         output.append(f"{result.status.value}\n", style=_status_style(result.status))
         if result.rule_name:
             output.append(f"  Verifier rule: {result.rule_name}\n")
+        if result.safety_claim:
+            output.append(f"  Safety claim: {result.safety_claim}\n")
+        if result.verification_method:
+            output.append(f"  Verification method: {result.verification_method}\n")
         if result.reason:
             output.append(f"  Reason: {result.reason}\n")
         if result.counterexample:
@@ -179,6 +195,15 @@ def render_dbt_scan_report(scan_result) -> Text:
             output.append(f"  Rewrite: {suggestion.rule_name}\n")
             if suggestion.reason:
                 output.append(f"  Reason: {suggestion.reason}\n")
+            if suggestion.assumptions:
+                output.append("  Guarding assumptions:\n")
+                for assumption in suggestion.assumptions:
+                    output.append(f"    - {assumption}\n")
+                tests = required_guarding_tests(suggestion)
+                if tests:
+                    output.append("  Required ongoing tests:\n")
+                    for test in tests:
+                        output.append(f"    - {test}\n")
             if suggestion.rewritten_sql:
                 output.append("  Rewritten SQL:\n")
                 for line in suggestion.rewritten_sql.splitlines():

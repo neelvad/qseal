@@ -7,8 +7,11 @@ Snowprove JSON output is intended for CI and review tooling. Every artifact has:
 - `dialect`: selected SQL dialect, or `inputs.dialect` on individual
   verification results
 
-Only `PROVEN_EQUIVALENT` should be treated as safe. `UNKNOWN`, `UNSUPPORTED`,
-and `NOT_EQUIVALENT` are not safe rewrite approvals.
+Only certified approvals should be treated as safe. For compatibility, safe
+approvals still use `status: PROVEN_EQUIVALENT`, but consumers should also read
+`safety_claim`: builtin verifier approvals report `VERIFIED_BY_RULE`, while
+external solver approvals can report `SOLVER_PROVEN_EQUIVALENT`. `UNKNOWN`,
+`UNSUPPORTED`, and `NOT_EQUIVALENT` are not safe rewrite approvals.
 
 ## `duckdb_fixture`
 
@@ -88,6 +91,10 @@ Important fields:
 
 - `status`: verifier result
 - `proven`: true only for `PROVEN_EQUIVALENT`
+- `safety_claim`: `VERIFIED_BY_RULE`, `SOLVER_PROVEN_EQUIVALENT`, or another
+  explicit claim describing the trust basis
+- `verification_method`: backend/method such as `builtin_rule_replay` or
+  `sqlsolver`
 - `rule_name`: rule/backend that produced the result
 - `inputs`: original, rewritten, and schema paths
 - `assumptions`: trusted assumptions used by the proof
@@ -109,6 +116,7 @@ Important fields:
 - `skipped_count`
 - `generated`: candidate file paths and producing rules
 - `skipped`: rule results without candidate SQL
+- `required_tests`: guard tests implied by each constraint-dependent rewrite
 
 ## `candidate_verifications`
 

@@ -97,6 +97,12 @@ class SqlSolverBackend:
             original_sql=request.normalized_original_sql(),
             rewritten_sql=request.normalized_rewritten_sql(),
             rule_name=self.name,
+            verification_method="sqlsolver",
+            safety_claim=(
+                "SOLVER_PROVEN_EQUIVALENT"
+                if solver_result == "EQ"
+                else None
+            ),
             reason=f"SQLSolver returned {solver_result}.",
         )
 
