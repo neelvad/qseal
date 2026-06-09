@@ -34,16 +34,35 @@ def test_rejects_project_without_models_directory(tmp_path: Path) -> None:
 def test_discovers_compiled_sql_files_when_compiled_path_is_provided(tmp_path: Path) -> None:
     models = tmp_path / "models"
     compiled = tmp_path / "target" / "compiled" / "project" / "models"
+    compiled_tests = compiled / "schema.yml"
     models.mkdir()
     compiled.mkdir(parents=True)
+    compiled_tests.mkdir()
     (models / "schema.yml").write_text("models: []")
     (models / "source_model.sql").write_text("SELECT * FROM {{ ref('orders') }}")
     (compiled / "source_model.sql").write_text("SELECT * FROM orders")
+    (compiled_tests / "unique_source_model_id.sql").write_text(
+        "SELECT id FROM source_model GROUP BY id HAVING COUNT(*) > 1"
+    )
 
     project = discover_dbt_project(tmp_path, compiled_path=compiled)
 
     assert project.model_sql_files == (compiled / "source_model.sql",)
     assert project.schema_yml_files == (models / "schema.yml",)
+
+
+def test_discards_compiled_sql_without_matching_source_model(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    compiled = tmp_path / "target" / "compiled" / "project" / "models"
+    compiled.mkdir(parents=True)
+    models.mkdir()
+    (models / "source_model.sql").write_text("SELECT * FROM {{ ref('orders') }}")
+    (compiled / "source_model.sql").write_text("SELECT * FROM orders")
+    (compiled / "package_only.sql").write_text("SELECT * FROM helper")
+
+    project = discover_dbt_project(tmp_path, compiled_path=compiled)
+
+    assert project.model_sql_files == (compiled / "source_model.sql",)
 
 
 def test_discovers_unambiguous_compiled_sql_path(tmp_path: Path) -> None:

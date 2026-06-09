@@ -199,6 +199,8 @@ dbt workflows:
 - supports `--compiled-dir`
 - supports `--use-compiled`
 - maps compiled SQL back to source model paths when possible
+- skips compiled dbt test SQL and package-only SQL that do not map to source
+  model files
 - refuses direct apply when scan came from compiled SQL or normalized raw dbt SQL
 - emits text, JSON, diffs, patch files, and report files
 - records patch paths inside JSON reports when `--write-patches` is used
@@ -780,12 +782,21 @@ Completed:
     test SQL under `target/compiled/.../models/schema.yml/...`, not source model
     SQL. They are useful evidence that guard metadata works, but not real
     optimization opportunities.
+78. `--use-compiled` now filters compiled SQL to files that map back to existing
+    source model files under `models/`, excluding compiled dbt tests and
+    package-only SQL. Filtered real-project reruns:
+    `/snowprove-runs/real-projects/20260609T185507Z-duckdb-compiled-filtered`
+    and
+    `/snowprove-runs/real-projects/20260609T185520Z-kestra-compiled-filtered`.
+    Each compiled scan now reports 5 models, 1 `UNKNOWN` unused-left-join
+    finding in `orders.sql`, and 0 proven findings. The previous dbt-test
+    redundant-not-null noise is gone.
 
 Next:
 
-1. Improve compiled dbt scanning so `--use-compiled` can distinguish model SQL
-   from dbt-generated test SQL before using real-project results to guide rule
-   investment.
+1. Use filtered compiled real-project results to decide the next rule investment.
+   Current signal points at richer join/reference analysis rather than more
+   policy-ranker work.
 2. Keep using `policy compare-holdouts` and `policy inspect-baseline` after
    each experiment to distinguish oracle savings, harmless near-ties, and real
    search-reward regressions.

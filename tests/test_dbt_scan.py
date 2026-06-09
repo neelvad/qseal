@@ -237,10 +237,15 @@ models:
 def test_scan_dbt_project_can_scan_compiled_sql(tmp_path: Path) -> None:
     models = tmp_path / "models"
     compiled = tmp_path / "target" / "compiled" / "project" / "models"
+    compiled_tests = compiled / "schema.yml"
     models.mkdir()
     compiled.mkdir(parents=True)
+    compiled_tests.mkdir()
     (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM {{ ref('dim_users') }}")
     (compiled / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (compiled_tests / "unique_dim_users_user_id.sql").write_text(
+        "SELECT user_id FROM dim_users GROUP BY user_id HAVING COUNT(*) > 1"
+    )
     (models / "schema.yml").write_text(
         """
 version: 2
@@ -289,7 +294,9 @@ models:
     assert result.results[0].source_path == models / "dim_users.sql"
 
 
-def test_scan_dbt_project_marks_package_compiled_sql_not_apply_ready(tmp_path: Path) -> None:
+def test_scan_dbt_project_skips_package_compiled_sql_without_source_model(
+    tmp_path: Path,
+) -> None:
     models = tmp_path / "models"
     compiled_root = tmp_path / "target" / "compiled"
     package_models = compiled_root / "dbt_utils" / "models"
@@ -310,9 +317,8 @@ models:
 
     result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES, compiled_path=compiled_root)
 
-    assert result.results[0].source_path is None
-    assert result.results[0].apply_ready() is False
-    assert result.results[0].apply_blocker() == "No matching source model file."
+    assert result.model_count == 0
+    assert result.results == ()
 
 
 def test_scan_jaffle_like_fixture_reports_stable_counts() -> None:

@@ -94,10 +94,10 @@ Review:
 - generated SQL readability
 - whether findings are useful even when not apply-ready
 
-Watch for compiled dbt test SQL under paths such as
-`target/compiled/<project>/models/schema.yml/...`. Those files can produce
-valid Snowprove findings, but they are dbt-generated tests rather than model
-optimization opportunities. Treat them separately from source model findings.
+Snowprove scans only compiled SQL files that map back to existing source models
+under `models/`. Compiled dbt test SQL under paths such as
+`target/compiled/<project>/models/schema.yml/...` and package-only compiled SQL
+are ignored so real-project summaries reflect model optimization opportunities.
 
 ## Candidate Pipeline Smoke
 

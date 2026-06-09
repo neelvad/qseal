@@ -57,7 +57,7 @@ def discover_dbt_project(
             raise DbtProjectDiscoveryError(f"Compiled SQL path is not a directory: {compiled_path}")
 
     return DbtProjectFiles(
-        model_sql_files=tuple(sorted(sql_root.rglob("*.sql"))),
+        model_sql_files=_discover_model_sql_files(sql_root, models_path, compiled_path),
         schema_yml_files=tuple(
             sorted(
                 [
@@ -67,6 +67,53 @@ def discover_dbt_project(
             )
         ),
     )
+
+
+def _discover_model_sql_files(
+    sql_root: Path,
+    models_path: Path,
+    compiled_path: Path | None,
+) -> tuple[Path, ...]:
+    sql_files = tuple(sorted(sql_root.rglob("*.sql")))
+    if compiled_path is None:
+        return sql_files
+
+    return tuple(
+        sql_file
+        for sql_file in sql_files
+        if _compiled_source_model_path(sql_file, compiled_path, models_path) is not None
+    )
+
+
+def _compiled_source_model_path(
+    sql_file: Path,
+    compiled_path: Path,
+    models_path: Path,
+) -> Path | None:
+    relative = _compiled_model_relative_path(compiled_path, sql_file)
+    if relative is None:
+        return None
+
+    source_path = models_path / relative
+    if source_path.exists() and source_path.is_file():
+        return source_path
+    return None
+
+
+def _compiled_model_relative_path(compiled_path: Path, sql_file: Path) -> Path | None:
+    try:
+        relative = sql_file.relative_to(compiled_path)
+    except ValueError:
+        return None
+
+    if relative.parts and relative.parts[0] == "models":
+        return Path(*relative.parts[1:])
+
+    if "models" in relative.parts:
+        models_index = relative.parts.index("models")
+        return Path(*relative.parts[models_index + 1 :])
+
+    return relative
 
 
 def _dbt_project_name(project_path: Path) -> str | None:

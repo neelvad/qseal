@@ -465,7 +465,9 @@ command.
 
 `--compiled-dir` lets Snowprove read already-compiled dbt SQL while still using
 constraints from the source project's `models/` schema files. Snowprove does not
-run `dbt compile` itself.
+run `dbt compile` itself. Compiled SQL files are scanned only when their path can
+be mapped back to an existing source model file under `models/`; compiled dbt
+test SQL and package-only SQL are ignored.
 
 `--use-compiled` auto-discovers a single compiled SQL directory under
 `target/compiled/`. If `dbt_project.yml` declares a project name, Snowprove
