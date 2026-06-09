@@ -653,15 +653,22 @@ Completed:
     `predicate:0 vs query` for distinct-vs-not-null cases on events/orders/users.
     The next policy improvement should probably add targeted calibration tasks
     for these inverse contexts before adding model complexity.
+63. The bundled DuckDB corpus is now v7 with 138 tasks. It adds two targeted
+    choice-calibration families:
+    `choice-not-null-distinct` and `choice-double-not-null-inverse`. These add
+    18 tasks total across standard-small, low-skew-small, and standard-medium
+    fixtures, covering the missing inverse contexts from `inspect-labels`.
+    A smoke run over representative new order tasks completed through
+    `corpus run`, and direct environment inspection confirmed the initial
+    action sets include `query:distinct` vs `predicate:0` and `predicate:0` vs
+    `predicate:1`.
 
 Next:
 
-1. Add targeted choice-calibration tasks for the holdout-only inverse contexts
-   surfaced by `policy inspect-labels`, especially `predicate:1 vs predicate:0`
-   and `predicate:0 vs query`.
-2. Rerun the v6 trajectory export and ranker holdout after the calibration
-   tasks exist, then compare whether offline multi-action accuracy improves
-   without hurting the standard-medium holdout.
+1. Rerun the full v7 corpus measurements and export fresh trajectories.
+2. Rerun `policy inspect-labels` and the ranker holdout on the v7 trajectories
+   to see whether the inverse calibration tasks reduce holdout-only groups and
+   improve multi-action offline accuracy.
 3. Keep using `policy inspect-baseline` after each experiment to distinguish
    harmless near-ties from real search-reward regressions.
 
