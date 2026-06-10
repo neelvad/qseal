@@ -90,9 +90,17 @@ derived from the query pair via sqlglot scope resolution, following star
 pass-through CTEs to base tables. The CLI entry point is `snowprove refute`,
 with `--fail-on refuted` for CI gates.
 
+`snowprove dbt crosscheck PROJECT --verieql-dir DIR` runs the refuter over
+every proven scan finding and exits nonzero on any refutation. On the GitLab
+corpus both proven findings abstain (UNSUPPORTED) because their fragment
+rewrites splice into full WITH queries whose unqualified columns span two
+scoped relations, which the schema attribution conservatively refuses.
+
 Remaining:
 
-1. A cross-check harness that runs the refuter over every
-   `PROVEN_EQUIVALENT` finding from scans and the corpus, failing CI on any
-   counterexample.
-2. UNKNOWN triage in scan reports: refuted-with-witness versus bounded-OK.
+1. Cross-check fragment findings at the fragment level (the proven pair is
+   the CTE body before/after, which is simpler SQL than the spliced whole
+   query and avoids most attribution ambiguity).
+2. Resolve unqualified columns through CTE projections during schema
+   attribution to reduce abstentions.
+3. UNKNOWN triage in scan reports: refuted-with-witness versus bounded-OK.

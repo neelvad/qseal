@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import click
@@ -24,8 +25,12 @@ from snowprove.corpus import (
     write_corpus_aggregate,
     write_corpus_summary,
 )
-from snowprove.dbt.project import DbtProjectDiscoveryError, discover_compiled_sql_path
-from snowprove.dbt.scan import scan_dbt_project
+from snowprove.dbt.project import (
+    DbtProjectDiscoveryError,
+    discover_compiled_sql_path,
+    discover_dbt_project,
+)
+from snowprove.dbt.scan import _load_project_constraints, scan_dbt_project
 from snowprove.dialects import DEFAULT_DIALECT, SUPPORTED_DIALECTS
 from snowprove.fixtures import DuckDbFixtureSpec, create_duckdb_fixture
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
@@ -2209,6 +2214,149 @@ def check(
         }
     )
     _print_verification(result, output_format, fail_on)
+
+
+@dbt_group.command(name="crosscheck")
+@click.argument("project_path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option(
+    "--verieql-dir",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    required=True,
+    help="Path to a local VeriEQL checkout with a prepared .venv.",
+)
+@click.option(
+    "--verieql-python",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Python interpreter for the VeriEQL checkout. Defaults to its .venv.",
+)
+@click.option(
+    "--bound",
+    type=click.IntRange(min=1),
+    default=2,
+    show_default=True,
+    help="Maximum rows per table in the counterexample search.",
+)
+@click.option(
+    "--timeout",
+    "timeout_seconds",
+    type=int,
+    default=120,
+    show_default=True,
+    help="Refuter timeout in seconds per finding.",
+)
+@click.option(
+    "--compiled-dir",
+    "compiled_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Scan already-compiled dbt SQL from this directory.",
+)
+@click.option(
+    "--use-compiled",
+    is_flag=True,
+    help="Auto-discover a single compiled SQL directory under target/compiled.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+@click.option(
+    "--dialect",
+    type=DialectChoice,
+    default=DEFAULT_DIALECT,
+    show_default=True,
+    help="SQL dialect used to parse, verify, and report.",
+)
+def dbt_crosscheck(
+    project_path: Path,
+    verieql_dir: Path,
+    verieql_python: Path | None,
+    bound: int,
+    timeout_seconds: int,
+    compiled_path: Path | None,
+    use_compiled: bool,
+    output_format: str,
+    dialect: str,
+) -> None:
+    """Cross-check proven scan findings against the VeriEQL refuter.
+
+    Exits nonzero when any proven finding is refuted, which indicates a
+    soundness bug in Snowprove or an untrue trusted constraint.
+    """
+    if compiled_path is not None and use_compiled:
+        raise click.ClickException("--compiled-dir and --use-compiled cannot be used together.")
+
+    try:
+        if use_compiled:
+            compiled_path = discover_compiled_sql_path(project_path)
+        scan = scan_dbt_project(
+            project_path,
+            rules=select_rules(None),
+            compiled_path=compiled_path,
+            dialect=dialect,
+        )
+        project = discover_dbt_project(project_path, compiled_path=compiled_path)
+    except DbtProjectDiscoveryError as error:
+        raise click.ClickException(str(error)) from error
+
+    constraints = _load_project_constraints(project.schema_yml_files)
+    backend = VeriEqlBackend(
+        verieql_dir=verieql_dir,
+        python_path=verieql_python,
+        bound=bound,
+        timeout_seconds=timeout_seconds,
+    )
+
+    rows = []
+    for model in scan.results:
+        for suggestion in model.suggestions:
+            if suggestion.status != VerificationStatus.PROVEN_EQUIVALENT:
+                continue
+            if suggestion.rewritten_sql is None:
+                continue
+            verdict = backend.refute(
+                suggestion.original_sql,
+                suggestion.rewritten_sql,
+                constraints,
+                dialect=dialect,
+            )
+            rows.append(
+                {
+                    "model_path": str(model.display_path()),
+                    "rule_name": suggestion.rule_name,
+                    "refuter_status": verdict.status.value,
+                    "refuter_reason": verdict.reason,
+                    "counterexample": verdict.counterexample,
+                }
+            )
+
+    refuted = [row for row in rows if row["refuter_status"] == "NOT_EQUIVALENT"]
+    payload = {
+        "artifact_type": "dbt_crosscheck",
+        "schema_version": 1,
+        "dialect": dialect,
+        "proven_finding_count": len(rows),
+        "refuted_count": len(refuted),
+        "results": rows,
+    }
+
+    if output_format == "json":
+        click.echo(json.dumps(payload, indent=2))
+    else:
+        console.print(f"Proven findings cross-checked: {len(rows)}")
+        for row in rows:
+            console.print(
+                f"  {row['refuter_status']:>14}  {row['model_path']} ({row['rule_name']})"
+            )
+            if row["refuter_status"] == "NOT_EQUIVALENT":
+                console.print(f"    {row['refuter_reason']}")
+        console.print(f"Refuted: {len(refuted)}")
+
+    if refuted:
+        raise click.exceptions.Exit(1)
 
 
 @main.command()

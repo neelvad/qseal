@@ -130,3 +130,81 @@ def test_build_request_abstains_on_ambiguous_unqualified_columns() -> None:
 
     assert isinstance(request, str)
     assert "ambiguous" in request
+
+
+def _write_scan_project(tmp_path: Path) -> Path:
+    project = tmp_path / "project"
+    models = project / "models"
+    models.mkdir(parents=True)
+    (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+          - not_null
+"""
+    )
+    return project
+
+
+def test_dbt_crosscheck_passes_when_findings_survive(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from snowprove.cli import main
+
+    project = _write_scan_project(tmp_path)
+    fake = tmp_path / "fake-python"
+    fake.write_text('#!/bin/sh\necho \'{"result": "bounded_ok", "bound": 2}\'\n')
+    fake.chmod(0o755)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "dbt",
+            "crosscheck",
+            str(project),
+            "--verieql-dir",
+            str(tmp_path),
+            "--verieql-python",
+            str(fake),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Proven findings cross-checked: 1" in result.output
+    assert "Refuted: 0" in result.output
+
+
+def test_dbt_crosscheck_fails_on_refuted_finding(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from snowprove.cli import main
+
+    project = _write_scan_project(tmp_path)
+    fake = tmp_path / "fake-python"
+    fake.write_text(
+        '#!/bin/sh\necho \'{"result": "refuted", "counterexample": "INSERT ...", "bound": 2}\'\n'
+    )
+    fake.chmod(0o755)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "dbt",
+            "crosscheck",
+            str(project),
+            "--verieql-dir",
+            str(tmp_path),
+            "--verieql-python",
+            str(fake),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "NOT_EQUIVALENT" in result.output
+    assert "Refuted: 1" in result.output
