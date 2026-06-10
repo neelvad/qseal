@@ -68,6 +68,17 @@ class RemoveUnusedLeftJoin:
                 reason="Only LEFT JOIN elimination is supported.",
             )
 
+        if query.references_cte_relation():
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.UNKNOWN,
+                original_sql=query.raw_sql,
+                reason=(
+                    "The query references a CTE relation, so a standalone "
+                    "rewritten query cannot be generated."
+                ),
+            )
+
         if _uses_joined_relation(query, join):
             return RewriteSuggestion(
                 rule_name=self.rule_name,
@@ -108,7 +119,9 @@ class RemoveUnusedLeftJoin:
 def _uses_joined_relation(query: SelectQuery, join: Join) -> bool:
     joined_name = join.relation_name()
     projected = any(
-        (column.is_star and column.table is None) or column.table == joined_name
+        (column.is_star and column.table is None)
+        or column.table == joined_name
+        or column.may_reference_relation(joined_name)
         for column in query.projections
     )
     filtered = any(

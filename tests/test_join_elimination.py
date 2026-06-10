@@ -85,3 +85,66 @@ def test_refuses_join_elimination_without_unique_right_key() -> None:
     suggestion = RemoveUnusedLeftJoin().apply(query, ConstraintCatalog())
 
     assert suggestion.status == VerificationStatus.UNKNOWN
+
+
+def test_refuses_join_elimination_when_opaque_projection_references_joined_table() -> None:
+    query = parse_select(
+        """
+        SELECT f.user_id, COALESCE(u.name, 'unknown') AS user_name
+        FROM fact_orders f
+        LEFT JOIN dim_users u ON f.user_id = u.user_id
+        """
+    )
+    constraints = ConstraintCatalog(tables={"dim_users": TableConstraints(unique=[("user_id",)])})
+
+    suggestion = RemoveUnusedLeftJoin().apply(query, constraints)
+
+    assert suggestion.status == VerificationStatus.UNKNOWN
+
+
+def test_refuses_join_elimination_when_opaque_projection_has_unqualified_columns() -> None:
+    query = parse_select(
+        """
+        SELECT f.user_id, COALESCE(name, 'unknown') AS user_name
+        FROM fact_orders f
+        LEFT JOIN dim_users u ON f.user_id = u.user_id
+        """
+    )
+    constraints = ConstraintCatalog(tables={"dim_users": TableConstraints(unique=[("user_id",)])})
+
+    suggestion = RemoveUnusedLeftJoin().apply(query, constraints)
+
+    assert suggestion.status == VerificationStatus.UNKNOWN
+
+
+def test_eliminates_join_when_opaque_projection_references_only_left_table() -> None:
+    query = parse_select(
+        """
+        SELECT f.user_id, COALESCE(f.region, 'unknown') AS region
+        FROM fact_orders f
+        LEFT JOIN dim_users u ON f.user_id = u.user_id
+        """
+    )
+    constraints = ConstraintCatalog(tables={"dim_users": TableConstraints(unique=[("user_id",)])})
+
+    suggestion = RemoveUnusedLeftJoin().apply(query, constraints)
+
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert "COALESCE(f.region, 'unknown') AS region" in suggestion.rewritten_sql
+
+
+def test_refuses_join_elimination_for_cte_sourced_query() -> None:
+    # A standalone rewrite of a query reading from a CTE would drop the WITH
+    # clause that defines it.
+    query = parse_select(
+        """
+        WITH x AS (SELECT a, k FROM base WHERE p = 1)
+        SELECT x.a FROM x LEFT JOIN dim_users u ON x.k = u.user_id
+        """
+    )
+    constraints = ConstraintCatalog(tables={"dim_users": TableConstraints(unique=[("user_id",)])})
+
+    suggestion = RemoveUnusedLeftJoin().apply(query, constraints)
+
+    assert suggestion.status == VerificationStatus.UNKNOWN
+    assert "CTE relation" in suggestion.reason

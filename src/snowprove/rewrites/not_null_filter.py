@@ -82,6 +82,17 @@ class RemoveRedundantNotNullFilter:
                 reason="Query has no IS NOT NULL predicates.",
             )
 
+        if query.references_cte_relation():
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.UNKNOWN,
+                original_sql=query.raw_sql,
+                reason=(
+                    "The query references a CTE relation, so a standalone "
+                    "rewritten query cannot be generated."
+                ),
+            )
+
         if not query.is_direct_table() or query.joins:
             return RewriteSuggestion(
                 rule_name=self.rule_name,

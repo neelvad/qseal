@@ -52,6 +52,17 @@ class PredicatePushdown:
                 reason="Query is not a filtered subquery.",
             )
 
+        if query.references_cte_relation():
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.UNKNOWN,
+                original_sql=query.raw_sql,
+                reason=(
+                    "The query references a CTE relation, so a standalone "
+                    "rewritten query cannot be generated."
+                ),
+            )
+
         inner = query.subquery
         if query.group_by or inner.group_by or query.having or inner.having:
             return RewriteSuggestion(

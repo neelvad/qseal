@@ -12,7 +12,17 @@ class ColumnRef(BaseModel):
     table: str | None = None
     alias: str | None = None
     expression_sql: str | None = None
+    # Relations referenced by columns inside an opaque expression. Unqualified
+    # column references cannot be attributed to a relation, so rules that
+    # depend on a relation being unused must treat them as potential uses.
+    referenced_tables: tuple[str, ...] = ()
+    references_unqualified_columns: bool = False
     is_star: bool = False
+
+    def may_reference_relation(self, relation: str) -> bool:
+        if self.expression_sql is None:
+            return False
+        return self.references_unqualified_columns or relation in self.referenced_tables
 
     def to_sql(self) -> str:
         if self.expression_sql is not None:
@@ -103,6 +113,10 @@ class ExistsPredicate(BaseModel):
     table: str
     table_sql: str | None = None
     alias: str | None = None
+    # True when the EXISTS subquery reads from a CTE reference, so trusted
+    # base-table constraints sharing the CTE's name must not be applied and
+    # regenerated SQL would dangle without the defining WITH clause.
+    table_is_cte: bool = False
     condition: JoinCondition
 
     def source_sql(self) -> str:
@@ -168,6 +182,17 @@ class SelectQuery(BaseModel):
         if self.table_is_cte:
             return None
         return self.table if self.is_direct_table() else None
+
+    def references_cte_relation(self) -> bool:
+        """True when regenerated SQL would reference a CTE it cannot define."""
+        if self.table_is_cte or any(join.table_is_cte for join in self.joins):
+            return True
+        if any(
+            isinstance(predicate, ExistsPredicate) and predicate.table_is_cte
+            for predicate in self.predicates
+        ):
+            return True
+        return self.subquery is not None and self.subquery.references_cte_relation()
 
     def source_sql(self) -> str:
         if self.table is not None:

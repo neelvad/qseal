@@ -405,7 +405,10 @@ def test_scan_synthetic_duckdb_fixture_reports_raw_blockers() -> None:
         "remove_redundant_distinct": 1,
     }
     assert result.reason_counts() == {
-        "orders.customer_id is not known to be unique.": 1,
+        (
+            "The query references a CTE relation, so a standalone rewritten query "
+            "cannot be generated."
+        ): 1,
     }
 
 
@@ -427,7 +430,10 @@ def test_scan_synthetic_duckdb_fixture_reports_compiled_blockers() -> None:
         "PROVEN_EQUIVALENT": 1,
     }
     assert result.reason_counts() == {
-        "orders.customer_id is not known to be unique.": 1,
+        (
+            "The query references a CTE relation, so a standalone rewritten query "
+            "cannot be generated."
+        ): 1,
     }
 
     dim_users = next(

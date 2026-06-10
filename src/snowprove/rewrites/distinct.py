@@ -64,6 +64,17 @@ class RemoveRedundantDistinct:
                 reason="DISTINCT removal with joins is not supported yet.",
             )
 
+        if query.references_cte_relation():
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.UNKNOWN,
+                original_sql=query.raw_sql,
+                reason=(
+                    "The query references a CTE relation, so a standalone "
+                    "rewritten query cannot be generated."
+                ),
+            )
+
         table_name = query.table_name()
         if table_name is None:
             return RewriteSuggestion(
