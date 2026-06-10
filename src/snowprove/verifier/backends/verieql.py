@@ -237,14 +237,32 @@ def _attribute_column(
         if source is None:
             return f"Could not resolve relation {column.table!r} for column {column.name!r}."
     else:
-        if len(scope.sources) != 1:
-            return (
-                f"Unqualified column {column.name!r} is ambiguous across "
-                f"{len(scope.sources)} relations."
-            )
-        source = next(iter(scope.sources.values()))
+        sources = list(scope.sources.values())
+        if len(sources) == 1:
+            source = sources[0]
+        else:
+            # Base tables have unknown columns and could define anything;
+            # CTE and derived sources define exactly their projections.
+            candidates = [item for item in sources if _may_define(item, column.name)]
+            if len(candidates) != 1:
+                return (
+                    f"Unqualified column {column.name!r} is ambiguous across "
+                    f"{len(scope.sources)} relations."
+                )
+            source = candidates[0]
 
     return _attribute_to_source(column.name, source, schema)
+
+
+def _may_define(source: exp.Table | Scope, column_name: str) -> bool:
+    if not isinstance(source, Scope):
+        return True
+    body = source.expression
+    if not isinstance(body, exp.Select):
+        return True
+    if any(isinstance(projection, exp.Star) for projection in body.expressions):
+        return True
+    return column_name in body.named_selects
 
 
 def _attribute_to_source(

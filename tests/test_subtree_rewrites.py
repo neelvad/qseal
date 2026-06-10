@@ -188,3 +188,34 @@ def test_passthrough_cte_join_target_resolves_to_base_table_constraints() -> Non
 
     suggestion = RemoveUnusedLeftJoin().apply(query, constraints)
     assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+
+
+def test_fragment_pair_uses_resolved_base_tables() -> None:
+    # The raw CTE body says FROM source, but the proof is over the resolved
+    # IR. The fragment pair must reference base tables so a refuter can
+    # attach base-table constraints to both sides.
+    sql = """
+    with source as (
+        select * from stg_users
+    ),
+    dedup as (
+        select distinct user_id from source
+    ),
+    agg as (
+        select dedup.user_id, count(*) as n
+        from orders
+        left join dedup on orders.user_id = dedup.user_id
+        group by dedup.user_id
+    )
+    select * from agg
+    """
+
+    suggestions = suggest_subtree_rewrites(sql, UNIQUE_STG_USERS)
+
+    assert len(suggestions) == 1
+    suggestion = suggestions[0]
+    assert suggestion.fragment_location == "cte:dedup"
+    assert "stg_users" in suggestion.fragment_original_sql
+    assert "FROM source" not in suggestion.fragment_original_sql
+    assert "DISTINCT" in suggestion.fragment_original_sql.upper()
+    assert "DISTINCT" not in suggestion.fragment_rewritten_sql.upper()

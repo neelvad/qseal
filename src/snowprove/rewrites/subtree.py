@@ -51,6 +51,13 @@ def suggest_subtree_rewrites(
                     rewritten_sql=full_sql,
                     assumptions=suggestion.assumptions,
                     reason=f"{reason} Applied inside {fragment.describe()}.",
+                    fragment_location=fragment.location,
+                    # The proof is over the parsed IR, where pass-through CTE
+                    # references resolve to base tables. The raw body may still
+                    # say FROM <cte>, so render the resolved IR for a pair a
+                    # refuter can check against base-table constraints.
+                    fragment_original_sql=fragment.query.to_sql(),
+                    fragment_rewritten_sql=suggestion.rewritten_sql,
                 )
             )
     return suggestions

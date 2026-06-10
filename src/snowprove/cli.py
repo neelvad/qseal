@@ -2317,16 +2317,16 @@ def dbt_crosscheck(
                 continue
             if suggestion.rewritten_sql is None:
                 continue
-            verdict = backend.refute(
-                suggestion.original_sql,
-                suggestion.rewritten_sql,
-                constraints,
-                dialect=dialect,
-            )
+            # Fragment findings are proven at the fragment level; cross-check
+            # the pair that was proven rather than the spliced full query.
+            original = suggestion.fragment_original_sql or suggestion.original_sql
+            rewritten = suggestion.fragment_rewritten_sql or suggestion.rewritten_sql
+            verdict = backend.refute(original, rewritten, constraints, dialect=dialect)
             rows.append(
                 {
                     "model_path": str(model.display_path()),
                     "rule_name": suggestion.rule_name,
+                    "fragment_location": suggestion.fragment_location,
                     "refuter_status": verdict.status.value,
                     "refuter_reason": verdict.reason,
                     "counterexample": verdict.counterexample,

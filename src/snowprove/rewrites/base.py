@@ -21,6 +21,12 @@ class RewriteSuggestion(BaseModel):
     rewritten_sql: str | None = None
     assumptions: tuple[str, ...] = Field(default_factory=tuple)
     reason: str | None = None
+    # For fragment (subtree) findings: the CTE-body pair that was actually
+    # proven, before splicing into the full query. Cross-checks should target
+    # this pair when present.
+    fragment_location: str | None = None
+    fragment_original_sql: str | None = None
+    fragment_rewritten_sql: str | None = None
 
 
 class RewriteMatch(BaseModel):

@@ -91,16 +91,22 @@ pass-through CTEs to base tables. The CLI entry point is `snowprove refute`,
 with `--fail-on refuted` for CI gates.
 
 `snowprove dbt crosscheck PROJECT --verieql-dir DIR` runs the refuter over
-every proven scan finding and exits nonzero on any refutation. On the GitLab
-corpus both proven findings abstain (UNSUPPORTED) because their fragment
-rewrites splice into full WITH queries whose unqualified columns span two
-scoped relations, which the schema attribution conservatively refuses.
+every proven scan finding and exits nonzero on any refutation. Fragment
+findings are cross-checked at the fragment level: suggestions carry the
+fragment pair (`fragment_original_sql` / `fragment_rewritten_sql`) rendered
+from the **resolved** IR, in which pass-through CTE references are replaced
+by their base tables. Rendering the raw body instead produced a false
+refutation on the GitLab corpus (original said `FROM source`, rewritten said
+`FROM bamboohr_headcount_intermediate`, and VeriEQL correctly treated those
+as different relations) — a useful demonstration that the gate also catches
+mistakes in the pair construction itself. Unqualified columns now resolve
+through CTE projections during schema attribution, with abstention only when
+multiple sources could define the column.
+
+Both GitLab proven findings cross-check to bounded-OK at bound 2.
 
 Remaining:
 
-1. Cross-check fragment findings at the fragment level (the proven pair is
-   the CTE body before/after, which is simpler SQL than the spliced whole
-   query and avoids most attribution ambiguity).
-2. Resolve unqualified columns through CTE projections during schema
-   attribution to reduce abstentions.
-3. UNKNOWN triage in scan reports: refuted-with-witness versus bounded-OK.
+1. UNKNOWN triage in scan reports: refuted-with-witness versus bounded-OK.
+2. Render full counterexample witness databases (the driver currently
+   captures only the header; `generate_code` may be required).
