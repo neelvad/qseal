@@ -97,6 +97,20 @@ class HavingPredicate(BaseModel):
         return self.expression_sql
 
 
+class QualifyPredicate(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    expression_sql: str
+    referenced_tables: tuple[str, ...] = ()
+    references_unqualified_columns: bool = False
+
+    def to_sql(self) -> str:
+        return self.expression_sql
+
+    def may_reference_relation(self, relation: str) -> bool:
+        return self.references_unqualified_columns or relation in self.referenced_tables
+
+
 class JoinCondition(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -171,6 +185,7 @@ class SelectQuery(BaseModel):
     predicates: tuple[Predicate | InPredicate | ExistsPredicate, ...] = ()
     group_by: tuple[ColumnRef, ...] = ()
     having: tuple[HavingPredicate, ...] = ()
+    qualify: tuple[QualifyPredicate, ...] = ()
     distinct: bool
     raw_sql: str
     dialect: SqlDialect = DEFAULT_DIALECT
@@ -221,6 +236,9 @@ class SelectQuery(BaseModel):
         if self.having:
             having = " AND ".join(predicate.to_sql() for predicate in self.having)
             sql = f"{sql}\nHAVING {having}"
+        if self.qualify:
+            qualify = " AND ".join(predicate.to_sql() for predicate in self.qualify)
+            sql = f"{sql}\nQUALIFY {qualify}"
         return f"{sql};"
 
     def without_distinct_sql(self) -> str:

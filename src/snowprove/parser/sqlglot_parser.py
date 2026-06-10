@@ -12,6 +12,7 @@ from snowprove.ir.model import (
     JoinCondition,
     LiteralValue,
     Predicate,
+    QualifyPredicate,
     SelectQuery,
 )
 
@@ -51,6 +52,7 @@ def parse_select(sql: str, dialect: SqlDialect = DEFAULT_DIALECT) -> SelectQuery
         for expr in parsed.expressions
     ]
     predicates = _where_predicates(parsed.args.get("where"), dialect, ctes)
+    qualify = _qualify_predicates(parsed.args.get("qualify"), dialect)
 
     return SelectQuery(
         **source,
@@ -59,6 +61,7 @@ def parse_select(sql: str, dialect: SqlDialect = DEFAULT_DIALECT) -> SelectQuery
         predicates=tuple(predicates),
         group_by=tuple(group_by),
         having=tuple(having),
+        qualify=tuple(qualify),
         distinct=parsed.args.get("distinct") is not None,
         raw_sql=sql.strip(),
         dialect=dialect,
@@ -118,6 +121,7 @@ def _parse_select_expression(
         for expr in parsed.expressions
     ]
     predicates = _where_predicates(parsed.args.get("where"), dialect, ctes)
+    qualify = _qualify_predicates(parsed.args.get("qualify"), dialect)
 
     return SelectQuery(
         **source,
@@ -126,6 +130,7 @@ def _parse_select_expression(
         predicates=tuple(predicates),
         group_by=tuple(group_by),
         having=tuple(having),
+        qualify=tuple(qualify),
         distinct=parsed.args.get("distinct") is not None,
         raw_sql=parsed.sql(dialect=dialect),
         dialect=dialect,
@@ -247,7 +252,6 @@ def _validate_opaque_cte_relation(
     if cte.args.get("distinct") is not None:
         raise UnsupportedSqlError("CTE relation references with DISTINCT are not supported yet.")
     for arg_name, clause_name in (
-        ("qualify", "QUALIFY"),
         ("order", "ORDER BY"),
         ("limit", "LIMIT"),
     ):
@@ -520,6 +524,24 @@ def _is_supported_having_side(node: exp.Expression) -> bool:
     return isinstance(node, exp.AggFunc | exp.Column)
 
 
+def _qualify_predicates(
+    qualify: exp.Qualify | None,
+    dialect: SqlDialect = DEFAULT_DIALECT,
+) -> list[QualifyPredicate]:
+    if qualify is None:
+        return []
+    if any(isinstance(child, exp.Select) for child in qualify.this.walk()):
+        raise UnsupportedSqlError("QUALIFY expressions with subqueries are not supported yet.")
+    referenced_tables, references_unqualified = _expression_column_references(qualify.this)
+    return [
+        QualifyPredicate(
+            expression_sql=qualify.this.sql(dialect=dialect),
+            referenced_tables=referenced_tables,
+            references_unqualified_columns=references_unqualified,
+        )
+    ]
+
+
 def _join(
     node: exp.Join,
     ctes: dict[str, exp.Select] | None = None,
@@ -598,7 +620,6 @@ def _join_type(node: exp.Join) -> str | None:
 
 def _reject_unsupported_clauses(parsed: exp.Select) -> None:
     unsupported = {
-        "qualify": "QUALIFY",
         "order": "ORDER BY",
         "limit": "LIMIT",
     }

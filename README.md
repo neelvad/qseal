@@ -484,7 +484,8 @@ the verified SQL is not the source model text.
 
 Currently modeled:
 
-- direct column projections, star projections, and simple aliased scalar projections
+- direct column projections, star projections, and aliased scalar expression
+  projections, including window functions but not subqueries
 - simple direct table sources
 - one simple subquery source
 - simple non-recursive CTE pass-through chains, such as `WITH x AS (...) SELECT * FROM x`
@@ -496,6 +497,7 @@ Currently modeled:
 - `LEFT JOIN ... ON a.col = b.col`
 - simple `WHERE EXISTS (SELECT 1 FROM ... WHERE a.col = b.col)` predicates
 - table aliases
+- opaque `QUALIFY` predicates, treated conservatively by each rewrite rule
 - `DISTINCT` removal when projected columns are known unique and non-null
 - predicate pushdown through simple projection subqueries
 - `JOIN` + `DISTINCT` rewrites to `EXISTS` for left-relation projections
@@ -506,7 +508,6 @@ Currently modeled:
 
 Explicitly out of scope for now:
 
-- windows and `QUALIFY`
 - `ORDER BY` and `LIMIT`
 - aggregation and `GROUP BY`
 - aggregate projection expressions

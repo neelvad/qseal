@@ -61,6 +61,17 @@ class RewriteJoinDistinctToExists:
                 reason="JOIN to EXISTS rewrite with GROUP BY or HAVING is not supported yet.",
             )
 
+        if query.qualify:
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.UNKNOWN,
+                original_sql=query.raw_sql,
+                reason=(
+                    "Rewriting the JOIN to EXISTS would change the rows QUALIFY "
+                    "window functions evaluate over."
+                ),
+            )
+
         join = query.joins[0]
         if join.join_type != "INNER":
             return RewriteSuggestion(

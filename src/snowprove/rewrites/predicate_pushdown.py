@@ -64,6 +64,17 @@ class PredicatePushdown:
             )
 
         inner = query.subquery
+        if query.qualify or inner.qualify:
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.UNKNOWN,
+                original_sql=query.raw_sql,
+                reason=(
+                    "Pushing predicates past QUALIFY would change the rows its "
+                    "window functions evaluate over."
+                ),
+            )
+
         if query.group_by or inner.group_by or query.having or inner.having:
             return RewriteSuggestion(
                 rule_name=self.rule_name,

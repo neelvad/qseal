@@ -128,7 +128,10 @@ def _uses_joined_relation(query: SelectQuery, join: Join) -> bool:
         _predicate_uses_joined_relation(predicate, joined_name)
         for predicate in query.predicates
     )
-    return projected or filtered
+    qualified = any(
+        predicate.may_reference_relation(joined_name) for predicate in query.qualify
+    )
+    return projected or filtered or qualified
 
 
 def _predicate_uses_joined_relation(predicate, joined_name: str) -> bool:
