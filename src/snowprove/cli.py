@@ -80,6 +80,7 @@ from snowprove.rewrites.registry import (
     select_rules,
     suggest_rewrites,
 )
+from snowprove.rewrites.subtree import suggest_subtree_rewrites
 from snowprove.verifier.backends import get_verifier_backend
 from snowprove.verifier.model import VerificationResult
 
@@ -1806,12 +1807,17 @@ def suggest(
 ) -> None:
     """Suggest verified-safe rewrites for one SQL query."""
     raw_sql = query_path.read_text()
+    constraints = _load_constraints(schema_path, schema_format)
     try:
         query = parse_select(raw_sql, dialect=dialect)
-        constraints = _load_constraints(schema_path, schema_format)
         suggestions = suggest_rewrites(query, constraints, rules=select_rules(selected_rules))
     except UnsupportedSqlError as error:
-        suggestions = [
+        suggestions = suggest_subtree_rewrites(
+            raw_sql,
+            constraints,
+            rules=select_rules(selected_rules),
+            dialect=dialect,
+        ) or [
             RewriteSuggestion(
                 rule_name=RemoveRedundantDistinct.rule_name,
                 status=VerificationStatus.UNSUPPORTED,

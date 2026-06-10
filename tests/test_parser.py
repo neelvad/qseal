@@ -321,7 +321,9 @@ def test_parses_grouped_cte_relation_with_join() -> None:
     )
 
     assert query.table == "stg_payments"
-    assert query.joins[0].table == "orders"
+    assert query.joins[0].table == "stg_orders"
+    assert query.joins[0].alias == "orders"
+    assert query.joins[0].table_is_cte is False
     assert [column.to_sql() for column in query.group_by] == ["orders.customer_id"]
     assert [projection.to_sql() for projection in query.projections] == [
         "orders.customer_id",

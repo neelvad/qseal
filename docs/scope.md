@@ -145,12 +145,26 @@ It also resolves narrow non-recursive CTE shapes that commonly appear in dbt
 models:
 
 - `SELECT * FROM cte_name` can forward to the referenced CTE body.
-- `FROM cte_name` can forward through a CTE body only when that CTE is a
-  `SELECT *` pass-through over one direct table or another pass-through CTE.
+- `FROM cte_name` and `JOIN cte_name` can forward through a CTE body only when
+  that CTE is a `SELECT *` pass-through over one direct table or another
+  pass-through CTE. The resolved base table keeps the CTE name as its alias so
+  qualified column references stay bound.
 
 Complex CTEs remain unsupported when their alias is referenced as a source.
 That includes aggregating CTEs, filtering CTEs, joining CTEs, recursive CTEs,
-and CTEs that project expressions.
+and CTEs that project expressions. A reference to such a CTE is never treated
+as the trusted base table sharing its name, so dbt model constraints cannot
+leak into same-named CTEs.
+
+## Fragment (Subtree) Rewrites
+
+When a whole `WITH` query is outside the supported subset, Snowprove still
+parses each CTE body and the outer `SELECT` as standalone fragments, with only
+the CTEs defined before each fragment in scope. Proven rewrites for one
+fragment are spliced back into the full query, which preserves whole-query
+semantics because the replaced fragment is proven equivalent under the trusted
+constraints. Fragment findings report the rewritten full query and name the
+CTE they fired in.
 
 ## dbt Project Scans
 

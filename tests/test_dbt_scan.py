@@ -39,6 +39,46 @@ models:
     assert result.results[0].suggestions[0].status == VerificationStatus.PROVEN_EQUIVALENT
 
 
+def test_scan_dbt_project_finds_subtree_rewrites_in_unsupported_models(tmp_path: Path) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "user_orders.sql").write_text(
+        """
+with active_users as (
+    select distinct user_id from stg_users
+),
+user_orders as (
+    select active_users.user_id, count(order_id) as order_count
+    from orders
+    left join active_users on orders.user_id = active_users.user_id
+    group by active_users.user_id
+)
+select * from user_orders
+"""
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: stg_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+          - not_null
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.proven_finding_count() == 1
+    suggestion = result.results[0].suggestions[0]
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rule_name == "remove_redundant_distinct"
+    assert "CTE 'active_users'" in suggestion.reason
+    assert "GROUP BY" in suggestion.rewritten_sql.upper()
+
+
 def test_scan_dbt_project_records_explicit_duckdb_dialect(tmp_path: Path) -> None:
     models = tmp_path / "models"
     models.mkdir()

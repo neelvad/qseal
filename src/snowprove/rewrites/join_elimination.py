@@ -85,7 +85,7 @@ class RemoveUnusedLeftJoin:
                 reason="Could not identify the joined table key in the join condition.",
             )
 
-        table = constraints.table(join.table)
+        table = None if join.table_is_cte else constraints.table(join.table)
         if table is None or not table.has_unique_key((right_key,)):
             return RewriteSuggestion(
                 rule_name=self.rule_name,

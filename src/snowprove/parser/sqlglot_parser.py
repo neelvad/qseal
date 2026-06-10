@@ -221,11 +221,15 @@ def _cte_source(
             "table": cte_name,
             "table_sql": cte_name,
             "table_alias": node.alias or None,
+            "table_is_cte": True,
         }
-    alias = node.alias or None
-    if alias is not None:
-        source = {**source, "table_alias": alias}
-    return source
+        alias = node.alias or None
+        if alias is not None:
+            source = {**source, "table_alias": alias}
+        return source
+    # The resolved base table must stay addressable by the name the query
+    # uses, so the CTE name becomes the alias when none is declared.
+    return {**source, "table_alias": node.alias or cte_name}
 
 
 def _validate_opaque_cte_relation(
@@ -522,7 +526,13 @@ def _join(
     if not isinstance(node.this, exp.Table):
         raise UnsupportedSqlError("Only direct table JOIN targets are supported.")
     if node.this.name in ctes:
-        _validate_opaque_cte_relation(node.this.name, ctes, dialect=dialect)
+        target = _join_cte_target(node.this, ctes, dialect)
+    else:
+        target = {
+            "table": node.this.name,
+            "table_sql": _relation_sql_without_alias(node.this, dialect),
+            "alias": node.this.alias or None,
+        }
 
     condition = node.args.get("on")
     if not isinstance(condition, exp.EQ):
@@ -536,9 +546,7 @@ def _join(
 
     return Join(
         join_type=join_type,
-        table=node.this.name,
-        table_sql=_relation_sql_without_alias(node.this, dialect),
-        alias=node.this.alias or None,
+        **target,
         condition=JoinCondition(
             left=ColumnRef(table=condition.this.table or None, name=condition.this.name),
             right=ColumnRef(
@@ -547,6 +555,31 @@ def _join(
             ),
         ),
     )
+
+
+def _join_cte_target(
+    node: exp.Table,
+    ctes: dict[str, exp.Select],
+    dialect: SqlDialect = DEFAULT_DIALECT,
+) -> dict[str, object]:
+    cte_name = node.name
+    try:
+        source = _passthrough_cte_source(cte_name, ctes, dialect=dialect)
+    except UnsupportedSqlError:
+        _validate_opaque_cte_relation(cte_name, ctes, dialect=dialect)
+        return {
+            "table": cte_name,
+            "table_sql": cte_name,
+            "alias": node.alias or None,
+            "table_is_cte": True,
+        }
+    # The resolved base table must stay addressable by the name the join
+    # condition uses, so the CTE name becomes the alias when none is declared.
+    return {
+        "table": source["table"],
+        "table_sql": source["table_sql"],
+        "alias": node.alias or cte_name,
+    }
 
 
 def _join_type(node: exp.Join) -> str | None:

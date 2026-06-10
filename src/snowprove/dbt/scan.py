@@ -10,6 +10,7 @@ from snowprove.dialects import DEFAULT_DIALECT, SqlDialect
 from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
 from snowprove.rewrites.registry import RewriteRule, first_applicable_suggestion, suggest_rewrites
+from snowprove.rewrites.subtree import suggest_subtree_rewrites
 
 
 class DbtModelScanResult(BaseModel):
@@ -171,6 +172,14 @@ def _scan_model(
     try:
         query = parse_select(preprocessed.sql, dialect=dialect)
     except UnsupportedSqlError as error:
+        subtree = suggest_subtree_rewrites(
+            preprocessed.sql,
+            constraints,
+            rules=rules,
+            dialect=dialect,
+        )
+        if subtree:
+            return subtree if include_all else [subtree[0]]
         return _visible_suggestions(
             [
                 RewriteSuggestion(

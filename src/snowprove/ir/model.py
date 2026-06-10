@@ -127,6 +127,9 @@ class Join(BaseModel):
     table: str
     table_sql: str | None = None
     alias: str | None = None
+    # True when the join target is a CTE reference, so trusted base-table
+    # constraints sharing the CTE's name must not be applied to it.
+    table_is_cte: bool = False
     condition: JoinCondition
 
     def relation_name(self) -> str:
@@ -144,6 +147,9 @@ class SelectQuery(BaseModel):
     table: str | None = None
     table_sql: str | None = None
     table_alias: str | None = None
+    # True when the source is a CTE reference, so trusted base-table
+    # constraints sharing the CTE's name must not be applied to it.
+    table_is_cte: bool = False
     subquery: SelectQuery | None = None
     alias: str | None = None
     joins: tuple[Join, ...] = ()
@@ -159,6 +165,8 @@ class SelectQuery(BaseModel):
         return self.table is not None and self.subquery is None
 
     def table_name(self) -> str | None:
+        if self.table_is_cte:
+            return None
         return self.table if self.is_direct_table() else None
 
     def source_sql(self) -> str:

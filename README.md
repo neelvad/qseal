@@ -488,6 +488,9 @@ Currently modeled:
 - simple direct table sources
 - one simple subquery source
 - simple non-recursive CTE pass-through chains, such as `WITH x AS (...) SELECT * FROM x`
+- proven rewrites inside individual CTE bodies of larger `WITH` queries, even
+  when the outer query (for example with `GROUP BY` or aggregates) is itself
+  outside the supported subset
 - simple `WHERE` predicates with `AND`
 - `INNER JOIN ... ON a.col = b.col`
 - `LEFT JOIN ... ON a.col = b.col`
