@@ -7,7 +7,10 @@ from snowprove.verifier.check import check_equivalence
 def test_check_proves_distinct_removal_with_unique_key() -> None:
     original = parse_select("SELECT DISTINCT user_id FROM users")
     rewritten = parse_select("SELECT user_id FROM users")
-    constraints = ConstraintCatalog(tables={"users": TableConstraints(unique=[("user_id",)])})
+    constraints = ConstraintCatalog(tables={"users": TableConstraints(
+        columns={"user_id": {"nullable": False}},
+        unique=[("user_id",)],
+    )})
 
     result = check_equivalence(original, rewritten, constraints)
 
@@ -19,7 +22,10 @@ def test_check_proves_distinct_removal_with_unique_key() -> None:
 def test_check_proves_distinct_removal_with_matching_where_predicates() -> None:
     original = parse_select("SELECT DISTINCT user_id FROM users WHERE status = 'active'")
     rewritten = parse_select("SELECT user_id FROM users WHERE status = 'active'")
-    constraints = ConstraintCatalog(tables={"users": TableConstraints(unique=[("user_id",)])})
+    constraints = ConstraintCatalog(tables={"users": TableConstraints(
+        columns={"user_id": {"nullable": False}},
+        unique=[("user_id",)],
+    )})
 
     result = check_equivalence(original, rewritten, constraints)
 
@@ -29,7 +35,10 @@ def test_check_proves_distinct_removal_with_matching_where_predicates() -> None:
 def test_check_does_not_apply_distinct_rule_when_predicates_differ() -> None:
     original = parse_select("SELECT DISTINCT user_id FROM users WHERE status = 'active'")
     rewritten = parse_select("SELECT user_id FROM users WHERE status = 'inactive'")
-    constraints = ConstraintCatalog(tables={"users": TableConstraints(unique=[("user_id",)])})
+    constraints = ConstraintCatalog(tables={"users": TableConstraints(
+        columns={"user_id": {"nullable": False}},
+        unique=[("user_id",)],
+    )})
 
     result = check_equivalence(original, rewritten, constraints)
 
@@ -39,7 +48,10 @@ def test_check_does_not_apply_distinct_rule_when_predicates_differ() -> None:
 def test_check_does_not_equate_different_qualified_relations() -> None:
     original = parse_select("SELECT DISTINCT user_id FROM analytics.public.users")
     rewritten = parse_select("SELECT user_id FROM analytics.staging.users")
-    constraints = ConstraintCatalog(tables={"users": TableConstraints(unique=[("user_id",)])})
+    constraints = ConstraintCatalog(tables={"users": TableConstraints(
+        columns={"user_id": {"nullable": False}},
+        unique=[("user_id",)],
+    )})
 
     result = check_equivalence(original, rewritten, constraints)
 
@@ -162,6 +174,18 @@ def test_check_disproves_distinct_removal_without_unique_key() -> None:
     assert result.status == VerificationStatus.NOT_EQUIVALENT
     assert result.rule_name == "remove_redundant_distinct"
     assert result.counterexample is not None
+
+
+def test_check_does_not_prove_distinct_removal_with_nullable_unique_key() -> None:
+    original = parse_select("SELECT DISTINCT user_id FROM users")
+    rewritten = parse_select("SELECT user_id FROM users")
+    constraints = ConstraintCatalog(tables={"users": TableConstraints(unique=[("user_id",)])})
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.UNKNOWN
+    assert result.rule_name == "remove_redundant_distinct"
+    assert "NULL" in result.reason
 
 
 def test_check_does_not_prove_distinct_removal_with_group_by() -> None:

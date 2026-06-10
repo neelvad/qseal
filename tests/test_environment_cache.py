@@ -28,7 +28,10 @@ def _task() -> EnvironmentTask:
         task_id="cached-distinct",
         sql="SELECT DISTINCT user_id FROM users",
         constraints=ConstraintCatalog(
-            tables={"users": TableConstraints(unique=[("user_id",)])}
+            tables={"users": TableConstraints(
+                columns={"user_id": {"nullable": False}},
+                unique=[("user_id",)],
+            )}
         ),
         metadata={"fixture_fingerprint": "fixture-1"},
     )
@@ -264,6 +267,7 @@ def test_state_rewards_reject_pair_only_evaluator() -> None:
         constraints=ConstraintCatalog(
             tables={
                 "users": TableConstraints(
+                    columns={"user_id": {"nullable": False}},
                     unique=[("user_id",)],
                 )
             }

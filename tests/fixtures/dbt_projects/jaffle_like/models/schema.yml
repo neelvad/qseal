@@ -5,3 +5,4 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null

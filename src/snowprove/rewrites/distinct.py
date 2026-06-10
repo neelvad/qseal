@@ -91,12 +91,14 @@ class RemoveRedundantDistinct:
             )
 
         projected_columns = tuple(column.name for column in query.projections)
-        if not table.has_unique_key(projected_columns):
+        # Unique keys exempt NULL rows (dbt-test semantics), so DISTINCT removal
+        # also needs the key columns trusted non-null to rule out duplicate NULLs.
+        if not table.has_non_null_unique_key(projected_columns):
             return RewriteSuggestion(
                 rule_name=self.rule_name,
                 status=VerificationStatus.UNKNOWN,
                 original_sql=query.raw_sql,
-                reason="Projected columns are not known to contain a unique key.",
+                reason="Projected columns are not known to contain a non-null unique key.",
             )
 
         return RewriteSuggestion(
@@ -105,7 +107,7 @@ class RemoveRedundantDistinct:
             original_sql=query.raw_sql,
             rewritten_sql=query.without_distinct_sql(),
             assumptions=(
-                f"{table_name} has a trusted unique key contained in "
+                f"{table_name} has a trusted non-null unique key contained in "
                 f"({', '.join(projected_columns)}).",
             ),
         )

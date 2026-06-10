@@ -17,7 +17,10 @@ from snowprove.rewrites.registry import apply_rewrite_match, available_rewrite_m
         (
             RemoveRedundantDistinct(),
             "SELECT DISTINCT user_id FROM users",
-            ConstraintCatalog(tables={"users": TableConstraints(unique=[("user_id",)])}),
+            ConstraintCatalog(tables={"users": TableConstraints(
+                columns={"user_id": {"nullable": False}},
+                unique=[("user_id",)],
+            )}),
             "query:distinct",
         ),
         (
@@ -111,7 +114,10 @@ def test_not_null_rule_exposes_one_action_per_redundant_predicate() -> None:
 def test_registry_enumerates_and_applies_matches() -> None:
     query = parse_select("SELECT DISTINCT user_id FROM users")
     constraints = ConstraintCatalog(
-        tables={"users": TableConstraints(unique=[("user_id",)])}
+        tables={"users": TableConstraints(
+            columns={"user_id": {"nullable": False}},
+            unique=[("user_id",)],
+        )}
     )
 
     matches = available_rewrite_matches(query, constraints)
@@ -126,7 +132,10 @@ def test_registry_enumerates_and_applies_matches() -> None:
 def test_apply_match_rejects_a_match_from_another_rule() -> None:
     query = parse_select("SELECT DISTINCT user_id FROM users")
     constraints = ConstraintCatalog(
-        tables={"users": TableConstraints(unique=[("user_id",)])}
+        tables={"users": TableConstraints(
+            columns={"user_id": {"nullable": False}},
+            unique=[("user_id",)],
+        )}
     )
     invalid = RewriteMatch(
         rule_name="predicate_pushdown",

@@ -183,17 +183,31 @@ def _check_distinct_removal(
 
     table = constraints.table(table_name)
 
-    if table is not None and table.has_unique_key(projected_columns):
+    if table is not None and table.has_non_null_unique_key(projected_columns):
         return VerificationResult(
             status=VerificationStatus.PROVEN_EQUIVALENT,
             original_sql=original.raw_sql,
             rewritten_sql=rewritten.raw_sql,
             rule_name="remove_redundant_distinct",
             assumptions=(
-                f"{table_name} has a trusted unique key contained in "
+                f"{table_name} has a trusted non-null unique key contained in "
                 f"({', '.join(projected_columns)}).",
             ),
             reason="DISTINCT cannot remove rows when the projection contains a unique key.",
+        )
+
+    if table is not None and table.has_unique_key(projected_columns):
+        # Unique keys exempt NULL rows (dbt-test semantics), so duplicate NULL
+        # rows remain possible and DISTINCT removal cannot be proven or refuted.
+        return VerificationResult(
+            status=VerificationStatus.UNKNOWN,
+            original_sql=original.raw_sql,
+            rewritten_sql=rewritten.raw_sql,
+            rule_name="remove_redundant_distinct",
+            reason=(
+                "The unique key is not trusted non-null, so duplicate NULL rows "
+                "may make DISTINCT removal unsafe."
+            ),
         )
 
     return VerificationResult(

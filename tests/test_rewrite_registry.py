@@ -32,7 +32,10 @@ def test_registry_returns_rules_in_default_order() -> None:
 
 def test_first_applicable_suggestion_skips_not_applicable_results() -> None:
     query = parse_select("SELECT DISTINCT user_id FROM users")
-    constraints = ConstraintCatalog(tables={"users": TableConstraints(unique=[("user_id",)])})
+    constraints = ConstraintCatalog(tables={"users": TableConstraints(
+        columns={"user_id": {"nullable": False}},
+        unique=[("user_id",)],
+    )})
 
     suggestion = first_applicable_suggestion(suggest_rewrites(query, constraints))
 

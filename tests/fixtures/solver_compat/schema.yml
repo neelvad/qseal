@@ -1,13 +1,15 @@
 tables:
   users:
     columns:
-      user_id: {}
+      user_id:
+        nullable: false
       status: {}
     unique:
       - [user_id]
   dim_users:
     columns:
-      user_id: {}
+      user_id:
+        nullable: false
     unique:
       - [user_id]
   fact_orders:

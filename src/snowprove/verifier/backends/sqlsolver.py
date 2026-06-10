@@ -146,7 +146,15 @@ def _schema_sql(constraints: ConstraintCatalog) -> str:
 
         column_defs = []
         for column in sorted(columns):
-            suffix = " PRIMARY KEY" if (column,) in table.unique else ""
+            # PRIMARY KEY implies NOT NULL, so it only encodes a trusted unique
+            # key faithfully when the column is also trusted non-null. Unique
+            # keys on nullable columns are omitted rather than overstated.
+            if (column,) in table.unique and table.is_non_null(column):
+                suffix = " PRIMARY KEY"
+            elif table.is_non_null(column):
+                suffix = " NOT NULL"
+            else:
+                suffix = ""
             column_defs.append(f"{column} INT{suffix}")
         statements.append(f"CREATE TABLE {table_name} ( {', '.join(column_defs)} );")
     return "\n".join(statements) + "\n"

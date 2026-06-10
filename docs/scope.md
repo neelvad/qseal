@@ -91,7 +91,10 @@ that map directly to dbt-style guard tests.
 
 ### `remove_redundant_distinct`
 
-Removes `DISTINCT` when the projected columns contain a trusted unique key.
+Removes `DISTINCT` when the projected columns contain a trusted unique key
+whose columns are also trusted non-null. Unique keys follow SQL/dbt-test
+semantics, so NULL rows are exempt from uniqueness; without the non-null
+premise, duplicate NULL rows could make removal unsafe.
 
 ### `predicate_pushdown`
 

@@ -14,13 +14,16 @@ def required_guarding_tests(suggestion: RewriteSuggestion) -> tuple[str, ...]:
 
 def _tests_for_assumption(assumption: str) -> tuple[str, ...]:
     unique_contained = re.match(
-        r"^(?P<table>.+) has a trusted unique key contained in \((?P<columns>.+)\)\.$",
+        r"^(?P<table>.+) has a trusted non-null unique key contained in \((?P<columns>.+)\)\.$",
         assumption,
     )
     if unique_contained is not None:
         table = unique_contained.group("table")
         columns = _columns(unique_contained.group("columns"))
-        return (_unique_test(table, columns),)
+        return (
+            _unique_test(table, columns),
+            *(f"dbt test: not_null on {table}.{column}" for column in columns),
+        )
 
     trusted_unique = re.match(
         r"^(?P<table>.+)\.(?P<column>.+) is a trusted unique key\.$",

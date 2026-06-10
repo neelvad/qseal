@@ -19,6 +19,9 @@ def test_suggest_cli(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -41,6 +44,9 @@ def test_check_cli(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -730,6 +736,9 @@ def test_suggest_cli_can_report_json(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -755,6 +764,9 @@ def test_suggest_cli_records_duckdb_dialect(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -817,6 +829,9 @@ def test_check_cli_can_report_json(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -877,6 +892,9 @@ def test_check_cli_accepts_builtin_verifier_backend(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -909,6 +927,9 @@ def test_check_cli_does_not_fail_on_proven_with_unproven_policy(tmp_path) -> Non
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -943,6 +964,9 @@ def test_candidates_check_cli_reports_multiple_candidates(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -979,6 +1003,9 @@ def test_candidates_generate_cli_writes_proven_rewrite_candidates(tmp_path) -> N
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -1013,6 +1040,9 @@ def test_candidates_generate_cli_can_report_json(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -1054,6 +1084,9 @@ def test_candidates_generate_cli_refuses_to_overwrite_without_force(tmp_path) ->
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -1086,6 +1119,9 @@ def test_candidates_generate_then_check_cli(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -1135,6 +1171,9 @@ def test_candidates_check_cli_accepts_candidates_dir(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -1167,6 +1206,9 @@ def test_candidates_run_cli_generates_and_checks_candidates(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -1203,6 +1245,9 @@ def test_candidates_run_cli_can_report_json(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -1241,6 +1286,9 @@ def test_candidates_run_cli_can_write_report_file(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -1306,6 +1354,9 @@ def test_candidates_check_cli_can_report_json(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -1364,6 +1415,9 @@ def test_candidates_check_cli_can_report_candidate_bundle_metadata(tmp_path) -> 
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -1505,6 +1559,9 @@ def test_check_cli_external_verifier_stub_reports_unsupported(tmp_path) -> None:
         """
 tables:
   users:
+    columns:
+      user_id:
+        nullable: false
     unique:
       - [user_id]
 """
@@ -1543,6 +1600,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -1575,6 +1633,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -1666,6 +1725,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -1692,6 +1752,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -1719,6 +1780,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -1748,6 +1810,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -1776,6 +1839,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -1813,6 +1877,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -1855,6 +1920,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -1883,6 +1949,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -1931,6 +1998,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -1961,6 +2029,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -1983,12 +2052,16 @@ models:
     assert payload["results"][0]["patches"] == [
         {
             "path": str(patch_path),
-            "required_tests": ["dbt test: unique on dim_users.user_id"],
+            "required_tests": [
+                "dbt test: unique on dim_users.user_id",
+                "dbt test: not_null on dim_users.user_id",
+            ],
             "rule_name": "remove_redundant_distinct",
         }
     ]
     assert payload["results"][0]["suggestions"][0]["required_tests"] == [
-        "dbt test: unique on dim_users.user_id"
+        "dbt test: unique on dim_users.user_id",
+        "dbt test: not_null on dim_users.user_id",
     ]
 
 
@@ -2006,6 +2079,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 

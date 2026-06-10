@@ -493,7 +493,7 @@ Currently modeled:
 - `LEFT JOIN ... ON a.col = b.col`
 - simple `WHERE EXISTS (SELECT 1 FROM ... WHERE a.col = b.col)` predicates
 - table aliases
-- `DISTINCT` removal when projected columns are known unique
+- `DISTINCT` removal when projected columns are known unique and non-null
 - predicate pushdown through simple projection subqueries
 - `JOIN` + `DISTINCT` rewrites to `EXISTS` for left-relation projections
 - unused `LEFT JOIN` elimination when the joined key is known unique

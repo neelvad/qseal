@@ -4,11 +4,12 @@ from pathlib import Path
 import yaml
 
 from snowprove.constraints.loader import load_constraint_catalog
+from snowprove.constraints.model import ConstraintCatalog, TableConstraints
 from snowprove.rewrites.base import VerificationStatus
 from snowprove.verifier.backends.builtin import BuiltinVerifierBackend
 from snowprove.verifier.backends.external import ExternalVerifierBackend
 from snowprove.verifier.backends.external_contract import ExternalSolverRequest
-from snowprove.verifier.backends.sqlsolver import SqlSolverBackend
+from snowprove.verifier.backends.sqlsolver import SqlSolverBackend, _schema_sql
 
 FIXTURE = Path(__file__).parent / "fixtures" / "solver_compat"
 
@@ -145,6 +146,31 @@ def test_sqlsolver_backend_schema_includes_unconstrained_fixture_tables(tmp_path
     assert "CREATE TABLE fact_orders" in captured
     assert "revenue INT" in captured
     assert "CREATE TABLE dim_users" in captured
+
+
+def test_sqlsolver_schema_encodes_constraint_premises_soundly() -> None:
+    constraints = ConstraintCatalog(
+        tables={
+            "users": TableConstraints(
+                columns={
+                    "user_id": {"nullable": False},
+                    "email": {"nullable": False},
+                    "nickname": {},
+                },
+                unique=[("user_id",), ("nickname",)],
+            )
+        }
+    )
+
+    schema = _schema_sql(constraints)
+
+    assert "user_id INT PRIMARY KEY" in schema
+    assert "email INT NOT NULL" in schema
+    # PRIMARY KEY implies NOT NULL, so a unique key on a nullable column must
+    # not be encoded as a premise the constraints do not justify.
+    assert "nickname INT PRIMARY KEY" not in schema
+    assert "nickname INT NOT NULL" not in schema
+    assert "nickname INT" in schema
 
 
 def test_sqlsolver_command_wrapper_reports_missing_jar() -> None:

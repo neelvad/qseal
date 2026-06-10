@@ -159,7 +159,10 @@ def test_environment_can_use_real_duckdb_performance_evaluator() -> None:
         task_id="distinct",
         sql="SELECT DISTINCT user_id FROM users",
         constraints=ConstraintCatalog(
-            tables={"users": TableConstraints(unique=[("user_id",)])}
+            tables={"users": TableConstraints(
+                columns={"user_id": {"nullable": False}},
+                unique=[("user_id",)],
+            )}
         ),
     )
     environment = RewriteEnvironment(

@@ -21,6 +21,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -69,6 +70,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -133,6 +135,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -160,6 +163,7 @@ models:
       - name: customer_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -192,6 +196,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -223,6 +228,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -255,6 +261,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -285,6 +292,7 @@ models:
       - name: user_id
         tests:
           - unique
+          - not_null
 """
     )
 
@@ -311,6 +319,7 @@ models:
       - name: helper_id
         tests:
           - unique
+          - not_null
 """
     )
     (package_models / "helper.sql").write_text("SELECT DISTINCT helper_id FROM helper")
