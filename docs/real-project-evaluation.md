@@ -187,3 +187,21 @@ Top blockers by reason count:
 
 The scan also exposed a robustness bug (sqlglot `TokenError` crashing the
 whole scan), fixed by catching `SqlglotError` in the parser entry points.
+
+## 2026-06-10 Run: Sandboxed Jinja Rendering
+
+`preprocess_dbt_sql` now renders dbt Jinja in a sandboxed environment with
+first-run compile semantics for known builtins (`ref`, `source`, `config`,
+`var` with defaults, `is_incremental()` as false). Unknown macros and `var`
+without defaults still fall back to the static path and its
+unsupported-reason reporting.
+
+GitLab analytics re-scan: proven findings 1 -> 2 (the second is another
+defensive `SELECT DISTINCT` backed by `unique` + `not_null` tests on
+`bamboohr_headcount_intermediate.unique_key`, in a previously Jinja-blocked
+model). Jinja block-syntax blockers dropped 346 -> 141; the unblocked models
+now surface SQL-subset blockers instead (QUALIFY visibility rose 16 -> 189).
+
+The two largest remaining levers, by reason count: the projection subset
+(478x) and QUALIFY (231x total), both SQL-subset work; then the GitLab-local
+`simple_cte`/`dbt_audit` macros (251x), which only compiled SQL can recover.
