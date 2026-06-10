@@ -436,27 +436,18 @@ def _is_supported_opaque_projection(
 ) -> bool:
     if _contains_aggregate(node) and not allow_aggregate:
         return False
-    if isinstance(node, exp.AggFunc):
-        return allow_aggregate
-    return isinstance(
-        node,
-        exp.EQ
-        | exp.NEQ
-        | exp.GT
-        | exp.GTE
-        | exp.LT
-        | exp.LTE
-        | exp.Case
-        | exp.Coalesce
-        | exp.Add
-        | exp.Sub
-        | exp.Mul
-        | exp.Div,
-    )
+    # Subqueries may correlate with relations outside the expression, which
+    # the recorded column references cannot capture.
+    return not any(isinstance(child, exp.Select) for child in node.walk())
 
 
 def _contains_aggregate(node: exp.Expression) -> bool:
-    return any(isinstance(child, exp.AggFunc) for child in node.walk())
+    # Aggregates inside an OVER clause are window functions, not group
+    # aggregates, so they do not require GROUP BY.
+    return any(
+        isinstance(child, exp.AggFunc) and child.find_ancestor(exp.Window) is None
+        for child in node.walk()
+    )
 
 
 def _expression_column_references(node: exp.Expression) -> tuple[tuple[str, ...], bool]:

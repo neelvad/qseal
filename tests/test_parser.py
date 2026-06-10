@@ -380,3 +380,46 @@ def test_parse_left_join_preserves_qualified_relation_sql() -> None:
     assert query.table_sql == "analytics.public.fact_orders"
     assert query.joins[0].table == "dim_users"
     assert query.joins[0].table_sql == "analytics.public.dim_users"
+
+
+def test_parses_general_function_projections_with_alias() -> None:
+    query = parse_select(
+        "SELECT user_id, DATE_TRUNC('month', created_at) AS month FROM users"
+    )
+
+    month = query.projections[1]
+    assert month.expression_sql == "DATE_TRUNC('MONTH', created_at)"
+    assert month.references_unqualified_columns is True
+
+
+def test_parses_window_function_projections_without_group_by() -> None:
+    query = parse_select(
+        """
+        SELECT u.user_id, ROW_NUMBER() OVER (PARTITION BY u.org ORDER BY u.ts) AS rn
+        FROM users u
+        """
+    )
+
+    rn = query.projections[1]
+    assert rn.expression_sql is not None
+    assert rn.referenced_tables == ("u",)
+    assert rn.references_unqualified_columns is False
+
+
+def test_parses_windowed_aggregate_projections_without_group_by() -> None:
+    query = parse_select(
+        "SELECT user_id, SUM(amount) OVER (PARTITION BY org) AS total FROM users"
+    )
+
+    assert query.projections[1].expression_sql is not None
+    assert query.group_by == ()
+
+
+def test_rejects_bare_aggregate_projection_without_group_by() -> None:
+    with pytest.raises(UnsupportedSqlError):
+        parse_select("SELECT SUM(amount) AS total FROM users")
+
+
+def test_rejects_scalar_subquery_projection() -> None:
+    with pytest.raises(UnsupportedSqlError):
+        parse_select("SELECT user_id, (SELECT MAX(x) FROM t) AS m FROM users")
