@@ -35,6 +35,7 @@ uv sync
 uv run snowprove suggest examples/distinct/original.sql --schema examples/distinct/schema.yml
 uv run snowprove suggest query.sql --schema schema.yml --dialect duckdb
 uv run snowprove check examples/distinct/original.sql examples/distinct/rewritten.sql --schema examples/distinct/schema.yml
+uv run snowprove refute original.sql rewritten.sql --schema schema.yml --verieql-dir ~/workspace/snowprove-eval/VeriEQL
 uv run snowprove candidates generate examples/distinct/original.sql --schema examples/distinct/schema.yml --out candidates/
 uv run snowprove candidates check examples/distinct/original.sql candidates/*.sql --schema examples/distinct/schema.yml
 uv run snowprove candidates run examples/distinct/original.sql --schema examples/distinct/schema.yml --out candidates/
@@ -43,7 +44,12 @@ uv run snowprove benchmark examples/benchmark/original.sql examples/benchmark/re
 ```
 
 `suggest` proposes the first applicable verified rewrite. `check` verifies a
-specific original/rewritten query pair. `candidates generate` writes candidate
+specific original/rewritten query pair. `refute` searches for a bounded
+counterexample with an external [VeriEQL](https://github.com/VeriEQL/VeriEQL)
+checkout: a counterexample soundly refutes equivalence under the trusted
+constraints, while finding none up to the bound is reported as UNKNOWN and is
+never treated as a proof. VeriEQL is CC BY-NC-SA licensed and is therefore
+never bundled; see [docs/verieql-spike.md](docs/verieql-spike.md) for setup. `candidates generate` writes candidate
 SQL files from Snowprove's existing rewrite rules. `candidates check` verifies
 multiple generated candidate rewrites against one original query. `candidates
 run` does both steps in one command.

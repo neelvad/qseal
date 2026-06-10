@@ -76,14 +76,23 @@ The attribute reference syntax is `TABLE__COLUMN` inside `{"value": ...}`:
 - Dialect is MySQL-flavored (`mo-sql-parsing`); Snowflake-specific functions
   will be unsupported and must map to abstention.
 
-## Integration Plan
+## Integration Status
 
-1. A `verieql` refuter backend (subprocess into the checkout's venv, JSON
-   contract) that maps: counterexample found -> `NOT_EQUIVALENT` with the
-   witness in the existing `counterexample` field; unsat at bound k -> an
-   annotation on `UNKNOWN`, never `PROVEN_EQUIVALENT`; unsupported SQL or
-   inexpressible premises -> abstain.
-2. A cross-check harness that runs the refuter over every
+Implemented: the `verieql` refuter backend
+(`snowprove/verifier/backends/verieql.py`) drives the checkout through
+`scripts/verieql_driver.py` (JSON contract, subprocess into the checkout's
+venv). Verdict mapping: counterexample -> `NOT_EQUIVALENT` with the witness
+in the `counterexample` field; no counterexample up to the bound -> `UNKNOWN`
+with a bounded-evidence reason, never `PROVEN_EQUIVALENT`; QUALIFY,
+inexpressible premises (NULL-exempt unique keys), ambiguous unqualified
+columns, and driver failures -> `UNSUPPORTED`. Schema attribute lists are
+derived from the query pair via sqlglot scope resolution, following star
+pass-through CTEs to base tables. The CLI entry point is `snowprove refute`,
+with `--fail-on refuted` for CI gates.
+
+Remaining:
+
+1. A cross-check harness that runs the refuter over every
    `PROVEN_EQUIVALENT` finding from scans and the corpus, failing CI on any
    counterexample.
-3. UNKNOWN triage in scan reports: refuted-with-witness versus bounded-OK.
+2. UNKNOWN triage in scan reports: refuted-with-witness versus bounded-OK.
