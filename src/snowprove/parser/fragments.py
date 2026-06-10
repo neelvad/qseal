@@ -1,7 +1,7 @@
 import sqlglot
 from pydantic import BaseModel, ConfigDict
 from sqlglot import exp
-from sqlglot.errors import ParseError
+from sqlglot.errors import SqlglotError
 
 from snowprove.dialects import DEFAULT_DIALECT, SqlDialect
 from snowprove.ir.model import SelectQuery
@@ -84,7 +84,7 @@ def replace_fragment_sql(
 def _parse_statement(sql: str, dialect: SqlDialect) -> exp.Select:
     try:
         parsed = sqlglot.parse_one(sql, read=dialect)
-    except ParseError as error:
+    except SqlglotError as error:
         raise UnsupportedSqlError(f"Could not parse SQL: {error}") from error
     if not isinstance(parsed, exp.Select):
         raise UnsupportedSqlError("Only SELECT statements are supported.")

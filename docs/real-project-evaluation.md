@@ -158,3 +158,32 @@ Implications:
   repositories with defensive `DISTINCT` / `IS NOT NULL` habits.
 - The next coverage lever is compiled SQL for macro-heavy projects, which
   requires warehouse profiles (or dbt-duckdb-compatible packages).
+
+## 2026-06-10 Run: GitLab Analytics (Production-Scale Corpus)
+
+Scanned the sqlfmt mirror of the GitLab Data Team dbt project
+(`tconbeer/gitlab-analytics-sqlfmt`, ~2022 snapshot of
+`gitlab-data/analytics`; the upstream repo is no longer public). Raw scan,
+Snowflake dialect, 2,206 models.
+
+Results: **1 proven finding** (first nonzero on a production corpus), 5
+UNKNOWN, 1,733 UNSUPPORTED.
+
+The proven finding is `models/legacy/sheetload/data_team_milestone_capacity.sql`:
+a defensive `SELECT DISTINCT` inside a CTE whose projection contains
+`milestone_id`, which carries `unique` + `not_null` dbt tests on
+`gitlab_dotcom_milestones_xf`. The finding required the full pipeline: static
+`ref()` resolution, fragment parsing inside a multi-CTE model, the non-null
+unique key premise, and splice-back. A warehouse optimizer cannot perform this
+rewrite because the uniqueness is only declared in dbt tests.
+
+Top blockers by reason count:
+
+- 477x projection subset (`Only direct columns, stars, and simple aliased
+  scalar projections`): now the largest SQL-side blocker, ahead of Jinja
+- 346x Jinja block syntax; ~500x macro expressions (`simple_cte` 126,
+  `dbt_audit` 125, `hash_sensitive_columns` 62, `dbt_utils.group_by` 57)
+- 51x QUALIFY, 41x non-literal WHERE comparisons, 31x non-SELECT CTEs
+
+The scan also exposed a robustness bug (sqlglot `TokenError` crashing the
+whole scan), fixed by catching `SqlglotError` in the parser entry points.

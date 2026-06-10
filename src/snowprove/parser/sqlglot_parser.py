@@ -1,6 +1,6 @@
 import sqlglot
 from sqlglot import exp
-from sqlglot.errors import ParseError
+from sqlglot.errors import SqlglotError
 
 from snowprove.dialects import DEFAULT_DIALECT, SqlDialect
 from snowprove.ir.model import (
@@ -23,7 +23,7 @@ class UnsupportedSqlError(ValueError):
 def parse_select(sql: str, dialect: SqlDialect = DEFAULT_DIALECT) -> SelectQuery:
     try:
         parsed = sqlglot.parse_one(sql, read=dialect)
-    except ParseError as error:
+    except SqlglotError as error:
         raise UnsupportedSqlError(f"Could not parse SQL: {error}") from error
 
     if not isinstance(parsed, exp.Select):
