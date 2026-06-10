@@ -4,6 +4,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import sqlglot
+from sqlglot import exp
+from sqlglot.errors import SqlglotError
+
 from snowprove.constraints.model import ConstraintCatalog
 from snowprove.dialects import DEFAULT_DIALECT, SqlDialect
 from snowprove.rewrites.base import VerificationStatus
@@ -47,13 +51,22 @@ class SqlSolverBackend:
             timeout_seconds=self.timeout_seconds,
         )
 
+        normalized = _unqualify_relations(original_sql, rewritten_sql, dialect)
+        if normalized is None:
+            return _unsupported(
+                request,
+                "Distinct qualified relations share an unqualified name, so the "
+                "schema premises cannot be attached unambiguously.",
+            )
+        solver_sql1, solver_sql2 = normalized
+
         with tempfile.TemporaryDirectory(prefix="snowprove-sqlsolver-") as temp_dir:
             temp_path = Path(temp_dir)
             sql1_path = temp_path / "sql1.sql"
             sql2_path = temp_path / "sql2.sql"
             schema_path = temp_path / "schema.sql"
-            sql1_path.write_text(f"{_one_line_sql(request.original_sql)}\n")
-            sql2_path.write_text(f"{_one_line_sql(request.rewritten_sql)}\n")
+            sql1_path.write_text(f"{_one_line_sql(solver_sql1)}\n")
+            sql2_path.write_text(f"{_one_line_sql(solver_sql2)}\n")
             schema_path.write_text(_schema_sql(request.constraints))
 
             command = _command(
@@ -128,6 +141,51 @@ def _command(
         f"-schema={schema_path}",
         "-print",
     ]
+
+
+def _unqualify_relations(
+    original_sql: str,
+    rewritten_sql: str,
+    dialect: SqlDialect,
+) -> tuple[str, str] | None:
+    """Rewrite qualified relation names to the unqualified names the schema uses.
+
+    Snowprove constraints are keyed by unqualified model names, and the
+    generated solver schema declares tables under those names. Renaming is a
+    bijection only while distinct qualified relations keep distinct leaf
+    names; otherwise the caller must give up instead of merging relations.
+    """
+    try:
+        trees = [
+            sqlglot.parse_one(sql, read=dialect)
+            for sql in (original_sql, rewritten_sql)
+        ]
+    except SqlglotError:
+        return original_sql, rewritten_sql
+
+    leaf_owners: dict[str, tuple[str, str, str]] = {}
+    for tree in trees:
+        for table in tree.find_all(exp.Table):
+            key = (table.catalog, table.db, table.name)
+            owner = leaf_owners.setdefault(table.name, key)
+            if owner != key:
+                return None
+
+    for tree in trees:
+        for table in tree.find_all(exp.Table):
+            table.set("catalog", None)
+            table.set("db", None)
+            identifier = table.this
+            if isinstance(identifier, exp.Identifier) and _is_simple_identifier(
+                identifier.this
+            ):
+                identifier.set("quoted", False)
+
+    return tuple(tree.sql(dialect=dialect) for tree in trees)
+
+
+def _is_simple_identifier(name: str) -> bool:
+    return re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) is not None
 
 
 def _one_line_sql(sql: str) -> str:

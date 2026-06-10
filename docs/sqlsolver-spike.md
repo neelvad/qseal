@@ -125,3 +125,17 @@ join_distinct_exists: EQ
 
 If `uname -m` prints `aarch64` while `file /sqlsolver/lib/libz3java.so` prints
 `x86-64`, restart Colima with `--arch x86_64`.
+
+## 2026-06-10 Premise Validation
+
+Validated against the real solver (all compat cases plus manual pairs):
+
+- `NOT NULL` column premises are consumed: redundant `IS NOT NULL` filter
+  removal proves `EQ`, including under `GROUP BY` / `HAVING` / `COUNT(*)`.
+- `PRIMARY KEY` (trusted unique + non-null) premises are consumed: DISTINCT
+  removal and unused LEFT JOIN elimination prove `EQ`.
+- Qualified relation names (`"db"."schema"."table"`) previously returned
+  UNKNOWN because the generated DDL declares unqualified names. The backend
+  now rewrites relations to their unqualified leaf names before solving, and
+  refuses (UNSUPPORTED) when distinct qualified relations share a leaf name.
+  The kestra not-null pair that returned UNKNOWN on 2026-06-09 now proves EQ.

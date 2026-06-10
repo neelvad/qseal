@@ -148,6 +148,39 @@ def test_sqlsolver_backend_schema_includes_unconstrained_fixture_tables(tmp_path
     assert "CREATE TABLE dim_users" in captured
 
 
+def test_sqlsolver_backend_unqualifies_relations_to_match_schema(tmp_path: Path) -> None:
+    capture = tmp_path / "capture"
+    command = _fake_sqlsolver(tmp_path, "[EQ]", capture_path=capture)
+    constraints = load_constraint_catalog(FIXTURE / "schema.yml", "auto")
+    backend = SqlSolverBackend(solver_command=str(command))
+
+    result = backend.verify(
+        'SELECT DISTINCT user_id FROM "analytics"."public"."users"',
+        'SELECT user_id FROM "analytics"."public"."users"',
+        constraints,
+    )
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    captured = capture.read_text()
+    assert "SQL1=SELECT DISTINCT user_id FROM users" in captured
+    assert "SQL2=SELECT user_id FROM users" in captured
+
+
+def test_sqlsolver_backend_rejects_colliding_unqualified_relations(tmp_path: Path) -> None:
+    command = _fake_sqlsolver(tmp_path, "[EQ]")
+    constraints = load_constraint_catalog(FIXTURE / "schema.yml", "auto")
+    backend = SqlSolverBackend(solver_command=str(command))
+
+    result = backend.verify(
+        "SELECT user_id FROM analytics.public.users",
+        "SELECT user_id FROM analytics.staging.users",
+        constraints,
+    )
+
+    assert result.status == VerificationStatus.UNSUPPORTED
+    assert "share an unqualified name" in result.reason
+
+
 def test_sqlsolver_schema_encodes_constraint_premises_soundly() -> None:
     constraints = ConstraintCatalog(
         tables={
