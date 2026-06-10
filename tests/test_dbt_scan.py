@@ -448,3 +448,40 @@ def test_scan_synthetic_duckdb_fixture_reports_compiled_blockers() -> None:
         dim_users.apply_blocker()
         == "Scanned compiled SQL; source file was not verified directly."
     )
+
+
+def test_scan_dbt_project_finds_subtree_rewrites_behind_opaque_cte_outer_query(
+    tmp_path: Path,
+) -> None:
+    # The outer query parses (opaque CTE source), but the redundant filter is
+    # only visible inside the CTE body, which the fragment path scans.
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "recent_events.sql").write_text(
+        """
+with recent as (
+    select user_id, ts from events where user_id is not null
+)
+select recent.user_id from recent where recent.ts > 1
+"""
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: events
+    columns:
+      - name: user_id
+        tests:
+          - not_null
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.proven_finding_count() == 1
+    suggestion = result.results[0].suggestions[0]
+    assert suggestion.rule_name == "remove_redundant_not_null_filter"
+    assert "CTE 'recent'" in suggestion.reason
+    assert "IS NOT NULL" not in suggestion.rewritten_sql.upper()
+    assert "WITH recent AS" in suggestion.rewritten_sql

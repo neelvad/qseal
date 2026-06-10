@@ -205,3 +205,29 @@ now surface SQL-subset blockers instead (QUALIFY visibility rose 16 -> 189).
 The two largest remaining levers, by reason count: the projection subset
 (478x) and QUALIFY (231x total), both SQL-subset work; then the GitLab-local
 `simple_cte`/`dbt_audit` macros (251x), which only compiled SQL can recover.
+
+## 2026-06-10 Run: Projection, QUALIFY, and Fragment-Fallback Coverage
+
+Three coverage changes, re-measured on the GitLab corpus (2,206 models):
+
+- General aliased scalar/window expression projections (was the top blocker
+  at 478 models), with subqueries still excluded.
+- Opaque `QUALIFY` parsing with per-rule conservative treatment (was 231
+  models including CTE-relation references).
+- dbt scans fall back to fragment rewrites when the whole query parses but
+  proves nothing, since whole-query rules cannot see inside opaque CTE
+  bodies.
+
+Alongside: two soundness fixes found during the work. Opaque expression
+projections now record referenced relations, closing a hole where unused
+LEFT JOIN elimination could prove a rewrite that dropped a join its
+projections still referenced (for example `COALESCE(u.name, 'x')`). Rules
+also refuse standalone rewrites of queries referencing CTE relations, whose
+regenerated SQL would dangle without the defining WITH clause.
+
+Results: UNSUPPORTED dropped 1,730 -> 1,084; 51% of models now parse (21%
+this morning). Proven findings hold at 2; UNKNOWN rose 5 -> 25, mostly
+join-elimination near-misses. Remaining blockers are GitLab-local macros
+(`simple_cte`, `dbt_audit`, ~600 models total, compile-only), non-literal
+WHERE comparisons (59), set-operation CTEs (45), and non-table join targets
+(37).

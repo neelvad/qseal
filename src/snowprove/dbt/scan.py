@@ -193,13 +193,33 @@ def _scan_model(
         )
 
     suggestions = suggest_rewrites(query, constraints, rules=rules)
+    has_proven = any(
+        suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+        for suggestion in suggestions
+    )
+    # Whole-query rules cannot see inside opaque CTE bodies, so fall back to
+    # fragment rewrites when the whole query proves nothing.
+    subtree = []
+    if not has_proven:
+        subtree = suggest_subtree_rewrites(
+            preprocessed.sql,
+            constraints,
+            rules=rules,
+            dialect=dialect,
+        )
+
     if include_all:
         return [
-            suggestion
-            for suggestion in suggestions
-            if suggestion.status != VerificationStatus.NOT_APPLICABLE
+            *subtree,
+            *(
+                suggestion
+                for suggestion in suggestions
+                if suggestion.status != VerificationStatus.NOT_APPLICABLE
+            ),
         ]
 
+    if subtree:
+        return [subtree[0]]
     suggestion = first_applicable_suggestion(suggestions)
     if suggestion.status == VerificationStatus.PROVEN_EQUIVALENT:
         return [suggestion]
