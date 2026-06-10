@@ -845,3 +845,45 @@ RL research phase:
 - store normalized SQL, schema, fixture, solver version, DuckDB version, plans,
   timings, and reward for every evaluated transition
 - scale to small-model SFT/GRPO only after search baselines are established
+
+## LLM Candidate Generator MVP (agreed 2026-06-10)
+
+The prover/refuter architecture is complete enough to gate an untrusted
+generator: builtin rule replay, SQLSolver with validated constraint premises,
+and the VeriEQL refuter with fragment-level cross-checking. The agreed MVP:
+
+1. **Placement**: offline batch producer writing candidate SQL files plus
+   `metadata.json` into the existing `candidates check` bundle contract.
+   Not wired into `dbt scan` (keep CI deterministic and free). A wrapper
+   pipeline command is a later convenience.
+2. **Prompting**: premise-targeted. Hand the model the trusted dbt-test
+   constraints explicitly and ask for rewrites that are valid *because* of
+   those facts, seeded with the five rule patterns as worked examples.
+   (v2: GenRewrite-style natural-language rewrite-rule hint library that
+   accumulates across runs.)
+3. **Verification cascade**, cheapest first: normalized-identity check
+   (also filters trivial reformattings) -> builtin rule replay -> SQLSolver
+   -> VeriEQL refutation on non-proven survivors (refuted vs bounded-OK)
+   *and* on proven ones (crosscheck gate). Acceptance bar is
+   PROVEN_EQUIVALENT only.
+4. **Feedback loop**: one-shot for the first run, logging everything.
+   (v2: counterexample-guided repair feeding VeriEQL witness databases back
+   to the model, 1-2 retries; prerequisite is full witness rendering in the
+   driver, which currently captures only the header.)
+5. **No performance claims** in the MVP. The headline metric is the proven
+   non-identity rewrite rate on real models. Performance evidence waits for
+   the Snowflake EXPLAIN track.
+6. **Provenance**: extend bundle `metadata.json` with model id, prompt hash,
+   temperature, timestamp. Reuse the content-addressed caches and JSONL
+   trajectory recorder from the RL track.
+
+Evaluation: run over the parseable GitLab analytics models (~1,100). Four
+numbers drive every downstream decision: candidate parse rate (prompt
+quality), proven rate (headline), refuted rate (worth of the repair loop),
+bounded-OK rate (whether QED integration is needed). Caveat to keep in mind:
+a low proven rate is ambiguous between "clean corpus" and "prover gap" —
+the bounded-OK pile disambiguates.
+
+QED stays parked until the bounded-OK numbers justify its two-component
+toolchain (Calcite parser + Rust prover). VeriEQL is CC BY-NC-SA: external
+checkout only, never bundled or shipped.
