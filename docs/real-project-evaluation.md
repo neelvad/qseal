@@ -129,3 +129,32 @@ Before public release, capture:
 - at least one compiled SQL scan
 - one candidate bundle check using `metadata.json`
 - no known false `PROVEN_EQUIVALENT` result
+
+## 2026-06-10 Run: Fragment Rewriting Baseline
+
+Full refresh run over all seven projects
+(`snowprove-runs/real-projects/20260610T163428Z`), after the non-null unique
+key soundness fix and fragment (subtree) rewriting landed.
+
+Findings: 350 models scanned, 0 proven rewrites. The public demo corpora are
+clean; the zero is a true zero, not a parse failure.
+
+Funnel measurement over the raw model SQL of all cloned projects:
+
+- 340 raw models total
+- 287 (84%) blocked by dbt/Jinja macros before SQL parsing; only compiled SQL
+  can recover these (the largest project, `fivetran/dbt_shopify` with 264
+  models, is entirely macro-blocked and needs a warehouse profile to compile)
+- 53 models parse after Jinja preprocessing
+- 23 of those parse as whole queries; 30 fail whole-query parsing
+- 25 of the 30 failures now expose at least one scannable fragment, so 48/53
+  post-Jinja models (91%) are at least partially scannable, up from 23/53
+  (43%) before fragment rewriting
+
+Implications:
+
+- Verification coverage is no longer the binding constraint on these demo
+  projects; model cleanliness is. Yield must be validated on production dbt
+  repositories with defensive `DISTINCT` / `IS NOT NULL` habits.
+- The next coverage lever is compiled SQL for macro-heavy projects, which
+  requires warehouse profiles (or dbt-duckdb-compatible packages).
