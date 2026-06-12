@@ -41,6 +41,7 @@ Documentation = "https://github.com/neelvad/snowprove#readme"
 [dependency-groups]
 dev = [
     "anthropic>=0.109.1",
+    "modal>=1.5.0",
     "pytest>=8.3.4",
     "ruff>=0.9.4",
 ]

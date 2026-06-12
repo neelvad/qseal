@@ -128,9 +128,29 @@ sound because equivalence under arbitrary function semantics implies
 equivalence under the real ones — plus varchar typing for columns compared
 against string literals).
 
-Merged result: **281/400 proven (70.3%) across 251 distinct models (74%)**,
+Merged result (after the Modal run below): **282/400 proven (70.5%)**,
 zero refuted, zero conflicts. The upgraded local-only pass proves 266 by
 itself — within 15 of the full multi-prover union, making routine
 verification a native, minutes-long operation. Residual unknowns: 74
 Calcite parse rejects (deeper dialect normalization), 43 ambiguous-column
 abstentions (schema attribution), 6 genuine NotProvable.
+
+## Modal Runner
+
+`scripts/modal_verify.py` runs the identical verification script on Modal,
+sharded across containers, with the QED toolchain and SQLSolver jar baked
+into a pinned-commit image (everything native x86 - SQLSolver needs no
+emulation there). Local runs remain first-class; the cloud path exists for
+iteration speed and larger corpora.
+
+```bash
+uv run modal run scripts/modal_verify.py \
+  --bundles-dir snowprove-runs/llm-candidates/gitlab-full \
+  --report-file snowprove-runs/llm-candidates/modal-full-report.json --shards 40
+```
+
+First full-corpus benchmark: **400 candidates, full cascade, 69 seconds
+wall-clock** across 40 containers (~$0.30 of compute; the one-time image
+build takes ~15 minutes and is cached). The single Modal pass proved 276 -
+within six of the four-pass accumulated local total - with zero conflicts
+against any local verdict.

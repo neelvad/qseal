@@ -48,6 +48,11 @@ def main() -> int:
         help="Run the QED prover (configured via SNOWPROVE_QED_* env vars).",
     )
     parser.add_argument("--merge-reports", type=Path, nargs=2, default=None)
+    parser.add_argument(
+        "--only",
+        default=None,
+        help="Comma-separated model names to verify (for sharded runs).",
+    )
     parser.add_argument("--report-file", type=Path, default=None)
     args = parser.parse_args()
 
@@ -75,9 +80,12 @@ def main() -> int:
     qed = QedBackend(timeout_seconds=args.solver_timeout) if args.qed else None
     refuter = VeriEqlBackend(verieql_dir=args.verieql_dir) if args.verieql_dir else None
 
+    only = set(args.only.split(",")) if args.only else None
     rows = []
     for metadata_path in sorted(args.bundles_dir.glob("*/metadata.json")):
         bundle_dir = metadata_path.parent
+        if only is not None and bundle_dir.name not in only:
+            continue
         metadata = json.loads(metadata_path.read_text())
         original_sql = (bundle_dir / metadata["original_path"]).read_text()
         for entry in metadata.get("candidates", []):
