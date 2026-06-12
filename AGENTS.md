@@ -887,3 +887,42 @@ the bounded-OK pile disambiguates.
 QED stays parked until the bounded-OK numbers justify its two-component
 toolchain (Calcite parser + Rust prover). VeriEQL is CC BY-NC-SA: external
 checkout only, never bundled or shipped.
+
+## Status Update (2026-06-12)
+
+The generator/verifier loop is complete and measured. Current state:
+
+- **Corpus result (GitLab analytics, 341 models, 400 LLM candidates):
+  282 proven (70.5%) across 251 models**; 0 refuted, 0 invalid, 0
+  prover conflicts. Generation cost ~$4.90 (Batches API).
+- **Prover cascade**: builtin -> QED (native, minutes) -> SQLSolver
+  (x86 container or Modal). Fragment-diff pair reduction proves
+  changed-CTE-only pairs by congruence (never used for refutation).
+  QED frontend declares unknown functions as uninterpreted scalars and
+  types string-compared columns varchar. Premise discipline everywhere:
+  uniqueness is emitted only with trusted non-null (QED UNIQUE and
+  SQLSolver PRIMARY KEY are both strict).
+- **Refuter**: VeriEQL (external checkout, CC BY-NC — never bundle).
+  Cross-checks proven findings; fragment findings check the resolved
+  fragment pair.
+- **Runners**: local first-class; Modal runs the same scripts sharded
+  (full cascade over 400 candidates in 69s, ~$0.30). Image pins QED
+  prover/parser and SQLSolver commits.
+- **Tier-1 performance evidence** (docs/performance-evidence.md):
+  DuckDB benchmarks on schema-conforming synthetic data; 14 faster
+  (1.3-2.2x, dedup shapes), 510 neutral, 3 slower (incl. an LLM
+  added-DISTINCT candidate). Row-count mismatch between proven sides
+  flags premise-violating synthetic data.
+
+Next, in rough priority:
+
+1. Tier-2 performance evidence: Snowflake trial account + EXPLAIN plan
+   diffing for proven pairs (roadmap v0.3; blocked on creating the
+   trial account).
+2. Coverage residue (optional): dialect normalization for QED's
+   Calcite frontend (74 parse rejects), schema-attribution
+   improvements (43 ambiguity abstentions).
+3. Product packaging: surfacing proven+benchmarked findings (ranking
+   gate: safe and beneficial are different axes), wider corpora.
+4. Parked: counterexample-guided repair (0 refuted = nothing to
+   repair), RL track, full witness rendering in the VeriEQL driver.
