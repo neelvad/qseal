@@ -96,3 +96,24 @@ def test_does_not_remove_nullable_not_null_filter() -> None:
     suggestion = RemoveRedundantNotNullFilter().apply(query, constraints)
 
     assert suggestion.status == VerificationStatus.NOT_APPLICABLE
+
+
+def test_matches_tolerates_in_and_exists_predicates() -> None:
+    from snowprove.constraints.model import ConstraintCatalog, TableConstraints
+    from snowprove.parser.sqlglot_parser import parse_select
+    from snowprove.rewrites.not_null_filter import RemoveRedundantNotNullFilter
+
+    query = parse_select(
+        """
+        SELECT user_id FROM users
+        WHERE email IS NOT NULL
+          AND status IN ('active', 'trial')
+          AND EXISTS (SELECT 1 FROM orders o WHERE o.user_id = users.user_id)
+        """
+    )
+    constraints = ConstraintCatalog(
+        tables={"users": TableConstraints(columns={"email": {"nullable": False}})}
+    )
+
+    matches = RemoveRedundantNotNullFilter().matches(query, constraints)
+    assert len(matches) == 1

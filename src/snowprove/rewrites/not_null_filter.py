@@ -169,6 +169,8 @@ def _is_trusted_not_null_predicate(
     table_alias: str | None,
     table,
 ) -> bool:
+    if not isinstance(predicate, Predicate):
+        return False
     if predicate.operator != "IS NOT NULL":
         return False
     if predicate.left.table is not None and predicate.left.table != table_alias:
