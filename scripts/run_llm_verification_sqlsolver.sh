@@ -78,7 +78,7 @@ docker --context "colima-$COLIMA_PROFILE" run --rm -i \
       ./gradlew fatjar
     fi
     cd /snowprove
-    uv run python scripts/verify_llm_candidates.py "$CONTAINER_BUNDLES" \
+    uv run --reinstall-package snowprove python scripts/verify_llm_candidates.py "$CONTAINER_BUNDLES" \
       --dialect "$DIALECT" \
       --solver-command /snowprove/scripts/sqlsolver_command.sh \
       --solver-timeout "$SOLVER_TIMEOUT" \

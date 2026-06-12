@@ -92,22 +92,13 @@ def main() -> int:
             )
             rows.append(row)
             print(f"{row['bucket']:>12}  {row['model']}/{row['candidate']}", file=sys.stderr)
+            if args.report_file and len(rows) % 20 == 0:
+                _write_report(args.report_file, rows, args, solver, refuter, partial=True)
 
     buckets = Counter(row["bucket"] for row in rows)
     total = len(rows)
-    report = {
-        "artifact_type": "llm_candidate_verification",
-        "schema_version": 1,
-        "dialect": args.dialect,
-        "solver_enabled": solver is not None,
-        "refuter_enabled": refuter is not None,
-        "candidate_count": total,
-        "buckets": dict(sorted(buckets.items())),
-        "results": rows,
-    }
     if args.report_file:
-        args.report_file.parent.mkdir(parents=True, exist_ok=True)
-        args.report_file.write_text(json.dumps(report, indent=2))
+        _write_report(args.report_file, rows, args, solver, refuter, partial=False)
 
     print(json.dumps({"candidates": total, **dict(sorted(buckets.items()))}, indent=2))
     alarms = [row for row in rows if row.get("crosscheck_alarm")]
@@ -176,6 +167,23 @@ def _verify_candidate(
     if refutation.status == VerificationStatus.UNKNOWN:
         return {"bucket": "bounded_ok", "reason": refutation.reason, **solver_note}
     return {"bucket": "unknown", "reason": refutation.reason, **solver_note}
+
+
+def _write_report(report_file, rows, args, solver, refuter, partial: bool) -> None:
+    buckets = Counter(row["bucket"] for row in rows)
+    report = {
+        "artifact_type": "llm_candidate_verification",
+        "schema_version": 1,
+        "dialect": args.dialect,
+        "solver_enabled": solver is not None,
+        "refuter_enabled": refuter is not None,
+        "partial": partial,
+        "candidate_count": len(rows),
+        "buckets": dict(sorted(buckets.items())),
+        "results": rows,
+    }
+    report_file.parent.mkdir(parents=True, exist_ok=True)
+    report_file.write_text(json.dumps(report, indent=2))
 
 
 _MERGE_PRECEDENCE = ("proven", "refuted", "bounded_ok", "unknown", "identity", "invalid")
