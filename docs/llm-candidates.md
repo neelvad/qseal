@@ -117,3 +117,20 @@ proven rewrite. The QED pass ran natively in minutes; standalone it proved
 264/400 — heavily overlapping SQLSolver's 233 but with complementary wins on
 CTE/projection shapes, while SQLSolver retains exclusive coverage of the
 join-shaped rewrites.
+
+### With coverage levers (same corpus, 2026-06-12)
+
+Three additions: provers run QED-first; fragment-diff pair reduction (when
+the pair differs in exactly one CTE body, provers see only that fragment —
+sound for proving by congruence, never used for refutation verdicts);
+and QED frontend prep (unknown functions declared as uninterpreted scalars —
+sound because equivalence under arbitrary function semantics implies
+equivalence under the real ones — plus varchar typing for columns compared
+against string literals).
+
+Merged result: **281/400 proven (70.3%) across 251 distinct models (74%)**,
+zero refuted, zero conflicts. The upgraded local-only pass proves 266 by
+itself — within 15 of the full multi-prover union, making routine
+verification a native, minutes-long operation. Residual unknowns: 74
+Calcite parse rejects (deeper dialect normalization), 43 ambiguous-column
+abstentions (schema attribution), 6 genuine NotProvable.

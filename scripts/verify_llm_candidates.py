@@ -26,6 +26,7 @@ from snowprove.verifier.backends.builtin import BuiltinVerifierBackend
 from snowprove.verifier.backends.qed import QedBackend
 from snowprove.verifier.backends.sqlsolver import SqlSolverBackend
 from snowprove.verifier.backends.verieql import VeriEqlBackend
+from snowprove.verifier.pair_reduction import reduce_pair
 
 
 def main() -> int:
@@ -135,26 +136,26 @@ def _verify_candidate(
     if trees[0] == trees[1]:
         return {"bucket": "identity", "reason": "Candidate is the original modulo formatting."}
 
-    builtin_result = builtin.verify(original_sql, candidate_sql, constraints, dialect=dialect)
+    # Provers run on the fragment-diff reduction when one applies: proving
+    # the differing CTE bodies equivalent proves the full pair by congruence.
+    # Refutations of a reduced pair say nothing about the full pair, so NEQ
+    # verdicts only count when no reduction happened.
+    reduced = reduce_pair(original_sql, candidate_sql, dialect)
+    prover_original, prover_candidate = reduced or (original_sql, candidate_sql)
+
+    builtin_result = builtin.verify(
+        prover_original, prover_candidate, constraints, dialect=dialect
+    )
     proven = None
-    solver_note = {}
+    solver_note = {"reduced": reduced is not None}
     if builtin_result.status == VerificationStatus.PROVEN_EQUIVALENT:
         proven = {"prover": "builtin", "rule_name": builtin_result.rule_name,
                   "reason": builtin_result.reason}
-    elif solver is not None:
-        solver_result = solver.verify(original_sql, candidate_sql, constraints, dialect=dialect)
-        if solver_result.status == VerificationStatus.PROVEN_EQUIVALENT:
-            proven = {"prover": "sqlsolver", "reason": solver_result.reason}
-        elif solver_result.status == VerificationStatus.NOT_EQUIVALENT:
-            return {"bucket": "refuted", "prover": "sqlsolver", "reason": solver_result.reason}
-        else:
-            solver_note = {
-                "solver_status": solver_result.status.value,
-                "solver_reason": solver_result.reason,
-            }
 
     if proven is None and qed is not None:
-        qed_result = qed.verify(original_sql, candidate_sql, constraints, dialect=dialect)
+        qed_result = qed.verify(
+            prover_original, prover_candidate, constraints, dialect=dialect
+        )
         if qed_result.status == VerificationStatus.PROVEN_EQUIVALENT:
             proven = {"prover": "qed", "reason": qed_result.reason}
         else:
@@ -164,8 +165,23 @@ def _verify_candidate(
                 "qed_reason": qed_result.reason,
             }
 
+    if proven is None and solver is not None:
+        solver_result = solver.verify(
+            prover_original, prover_candidate, constraints, dialect=dialect
+        )
+        if solver_result.status == VerificationStatus.PROVEN_EQUIVALENT:
+            proven = {"prover": "sqlsolver", "reason": solver_result.reason}
+        elif solver_result.status == VerificationStatus.NOT_EQUIVALENT and reduced is None:
+            return {"bucket": "refuted", "prover": "sqlsolver", "reason": solver_result.reason}
+        else:
+            solver_note = {
+                **solver_note,
+                "solver_status": solver_result.status.value,
+                "solver_reason": solver_result.reason,
+            }
+
     if proven is not None:
-        row = {"bucket": "proven", **proven}
+        row = {"bucket": "proven", **proven, "reduced": reduced is not None}
         if refuter is not None:
             crosscheck = refuter.refute(original_sql, candidate_sql, constraints, dialect=dialect)
             row["crosscheck_status"] = crosscheck.status.value

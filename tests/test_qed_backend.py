@@ -83,9 +83,33 @@ def test_qed_case_emits_unique_only_with_non_null() -> None:
         }
     )
 
-    case = _qed_case(schema, constraints, "SELECT 1 FROM users", "SELECT 1 FROM users")
+    import sqlglot
+
+    trees = [sqlglot.parse_one("SELECT 1 FROM users")] * 2
+    case = _qed_case(
+        schema, constraints, "SELECT 1 FROM users", "SELECT 1 FROM users", trees, "snowflake"
+    )
 
     assert "user_id integer not null" in case
     assert "unique (user_id)" in case
     assert "order_id integer" in case
     assert "unique (order_id)" not in case
+
+
+
+def test_qed_case_declares_unknown_functions_and_types_string_columns() -> None:
+    import sqlglot
+
+    sql = (
+        "SELECT iff(status = 'active', 1, 0) AS flag "
+        "FROM users WHERE date_trunc('month', created_at) > 0"
+    )
+    trees = [sqlglot.parse_one(sql, read="snowflake")] * 2
+    schema = {"users": {"status", "created_at"}}
+
+    case = _qed_case(schema, ConstraintCatalog(), sql, sql, trees, "snowflake")
+
+    assert "status varchar" in case
+    assert "created_at integer" in case
+    assert "declare scalar function iff(integer, integer, integer) returns integer;" in case
+    assert "declare scalar function date_trunc(integer, integer) returns integer;" in case

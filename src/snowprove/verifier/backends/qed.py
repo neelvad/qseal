@@ -1,10 +1,12 @@
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
 import sqlglot
+from sqlglot import exp
 from sqlglot.errors import SqlglotError
 
 from snowprove.constraints.model import ConstraintCatalog
@@ -87,7 +89,7 @@ class QedBackend:
                 original_sql, rewritten_sql, VerificationStatus.UNSUPPORTED, reason=schema
             )
 
-        case_sql = _qed_case(schema, constraints, sql1, sql2)
+        case_sql = _qed_case(schema, constraints, sql1, sql2, trees, dialect)
         status, reason = self._run_toolchain(case_sql)
         return self._result(original_sql, rewritten_sql, status, reason=reason)
 
@@ -179,18 +181,36 @@ class QedBackend:
         )
 
 
+# Functions Calcite's MySQL frontend understands; anything else is declared
+# as an uninterpreted scalar function, which is sound for proving: queries
+# equivalent under arbitrary function semantics are equivalent under the
+# real semantics.
+_KNOWN_FUNCTIONS = {
+    "abs", "avg", "cast", "ceil", "ceiling", "char_length", "coalesce",
+    "concat", "count", "floor", "greatest", "least", "lower", "max", "min",
+    "mod", "nullif", "power", "replace", "round", "substring", "sum",
+    "trim", "upper",
+}
+
+
 def _qed_case(
     schema: dict[str, set[str]],
     constraints: ConstraintCatalog,
     sql1: str,
     sql2: str,
+    trees: list[exp.Expression],
+    dialect: SqlDialect = DEFAULT_DIALECT,
 ) -> str:
     """One QED input file: MySQL-valid DDL plus the two SELECT statements.
 
     QED treats UNIQUE as strict uniqueness including NULLs, so a trusted
     unique key is emitted only when its columns are also trusted non-null;
-    weaker premises are omitted, which is sound for a prover.
+    weaker premises are omitted, which is sound for a prover. Columns
+    compared against string literals anywhere in the pair are typed varchar
+    so Calcite's validator accepts the comparisons; unknown functions are
+    declared as uninterpreted scalars.
     """
+    varchar_columns = _string_typed_columns(trees)
     statements = []
     for table_name in sorted(schema):
         columns = {column.lower() for column in schema[table_name]}
@@ -212,17 +232,103 @@ def _qed_case(
                 columns.update(key)
             columns.update(non_null & set(table.columns))
 
-        lines = [
-            f"  {column} integer{' not null' if column in non_null else ''}"
-            for column in sorted(columns) or ["snowprove_id"]
-        ]
+        lines = []
+        for column in sorted(columns) or ["snowprove_id"]:
+            column_type = "varchar" if column in varchar_columns else "integer"
+            suffix = " not null" if column in non_null else ""
+            lines.append(f"  {column} {column_type}{suffix}")
         lines.extend(f"  unique ({', '.join(key)})" for key in unique_keys)
         statements.append(
             f"create table {table_name.lower()} (\n" + ",\n".join(lines) + "\n);"
         )
 
+    declarations = _function_declarations(trees, dialect)
     queries = "\n\n".join(f"{sql.rstrip().rstrip(';')};" for sql in (sql1, sql2))
-    return "\n".join(statements) + f"\n\n{queries}\n"
+    parts = ["\n".join(statements)]
+    if declarations:
+        parts.append("\n".join(declarations))
+    parts.append(queries)
+    return "\n\n".join(parts) + "\n"
+
+
+def _string_typed_columns(trees: list[exp.Expression]) -> set[str]:
+    """Column names compared against string literals anywhere in the pair."""
+    names: set[str] = set()
+    comparison_types = (exp.EQ, exp.NEQ, exp.GT, exp.GTE, exp.LT, exp.LTE, exp.Like)
+    for tree in trees:
+        for node in tree.walk():
+            if isinstance(node, comparison_types):
+                sides = (node.this, node.expression)
+            elif isinstance(node, exp.In):
+                sides = (node.this, *node.expressions)
+            else:
+                continue
+            has_string = any(
+                isinstance(side, exp.Literal) and side.is_string for side in sides
+            )
+            if has_string:
+                names.update(
+                    side.name.lower() for side in sides if isinstance(side, exp.Column)
+                )
+    return names
+
+
+def _function_declarations(
+    trees: list[exp.Expression],
+    dialect: SqlDialect,
+) -> list[str]:
+    """Uninterpreted-scalar declarations for functions Calcite will not know.
+
+    Names come from the rendered surface form (the SQL actually sent to the
+    parser), not sqlglot's canonical node names, which can differ.
+    """
+    arities: dict[str, int] = {}
+    for tree in trees:
+        for node in tree.walk():
+            if not isinstance(node, exp.Func) or isinstance(
+                node, exp.AggFunc | exp.Window | exp.Cast | exp.Case
+            ):
+                continue
+            rendered = node.sql(dialect=dialect)
+            match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)\(", rendered)
+            if match is None:
+                continue
+            name = match.group(1).lower()
+            if name in _KNOWN_FUNCTIONS:
+                continue
+            arity = _rendered_arity(rendered)
+            if arity is None:
+                continue
+            arities.setdefault(name, arity)
+    return [
+        f"declare scalar function {name}"
+        f"({', '.join(['integer'] * arity)}) returns integer;"
+        for name, arity in sorted(arities.items())
+    ]
+
+
+def _rendered_arity(rendered: str) -> int | None:
+    """Argument count of a rendered call, counting top-level commas only."""
+    if not rendered.endswith(")"):
+        return None
+    inner = rendered[rendered.index("(") + 1 : -1]
+    if not inner.strip():
+        return 0
+    depth = 0
+    in_string = False
+    count = 1
+    for char in inner:
+        if in_string:
+            in_string = char != "'"
+        elif char == "'":
+            in_string = True
+        elif char in "([":
+            depth += 1
+        elif char in ")]":
+            depth -= 1
+        elif char == "," and depth == 0:
+            count += 1
+    return count
 
 
 def _option(value: str | Path | None, env_name: str) -> Path | None:
