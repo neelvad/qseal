@@ -107,6 +107,15 @@ These patterns also apply inside CTE bodies of larger queries. Novel rewrites \
 beyond these patterns are welcome when you are confident they are equivalent \
 under the premises - the prover handles general rewrites, not just these shapes.
 
+## Candidate sizing
+
+Include at least one minimal, self-contained candidate when any sound rewrite \
+exists: change a single CTE body or a single clause and keep every other byte \
+of the query identical. Verifiers discharge small, local rewrites far more \
+often than whole-query restructurings, so a modest candidate that verifies \
+beats an ambitious one that cannot be checked. Ambitious restructurings are \
+still welcome as additional candidates after the minimal one.
+
 ## Pitfalls that get candidates rejected
 
 - Removing DISTINCT using a unique key that is not also never-NULL (duplicate \
