@@ -6,6 +6,9 @@
 #
 #   uv run python scripts/verify_llm_candidates.py BUNDLES_DIR --project PROJECT \
 #       [--verieql-dir ~/workspace/snowprove-eval/VeriEQL] [--dialect snowflake]
+#       [--solver-command CMD]   # SQLSolver, typically inside the x86 container
+#   uv run python scripts/verify_llm_candidates.py --merge-reports A.json B.json \
+#       --report-file final.json
 import argparse
 import json
 import sys
@@ -15,25 +18,53 @@ from pathlib import Path
 import sqlglot
 from sqlglot.errors import SqlglotError
 
+from snowprove.constraints.model import ConstraintCatalog
 from snowprove.dbt.project import discover_dbt_project
 from snowprove.dbt.scan import _load_project_constraints
 from snowprove.rewrites.base import VerificationStatus
 from snowprove.verifier.backends.builtin import BuiltinVerifierBackend
+from snowprove.verifier.backends.sqlsolver import SqlSolverBackend
 from snowprove.verifier.backends.verieql import VeriEqlBackend
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("bundles_dir", type=Path)
-    parser.add_argument("--project", type=Path, required=True)
+    parser.add_argument("bundles_dir", type=Path, nargs="?")
+    parser.add_argument("--project", type=Path)
+    parser.add_argument(
+        "--constraints",
+        type=Path,
+        help="Constraint catalog JSON (defaults to BUNDLES_DIR/constraints.json).",
+    )
     parser.add_argument("--dialect", default="snowflake")
     parser.add_argument("--verieql-dir", type=Path, default=None)
+    parser.add_argument("--solver-command", default=None)
+    parser.add_argument("--solver-timeout", type=int, default=60)
+    parser.add_argument("--merge-reports", type=Path, nargs=2, default=None)
     parser.add_argument("--report-file", type=Path, default=None)
     args = parser.parse_args()
 
-    project = discover_dbt_project(args.project)
-    constraints = _load_project_constraints(project.schema_yml_files)
+    if args.merge_reports:
+        return _merge_reports(args.merge_reports, args.report_file)
+    if args.bundles_dir is None:
+        parser.error("bundles_dir is required unless --merge-reports is used")
+
+    constraints_path = args.constraints or (args.bundles_dir / "constraints.json")
+    if args.project is not None:
+        project = discover_dbt_project(args.project)
+        constraints = _load_project_constraints(project.schema_yml_files)
+    elif constraints_path.exists():
+        constraints = ConstraintCatalog.model_validate_json(constraints_path.read_text())
+    else:
+        parser.error("provide --project or a constraints snapshot (constraints.json)")
     builtin = BuiltinVerifierBackend()
+    solver = (
+        SqlSolverBackend(
+            solver_command=args.solver_command, timeout_seconds=args.solver_timeout
+        )
+        if args.solver_command
+        else None
+    )
     refuter = VeriEqlBackend(verieql_dir=args.verieql_dir) if args.verieql_dir else None
 
     rows = []
@@ -50,7 +81,13 @@ def main() -> int:
             }
             row.update(
                 _verify_candidate(
-                    original_sql, candidate_sql, constraints, args.dialect, builtin, refuter
+                    original_sql,
+                    candidate_sql,
+                    constraints,
+                    args.dialect,
+                    builtin,
+                    solver,
+                    refuter,
                 )
             )
             rows.append(row)
@@ -62,6 +99,7 @@ def main() -> int:
         "artifact_type": "llm_candidate_verification",
         "schema_version": 1,
         "dialect": args.dialect,
+        "solver_enabled": solver is not None,
         "refuter_enabled": refuter is not None,
         "candidate_count": total,
         "buckets": dict(sorted(buckets.items())),
@@ -84,6 +122,7 @@ def _verify_candidate(
     constraints,
     dialect: str,
     builtin: BuiltinVerifierBackend,
+    solver: SqlSolverBackend | None,
     refuter: VeriEqlBackend | None,
 ) -> dict:
     trees = []
@@ -97,12 +136,25 @@ def _verify_candidate(
         return {"bucket": "identity", "reason": "Candidate is the original modulo formatting."}
 
     builtin_result = builtin.verify(original_sql, candidate_sql, constraints, dialect=dialect)
+    proven = None
+    solver_note = {}
     if builtin_result.status == VerificationStatus.PROVEN_EQUIVALENT:
-        row = {
-            "bucket": "proven",
-            "rule_name": builtin_result.rule_name,
-            "reason": builtin_result.reason,
-        }
+        proven = {"prover": "builtin", "rule_name": builtin_result.rule_name,
+                  "reason": builtin_result.reason}
+    elif solver is not None:
+        solver_result = solver.verify(original_sql, candidate_sql, constraints, dialect=dialect)
+        if solver_result.status == VerificationStatus.PROVEN_EQUIVALENT:
+            proven = {"prover": "sqlsolver", "reason": solver_result.reason}
+        elif solver_result.status == VerificationStatus.NOT_EQUIVALENT:
+            return {"bucket": "refuted", "prover": "sqlsolver", "reason": solver_result.reason}
+        else:
+            solver_note = {
+                "solver_status": solver_result.status.value,
+                "solver_reason": solver_result.reason,
+            }
+
+    if proven is not None:
+        row = {"bucket": "proven", **proven}
         if refuter is not None:
             crosscheck = refuter.refute(original_sql, candidate_sql, constraints, dialect=dialect)
             row["crosscheck_status"] = crosscheck.status.value
@@ -112,7 +164,7 @@ def _verify_candidate(
         return row
 
     if refuter is None:
-        return {"bucket": "unknown", "reason": builtin_result.reason}
+        return {"bucket": "unknown", "reason": builtin_result.reason, **solver_note}
 
     refutation = refuter.refute(original_sql, candidate_sql, constraints, dialect=dialect)
     if refutation.status == VerificationStatus.NOT_EQUIVALENT:
@@ -122,8 +174,52 @@ def _verify_candidate(
             "counterexample": (refutation.counterexample or "")[:500],
         }
     if refutation.status == VerificationStatus.UNKNOWN:
-        return {"bucket": "bounded_ok", "reason": refutation.reason}
-    return {"bucket": "unknown", "reason": refutation.reason}
+        return {"bucket": "bounded_ok", "reason": refutation.reason, **solver_note}
+    return {"bucket": "unknown", "reason": refutation.reason, **solver_note}
+
+
+_MERGE_PRECEDENCE = ("proven", "refuted", "bounded_ok", "unknown", "identity", "invalid")
+
+
+def _merge_reports(report_paths: list[Path], report_file: Path | None) -> int:
+    reports = [json.loads(path.read_text()) for path in report_paths]
+    merged: dict[tuple[str, str], dict] = {}
+    conflicts = []
+    for report in reports:
+        for row in report.get("results", []):
+            key = (row["model"], row["candidate"])
+            existing = merged.get(key)
+            if existing is None:
+                merged[key] = dict(row)
+                continue
+            pair = {existing["bucket"], row["bucket"]}
+            if pair == {"proven", "refuted"}:
+                conflicts.append(key)
+                merged[key] = {**existing, "bucket": "conflict",
+                               "reason": "One verifier proved what another refuted."}
+                continue
+            if _MERGE_PRECEDENCE.index(row["bucket"]) < _MERGE_PRECEDENCE.index(
+                existing["bucket"]
+            ):
+                merged[key] = dict(row)
+
+    rows = [merged[key] for key in sorted(merged)]
+    buckets = Counter(row["bucket"] for row in rows)
+    report = {
+        "artifact_type": "llm_candidate_verification",
+        "schema_version": 1,
+        "merged_from": [str(path) for path in report_paths],
+        "candidate_count": len(rows),
+        "buckets": dict(sorted(buckets.items())),
+        "results": rows,
+    }
+    if report_file:
+        report_file.parent.mkdir(parents=True, exist_ok=True)
+        report_file.write_text(json.dumps(report, indent=2))
+    print(json.dumps({"candidates": len(rows), **dict(sorted(buckets.items()))}, indent=2))
+    for key in conflicts:
+        print(f"ALARM: prover/refuter conflict on {key[0]}/{key[1]}")
+    return 1 if conflicts else 0
 
 
 if __name__ == "__main__":

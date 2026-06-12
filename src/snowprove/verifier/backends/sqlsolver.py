@@ -67,7 +67,12 @@ class SqlSolverBackend:
             schema_path = temp_path / "schema.sql"
             sql1_path.write_text(f"{_one_line_sql(solver_sql1)}\n")
             sql2_path.write_text(f"{_one_line_sql(solver_sql2)}\n")
-            schema_path.write_text(_schema_sql(request.constraints))
+            schema_path.write_text(
+                _schema_sql(
+                    request.constraints,
+                    table_names=_referenced_tables(solver_sql1, solver_sql2, dialect),
+                )
+            )
 
             command = _command(
                 self.solver_command,
@@ -193,9 +198,31 @@ def _one_line_sql(sql: str) -> str:
     return re.sub(r"\s+", " ", stripped_comments).strip().removesuffix(";")
 
 
-def _schema_sql(constraints: ConstraintCatalog) -> str:
+def _referenced_tables(sql1: str, sql2: str, dialect: SqlDialect) -> set[str] | None:
+    """Names of relations the pair references, or None when parsing fails."""
+    names: set[str] = set()
+    for sql in (sql1, sql2):
+        try:
+            tree = sqlglot.parse_one(sql, read=dialect)
+        except SqlglotError:
+            return None
+        names.update(table.name for table in tree.find_all(exp.Table))
+    return names
+
+
+def _schema_sql(
+    constraints: ConstraintCatalog,
+    table_names: set[str] | None = None,
+) -> str:
+    """DDL for catalog tables, restricted to referenced relations when known.
+
+    Project-wide catalogs can hold thousands of tables; emitting them all
+    makes the solver parse a huge schema for every pair.
+    """
     statements = []
     for table_name, table in constraints.tables.items():
+        if table_names is not None and table_name not in table_names:
+            continue
         columns = set(table.columns)
         for unique_key in table.unique:
             columns.update(unique_key)

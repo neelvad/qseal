@@ -188,6 +188,9 @@ def main() -> int:
         summary["candidates"] += written
 
     (args.out / "run-summary.json").parent.mkdir(parents=True, exist_ok=True)
+    # Snapshot the constraint catalog so verification does not need the
+    # project tree (e.g. inside containers that cannot mount it).
+    (args.out / "constraints.json").write_text(constraints.model_dump_json(indent=2))
     (args.out / "run-summary.json").write_text(
         json.dumps(
             {
