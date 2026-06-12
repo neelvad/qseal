@@ -23,6 +23,7 @@ from snowprove.dbt.project import discover_dbt_project
 from snowprove.dbt.scan import _load_project_constraints
 from snowprove.rewrites.base import VerificationStatus
 from snowprove.verifier.backends.builtin import BuiltinVerifierBackend
+from snowprove.verifier.backends.qed import QedBackend
 from snowprove.verifier.backends.sqlsolver import SqlSolverBackend
 from snowprove.verifier.backends.verieql import VeriEqlBackend
 
@@ -40,6 +41,11 @@ def main() -> int:
     parser.add_argument("--verieql-dir", type=Path, default=None)
     parser.add_argument("--solver-command", default=None)
     parser.add_argument("--solver-timeout", type=int, default=60)
+    parser.add_argument(
+        "--qed",
+        action="store_true",
+        help="Run the QED prover (configured via SNOWPROVE_QED_* env vars).",
+    )
     parser.add_argument("--merge-reports", type=Path, nargs=2, default=None)
     parser.add_argument("--report-file", type=Path, default=None)
     args = parser.parse_args()
@@ -65,6 +71,7 @@ def main() -> int:
         if args.solver_command
         else None
     )
+    qed = QedBackend(timeout_seconds=args.solver_timeout) if args.qed else None
     refuter = VeriEqlBackend(verieql_dir=args.verieql_dir) if args.verieql_dir else None
 
     rows = []
@@ -87,18 +94,19 @@ def main() -> int:
                     args.dialect,
                     builtin,
                     solver,
+                    qed,
                     refuter,
                 )
             )
             rows.append(row)
             print(f"{row['bucket']:>12}  {row['model']}/{row['candidate']}", file=sys.stderr)
             if args.report_file and len(rows) % 20 == 0:
-                _write_report(args.report_file, rows, args, solver, refuter, partial=True)
+                _write_report(args.report_file, rows, args, solver, qed, refuter, partial=True)
 
     buckets = Counter(row["bucket"] for row in rows)
     total = len(rows)
     if args.report_file:
-        _write_report(args.report_file, rows, args, solver, refuter, partial=False)
+        _write_report(args.report_file, rows, args, solver, qed, refuter, partial=False)
 
     print(json.dumps({"candidates": total, **dict(sorted(buckets.items()))}, indent=2))
     alarms = [row for row in rows if row.get("crosscheck_alarm")]
@@ -114,6 +122,7 @@ def _verify_candidate(
     dialect: str,
     builtin: BuiltinVerifierBackend,
     solver: SqlSolverBackend | None,
+    qed: QedBackend | None,
     refuter: VeriEqlBackend | None,
 ) -> dict:
     trees = []
@@ -144,6 +153,17 @@ def _verify_candidate(
                 "solver_reason": solver_result.reason,
             }
 
+    if proven is None and qed is not None:
+        qed_result = qed.verify(original_sql, candidate_sql, constraints, dialect=dialect)
+        if qed_result.status == VerificationStatus.PROVEN_EQUIVALENT:
+            proven = {"prover": "qed", "reason": qed_result.reason}
+        else:
+            solver_note = {
+                **solver_note,
+                "qed_status": qed_result.status.value,
+                "qed_reason": qed_result.reason,
+            }
+
     if proven is not None:
         row = {"bucket": "proven", **proven}
         if refuter is not None:
@@ -169,13 +189,14 @@ def _verify_candidate(
     return {"bucket": "unknown", "reason": refutation.reason, **solver_note}
 
 
-def _write_report(report_file, rows, args, solver, refuter, partial: bool) -> None:
+def _write_report(report_file, rows, args, solver, qed, refuter, partial: bool) -> None:
     buckets = Counter(row["bucket"] for row in rows)
     report = {
         "artifact_type": "llm_candidate_verification",
         "schema_version": 1,
         "dialect": args.dialect,
         "solver_enabled": solver is not None,
+        "qed_enabled": qed is not None,
         "refuter_enabled": refuter is not None,
         "partial": partial,
         "candidate_count": len(rows),

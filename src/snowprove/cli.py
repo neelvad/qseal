@@ -97,7 +97,7 @@ SchemaFormat = click.Choice(["auto", "snowprove", "dbt"], case_sensitive=False)
 RuleChoice = click.Choice(rule_names(), case_sensitive=False)
 FailOn = click.Choice(["none", "findings"], case_sensitive=False)
 CheckFailOn = click.Choice(["none", "unproven"], case_sensitive=False)
-VerifierChoice = click.Choice(["builtin", "external", "sqlsolver"], case_sensitive=False)
+VerifierChoice = click.Choice(["builtin", "external", "sqlsolver", "qed"], case_sensitive=False)
 DialectChoice = click.Choice(SUPPORTED_DIALECTS, case_sensitive=False)
 SearchStrategyChoice = click.Choice(
     [

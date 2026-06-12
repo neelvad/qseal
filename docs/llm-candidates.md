@@ -98,3 +98,22 @@ builtin + SQLSolver in the container, 60s timeout):
 
 Proven findings remain advisory until reviewed: equivalence is proven under
 trusted dbt-test premises, and no performance claim is made.
+
+### With QED in the cascade (same corpus, 2026-06-12)
+
+Adding the native QED prover (`--qed`, see `docs/qed-spike.md`) as a third
+phase and merging all three reports:
+
+| Bucket | Count | Rate |
+|---|---|---|
+| proven (233 sqlsolver + 38 qed) | **271** | **67.8%** |
+| bounded_ok | 3 | 0.8% |
+| unknown | 115 | 28.7% |
+| identity | 11 | 2.8% |
+| refuted / invalid / conflict | 0 | 0% |
+
+**243 distinct models** (71% of targeted) now carry at least one formally
+proven rewrite. The QED pass ran natively in minutes; standalone it proved
+264/400 — heavily overlapping SQLSolver's 233 but with complementary wins on
+CTE/projection shapes, while SQLSolver retains exclusive coverage of the
+join-shaped rewrites.

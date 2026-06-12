@@ -178,14 +178,9 @@ def _build_request(
             # VeriEQL silently ignores QUALIFY, which would corrupt verdicts.
             return "VeriEQL does not model QUALIFY."
 
-    schema: dict[str, set[str]] = {}
-    for tree in trees:
-        outcome = _collect_schema(tree, schema, constraints)
-        if outcome is not None:
-            return outcome
-
-    if not schema:
-        return "No base tables found to declare a schema for."
+    schema = collect_pair_schema(trees, constraints)
+    if isinstance(schema, str):
+        return schema
 
     request_constraints, abstention = _build_constraints(schema, constraints)
     if abstention is not None:
@@ -205,6 +200,21 @@ def _build_request(
         "constraints": request_constraints,
         "bound": bound,
     }
+
+
+def collect_pair_schema(
+    trees: list[exp.Expression],
+    constraints: ConstraintCatalog,
+) -> dict[str, set[str]] | str:
+    """Table -> columns for a query pair, or an abstention reason string."""
+    schema: dict[str, set[str]] = {}
+    for tree in trees:
+        outcome = _collect_schema(tree, schema, constraints)
+        if outcome is not None:
+            return outcome
+    if not schema:
+        return "No base tables found to declare a schema for."
+    return schema
 
 
 def _collect_schema(
