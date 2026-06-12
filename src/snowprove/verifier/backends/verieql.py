@@ -180,7 +180,7 @@ def _build_request(
 
     schema: dict[str, set[str]] = {}
     for tree in trees:
-        outcome = _collect_schema(tree, schema)
+        outcome = _collect_schema(tree, schema, constraints)
         if outcome is not None:
             return outcome
 
@@ -207,7 +207,11 @@ def _build_request(
     }
 
 
-def _collect_schema(tree: exp.Expression, schema: dict[str, set[str]]) -> str | None:
+def _collect_schema(
+    tree: exp.Expression,
+    schema: dict[str, set[str]],
+    constraints: ConstraintCatalog,
+) -> str | None:
     """Attribute every column reference to a base table, or return a reason."""
     for scope in traverse_scope(tree):
         for table in scope.tables:
@@ -216,7 +220,7 @@ def _collect_schema(tree: exp.Expression, schema: dict[str, set[str]]) -> str | 
             ):
                 schema.setdefault(table.name, set())
         for column in scope.columns:
-            outcome = _attribute_column(column, scope, schema)
+            outcome = _attribute_column(column, scope, schema, constraints)
             if outcome is not None:
                 return outcome
     return None
@@ -231,6 +235,7 @@ def _attribute_column(
     column: exp.Column,
     scope: Scope,
     schema: dict[str, set[str]],
+    constraints: ConstraintCatalog,
 ) -> str | None:
     if column.table:
         source = scope.sources.get(column.table)
@@ -241,21 +246,45 @@ def _attribute_column(
         if len(sources) == 1:
             source = sources[0]
         else:
-            # Base tables have unknown columns and could define anything;
-            # CTE and derived sources define exactly their projections.
-            candidates = [item for item in sources if _may_define(item, column.name)]
+            candidates = [
+                item for item in sources if _may_define(item, column.name, constraints)
+            ]
             if len(candidates) != 1:
-                return (
-                    f"Unqualified column {column.name!r} is ambiguous across "
-                    f"{len(scope.sources)} relations."
-                )
+                # A second pass: a valid production query has exactly one owner
+                # for an unqualified column, so if exactly one source's base
+                # table *declares* it in the trusted catalog, that source owns
+                # it. Star pass-through CTEs resolve to their base tables.
+                declared = [
+                    item
+                    for item in candidates
+                    if _definitely_defines(item, column.name, constraints)
+                ]
+                if len(declared) == 1:
+                    candidates = declared
+                else:
+                    return (
+                        f"Unqualified column {column.name!r} is ambiguous across "
+                        f"{len(scope.sources)} relations."
+                    )
             source = candidates[0]
 
     return _attribute_to_source(column.name, source, schema)
 
 
-def _may_define(source: exp.Table | Scope, column_name: str) -> bool:
-    if not isinstance(source, Scope):
+def _may_define(
+    source: exp.Table | Scope,
+    column_name: str,
+    constraints: ConstraintCatalog,
+) -> bool:
+    base = _base_table(source)
+    if base is not None:
+        # A base table with a declared column list cannot define columns
+        # outside it; tables unknown to the catalog could define anything.
+        table = constraints.table(base.name)
+        if table is not None and table.columns:
+            return column_name in table.columns
+        return True
+    if isinstance(source, exp.Table):
         return True
     body = source.expression
     if not isinstance(body, exp.Select):
@@ -263,6 +292,48 @@ def _may_define(source: exp.Table | Scope, column_name: str) -> bool:
     if any(isinstance(projection, exp.Star) for projection in body.expressions):
         return True
     return column_name in body.named_selects
+
+
+def _base_table(source: exp.Table | Scope) -> exp.Table | None:
+    """Resolve a source to its base table, following star pass-through CTEs."""
+    seen = 0
+    while isinstance(source, Scope):
+        body = source.expression
+        if not _is_star_passthrough_body(body):
+            return None
+        inner = body.args["from_"].this
+        next_source = source.sources.get(inner.alias_or_name)
+        if next_source is None:
+            return inner if isinstance(inner, exp.Table) else None
+        source = next_source
+        seen += 1
+        if seen > 16:
+            return None
+    return source if isinstance(source, exp.Table) else None
+
+
+def _definitely_defines(
+    source: exp.Table | Scope,
+    column_name: str,
+    constraints: ConstraintCatalog,
+) -> bool:
+    """True when the source is positively known to define the column.
+
+    A CTE or derived table with explicit projections defines exactly those
+    names. A base table (directly or behind star pass-throughs) defines a
+    column when the trusted catalog declares it.
+    """
+    if isinstance(source, Scope):
+        body = source.expression
+        if isinstance(body, exp.Select) and not any(
+            isinstance(projection, exp.Star) for projection in body.expressions
+        ):
+            return column_name in body.named_selects
+    base = _base_table(source)
+    if base is None:
+        return False
+    table = constraints.table(base.name)
+    return table is not None and column_name in table.columns
 
 
 def _attribute_to_source(

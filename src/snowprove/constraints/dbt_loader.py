@@ -23,8 +23,13 @@ def load_dbt_constraints(path: Path) -> ConstraintCatalog:
                 continue
 
             test_names = {_test_name(test) for test in column.get("tests", []) or []}
-            if "not_null" in test_names:
-                columns[column_name] = ColumnConstraint(nullable=False)
+            # Every declared column is recorded; nullable stays unknown unless
+            # a not_null test makes it trusted. Declared column lists let
+            # downstream consumers (solver schemas, column attribution) know
+            # which table owns a column.
+            columns[column_name] = ColumnConstraint(
+                nullable=False if "not_null" in test_names else None
+            )
             if "unique" in test_names:
                 unique.append((column_name,))
 
