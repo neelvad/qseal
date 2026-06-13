@@ -976,3 +976,27 @@ Next, in rough priority:
   trust gate on machine-generated SQL from any NL2SQL system. Caveat: our
   provers cover a fragment of SQL; arbitrary BIRD/NL2SQL queries exceed it,
   so this is partial adjudication, strongest as a false-positive catcher.
+
+## Parser Coverage Findings (2026-06-13)
+
+Mapped parse blockers among Jinja-clean, premise-bearing models across both
+corpora. GitLab already parses ~90% of them; Mattermost only ~46% (its
+premise-bearing tables feed join/aggregate-heavy marts). Done: non-SELECT
+(UNION) CTE tolerance in fragment enumeration (commit aeb6778, +16 targets,
+the single largest cross-corpus blocker). Remaining levers, in rough ROI
+order, all incremental (parser coverage has bounded juice since GitLab is
+near-saturated):
+
+- **Ordinal/expression GROUP BY** (`group by 1, 2`) - top Mattermost blocker
+  (~7); needs group-key representation beyond ColumnRef. For the LLM path
+  only target-selection parsing is needed (provers handle aggregates).
+- **Column-to-column / expression WHERE predicates** (~14 GitLab) -
+  `_comparison` currently requires column-to-literal.
+- **Join-heavy marts** (the real Mattermost gap) - parser join support is
+  narrow (INNER/LEFT, col=col ON, mostly single-join). Substantial work;
+  the structural reason Mattermost target yield is low.
+- Recursive CTEs (~5), broader EXISTS (~4) - low frequency.
+
+Net: the union-CTE fix was the clean high-ROI item; the rest are a long
+tail. Bigger breadth unlock is join-parser coverage, which is a project, not
+a patch.
