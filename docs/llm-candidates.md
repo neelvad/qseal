@@ -154,3 +154,43 @@ wall-clock** across 40 containers (~$0.30 of compute; the one-time image
 build takes ~15 minutes and is cached). The single Modal pass proved 276 -
 within six of the four-pass accumulated local total - with zero conflicts
 against any local verdict.
+
+## Second Corpus: Mattermost (breadth check, 2026-06-13)
+
+Ran the full pipeline unmodified on `mattermost/mattermost-data-warehouse`
+(`transform/mattermost-analytics`, 254 models, Snowflake, 287 unique +
+206 not_null tests) to test generalization beyond GitLab.
+
+What generalized cleanly:
+
+- **The pipeline runs unchanged** on a second company's Snowflake dbt
+  project: scan, generate (Batches), three-prover verify, DuckDB Tier-1,
+  Snowflake Tier-2 EXPLAIN, all without code changes.
+- **Soundness generalizes hard: 0 refuted across both corpora (0 / 406
+  candidates).** Premise-targeted generation produced no detectably wrong
+  SQL on either codebase.
+- The two proven Mattermost rewrites reproduced both ends of the
+  benefit axis at once: `fct_events_daily_snapshot` is proven AND drops a
+  Snowflake aggregate AND runs 1.23x on DuckDB; `int_legacy_licenses_deduped`
+  is proven but adds work on Snowflake (the suppress case).
+
+What did *not* transfer, and why it matters:
+
+- **Target yield is dbt-project-style-dependent.** Only 10 of 254 models
+  (4%) are parseable-and-premise-bearing, versus GitLab's ~341 of 2206
+  (15%). GitLab's simple `*_xf` transform models read directly from tested
+  tables; Mattermost's simple models are thin staging over *untested* raw
+  sources, while its premise-bearing tables feed join-heavy marts that do
+  not parse. Of 90 parseable models, only 3 reference a constrained table.
+- **Proven rate among candidates dropped (2/6 vs GitLab 0.70)** but the
+  gap is fully explained by known limitations, not method failure: 3 of 4
+  unknowns are the schema-attribution gap (ambiguous columns across
+  multi-source scopes), 1 is QUALIFY. Zero were refuted or unprovable for
+  novel reasons.
+
+Conclusion: operational and soundness generalization are confirmed; the
+binding constraint on breadth is parser/attribution coverage of
+join-and-aggregate-heavy models, not corpus availability. A second corpus
+helps only where its *simple* models read from *tested* tables - which is a
+property of project style, not project size. This reprioritizes manifest
+ingestion and join/aggregate parser coverage over corpus hunting.
