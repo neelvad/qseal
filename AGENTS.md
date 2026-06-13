@@ -926,3 +926,21 @@ Next, in rough priority:
    gate: safe and beneficial are different axes), wider corpora.
 4. Parked: counterexample-guided repair (0 refuted = nothing to
    repair), RL track, full witness rendering in the VeriEQL driver.
+
+## Future Research Notes (2026-06-12)
+
+- **Extend QED toward SQLSolver's coverage.** QED (Rust core, MIT) cannot
+  prove the join-shaped rewrites SQLSolver handles (unused LEFT JOIN
+  elimination, JOIN+DISTINCT to EXISTS). Rather than porting SQLSolver
+  (Apache-2.0, so a port is legal), consider contributing the missing
+  reasoning to QED's prover, or rebuilding SQLSolver against arm64 Z3
+  bindings to escape the x86 container. Any port/extension validates via
+  the existing differential harness (multi-prover cross-checks, execution
+  grounding on random premise-satisfying databases) and, ideally,
+  certificate emission with an independent checker.
+- **SATNet-style soft-equivalence ranking layer (research).** A
+  differentiable relaxed-equivalence scorer (e.g. SDP relaxation a la
+  SATNet, or smooth agreement over sampled databases) used purely to rank
+  candidates before the exact provers run. Differentiable where it helps,
+  sound where it counts: the exact cascade remains the gate. Relaxations
+  must never replace the verification gate (unsound by construction).
