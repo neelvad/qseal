@@ -944,3 +944,19 @@ Next, in rough priority:
   candidates before the exact provers run. Differentiable where it helps,
   sound where it counts: the exact cascade remains the gate. Relaxations
   must never replace the verification gate (unsound by construction).
+
+## Backlog (2026-06-12)
+
+- **dbt manifest/catalog ingestion** (`--manifest target/manifest.json`).
+  A deployment-readiness feature, not an eval-number mover: real dbt
+  projects ship `target/manifest.json` (full compiled column lineage) and
+  optionally `catalog.json` (real warehouse column types). Ingesting these
+  replaces schema reconstruction from `schema.yml` tests and subsumes all
+  three "attribution" sub-problems at once — column ambiguity, missing
+  relations, and synthetic-DDL type errors. The current eval mirror is
+  source-only (no manifest), which is exactly why we hit these gaps;
+  measured ceiling of fixing attribution on GitLab alone is only ~3-5% of
+  the proven count, so this waits for a real second corpus / deployment.
+- **FLATTEN output schema** in the scope-walker (fixed cols seq/key/path/
+  index/value/this) — sound, general, but low yield (most targets die at
+  the prover on FLATTEN anyway).
