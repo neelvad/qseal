@@ -63,3 +63,40 @@ may matter on a billed, distributed warehouse and vice versa.
   data.
 - **Tier 3 (design partner):** the benchmark harness against a real
   warehouse with real distributions.
+
+## Tier 2: Snowflake EXPLAIN plan diffing (first sweep, 2026-06-12)
+
+`scripts/explain_proven_candidates.py` replays extracted schemas as empty
+tables in a trial-account scratch database (`SNOWPROVE_TIER2`) and diffs
+`EXPLAIN USING JSON` operator profiles for each proven pair. EXPLAIN is
+compile-only: no warehouse runtime, effectively free. Empty tables do not
+collapse plans (verified: DISTINCT still produces an Aggregate node).
+
+| Verdict (282 pairs) | Count |
+|---|---|
+| no_plan_change | 262 |
+| work_eliminated (a table scan dropped) | 3 |
+| work_added | 4 |
+| error (schema/identifier gaps) | 13 |
+
+Findings:
+
+- **Snowflake's compiler normalizes away most generic restructurings.**
+  CTE inlining and similar rewrites produce byte-identical plans - e.g. the
+  pass-through-CTE eliminations that measured 1.9x on DuckDB (which
+  materializes multi-referenced CTEs) are plan-no-ops on Snowflake. The
+  DuckDB-faster set and the Snowflake-improved set do not overlap at all.
+  Performance value is engine-specific; rank findings per target engine.
+- This strengthens the original thesis: rewrites the optimizer can already
+  do are compiled away; the durable value is premise-enabled rewrites the
+  engine cannot see. The three scan-eliminations are exactly that shape.
+- The four work_added pairs (including the added-DISTINCT candidate) are
+  the suppress list.
+- The 13 errors include the strongest known DISTINCT-removal pairs, blocked
+  by schema-attribution gaps in the replayed DDL - attribution is now the
+  highest-leverage improvement across verification, benchmarking, and plan
+  diffing alike.
+
+Caveat: empty-table plans show compile-time structure only; stats-driven
+effects (pruning, join strategies) need loaded data, and execution timings
+need Tier 3.
