@@ -960,3 +960,19 @@ Next, in rough priority:
 - **FLATTEN output schema** in the scope-walker (fixed cols seq/key/path/
   index/value/this) — sound, general, but low yield (most targets die at
   the prover on FLATTEN anyway).
+
+## Future Product Direction (2026-06-13)
+
+- **Formal equivalence as a text-to-SQL trust/eval layer.** The NL2SQL
+  field (BIRD benchmark, Gemini-SQL2 at 80% on 2026-06-12) scores
+  correctness by execution accuracy - run predicted vs gold SQL on one DB,
+  compare result sets. This is unsound (the FLEX paper found BIRD EX agrees
+  with human experts only ~62% of the time, ~38% wrong, mostly false
+  negatives). Snowprove's prover/refuter cascade is the sound replacement:
+  prove the predicted query equivalent to the gold query, or refute with a
+  counterexample database. Use cases: (1) a sounder text-to-SQL eval metric
+  for the supported SQL fragment (formal where possible, bounded-refute
+  elsewhere, fall back to execution only as a last resort); (2) a runtime
+  trust gate on machine-generated SQL from any NL2SQL system. Caveat: our
+  provers cover a fragment of SQL; arbitrary BIRD/NL2SQL queries exceed it,
+  so this is partial adjudication, strongest as a false-positive catcher.
