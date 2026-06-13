@@ -7,7 +7,9 @@ from rich.console import Console
 from snowprove.benchmark import BenchmarkStatus, benchmark_query_pair
 from snowprove.candidates.bundle import load_candidate_metadata
 from snowprove.candidates.generation import generate_candidates
+from snowprove.candidates.verification import merge_reports, verify_bundles
 from snowprove.constraints.loader import load_constraint_catalog
+from snowprove.constraints.model import ConstraintCatalog
 from snowprove.corpora import bundled_corpus_path
 from snowprove.corpus import (
     CorpusRunConfig,
@@ -88,6 +90,8 @@ from snowprove.rewrites.registry import (
 )
 from snowprove.rewrites.subtree import suggest_subtree_rewrites
 from snowprove.verifier.backends import get_verifier_backend
+from snowprove.verifier.backends.qed import QedBackend
+from snowprove.verifier.backends.sqlsolver import SqlSolverBackend
 from snowprove.verifier.backends.verieql import VeriEqlBackend
 from snowprove.verifier.model import VerificationResult
 
@@ -202,6 +206,110 @@ def llm_generate(
         log=lambda message: click.echo(message, err=True),
     )
     click.echo(json.dumps(summary, indent=2))
+
+
+@llm_group.command(name="verify")
+@click.argument("bundles_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="dbt project for constraints (else BUNDLES_DIR/constraints.json).",
+)
+@click.option(
+    "--constraints",
+    "constraints_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Constraint catalog JSON (else BUNDLES_DIR/constraints.json).",
+)
+@click.option("--dialect", type=DialectChoice, default=DEFAULT_DIALECT, show_default=True)
+@click.option("--qed", is_flag=True, help="Run the QED prover (SNOWPROVE_QED_* env vars).")
+@click.option("--solver-command", help="SQLSolver command (typically in the x86 container).")
+@click.option("--solver-timeout", type=int, default=60, show_default=True)
+@click.option(
+    "--verieql-dir",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="VeriEQL checkout for refutation and cross-checks.",
+)
+@click.option("--only", help="Comma-separated model names (for sharded runs).")
+@click.option(
+    "--report-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the verification report JSON here.",
+)
+def llm_verify(
+    bundles_dir: Path,
+    project_path: Path | None,
+    constraints_path: Path | None,
+    dialect: str,
+    qed: bool,
+    solver_command: str | None,
+    solver_timeout: int,
+    verieql_dir: Path | None,
+    only: str | None,
+    report_file: Path | None,
+) -> None:
+    """Verify candidate bundles through the prover/refuter cascade."""
+    constraints = _bundle_constraints(bundles_dir, project_path, constraints_path)
+    result = verify_bundles(
+        bundles_dir,
+        constraints,
+        dialect=dialect,
+        solver=(
+            SqlSolverBackend(solver_command=solver_command, timeout_seconds=solver_timeout)
+            if solver_command
+            else None
+        ),
+        qed=QedBackend(timeout_seconds=solver_timeout) if qed else None,
+        refuter=VeriEqlBackend(verieql_dir=verieql_dir) if verieql_dir else None,
+        only=set(only.split(",")) if only else None,
+        report_file=report_file,
+        log=lambda message: click.echo(message, err=True),
+    )
+    click.echo(
+        json.dumps({"candidates": result["candidate_count"], **result["buckets"]}, indent=2)
+    )
+    for alarm in result["alarms"]:
+        click.echo(f"ALARM: proven candidate refuted: {alarm}")
+    if result["alarms"]:
+        raise click.exceptions.Exit(1)
+
+
+@llm_group.command(name="merge")
+@click.argument("reports", nargs=-1, type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--report-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the merged report JSON here.",
+)
+def llm_merge(reports: tuple[Path, ...], report_file: Path | None) -> None:
+    """Merge per-prover verification reports into the best verdict per candidate."""
+    if len(reports) < 2:
+        raise click.ClickException("merge requires at least two report files.")
+    result = merge_reports(list(reports), report_file)
+    click.echo(
+        json.dumps({"candidates": result["candidate_count"], **result["buckets"]}, indent=2)
+    )
+    for conflict in result["conflicts"]:
+        click.echo(f"ALARM: prover/refuter conflict on {conflict}")
+    if result["conflicts"]:
+        raise click.exceptions.Exit(1)
+
+
+def _bundle_constraints(
+    bundles_dir: Path,
+    project_path: Path | None,
+    constraints_path: Path | None,
+) -> ConstraintCatalog:
+    if project_path is not None:
+        project = discover_dbt_project(project_path)
+        return _load_project_constraints(project.schema_yml_files)
+    path = constraints_path or (bundles_dir / "constraints.json")
+    if not path.exists():
+        raise click.ClickException(
+            "provide --project or a constraints snapshot (constraints.json)."
+        )
+    return ConstraintCatalog.model_validate_json(path.read_text())
 
 
 @corpus_group.command(name="run")
