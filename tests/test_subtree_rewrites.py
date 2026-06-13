@@ -219,3 +219,31 @@ def test_fragment_pair_uses_resolved_base_tables() -> None:
     assert "FROM source" not in suggestion.fragment_original_sql
     assert "DISTINCT" in suggestion.fragment_original_sql.upper()
     assert "DISTINCT" not in suggestion.fragment_rewritten_sql.upper()
+
+
+def test_fragments_tolerate_non_select_cte():
+    # A UNION CTE must not abort fragment enumeration of the whole model;
+    # the surrounding SELECT CTEs and the outer query stay scannable.
+    sql = """
+    with
+      base as (select id, val from raw_a),
+      merged as (select id from raw_a union select id from raw_b),
+      deduped as (select distinct id from base)
+    select * from deduped
+    """
+    fragments = parse_select_fragments(sql)
+    locations = {f.location: (f.query is not None) for f in fragments}
+    assert locations.get("cte:base") is True
+    assert locations.get("cte:deduped") is True
+    # the UNION CTE is skipped entirely, not emitted as a failed fragment
+    assert "cte:merged" not in locations
+
+
+def test_recursive_with_yields_no_fragments():
+    sql = """
+    with recursive r as (
+      select 1 as n union all select n + 1 from r where n < 5
+    )
+    select * from r
+    """
+    assert parse_select_fragments(sql) == ()

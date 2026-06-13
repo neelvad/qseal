@@ -7,7 +7,6 @@ from snowprove.dialects import DEFAULT_DIALECT, SqlDialect
 from snowprove.ir.model import SelectQuery
 from snowprove.parser.sqlglot_parser import (
     UnsupportedSqlError,
-    _cte_map,
     _parse_select_expression,
 )
 
@@ -38,15 +37,25 @@ def parse_select_fragments(
     """
     parsed = _parse_statement(sql, dialect)
     with_expr = parsed.args.get("with_")
-    if with_expr is None:
+    if with_expr is None or with_expr.args.get("recursive"):
         return ()
 
-    ctes = _cte_map(with_expr)
+    # Tolerant enumeration: a CTE whose body is not a plain SELECT (a UNION,
+    # a duplicate name) is skipped rather than aborting the whole model, so
+    # the other CTE bodies and the outer query remain scannable fragments.
+    # A skipped CTE keeps its name occupied; later fragments that reference it
+    # resolve it as an opaque base-table relation, which is sound for proving
+    # (no trusted premises are attached to it).
     fragments = []
     in_scope: dict[str, exp.Select] = {}
-    for name, body in ctes.items():
-        fragments.append(_fragment(f"cte:{name}", name, body, dict(in_scope), dialect))
-        in_scope[name] = body
+    for cte in with_expr.expressions:
+        if not isinstance(cte, exp.CTE):
+            continue
+        name = cte.alias
+        body = cte.this
+        if isinstance(body, exp.Select) and name not in in_scope:
+            fragments.append(_fragment(f"cte:{name}", name, body, dict(in_scope), dialect))
+            in_scope[name] = body
 
     outer = parsed.copy()
     outer.set("with_", None)
