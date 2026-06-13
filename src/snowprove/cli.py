@@ -6,6 +6,7 @@ from rich.console import Console
 
 from snowprove.benchmark import BenchmarkStatus, benchmark_query_pair
 from snowprove.candidates.bundle import load_candidate_metadata
+from snowprove.candidates.generation import generate_candidates
 from snowprove.constraints.loader import load_constraint_catalog
 from snowprove.corpora import bundled_corpus_path
 from snowprove.corpus import (
@@ -155,6 +156,52 @@ def corpus_group() -> None:
 @main.group(name="policy")
 def policy_group() -> None:
     """Train and evaluate simple rewrite action policies."""
+
+
+@main.group(name="llm")
+def llm_group() -> None:
+    """LLM-generated candidate pipeline: generate, verify, benchmark, explain."""
+
+
+@llm_group.command(name="generate")
+@click.argument("project_path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option(
+    "--out",
+    "out_dir",
+    required=True,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Directory where candidate bundles are written.",
+)
+@click.option("--dialect", type=DialectChoice, default=DEFAULT_DIALECT, show_default=True)
+@click.option("--limit", type=click.IntRange(min=1), help="Only process the first N targets.")
+@click.option("--max-candidates", type=click.IntRange(min=1), default=3, show_default=True)
+@click.option(
+    "--use-batches",
+    is_flag=True,
+    help="Submit via the Anthropic Batches API (half price, for full runs).",
+)
+@click.option("--dry-run", is_flag=True, help="Print prompts without calling the API.")
+def llm_generate(
+    project_path: Path,
+    out_dir: Path,
+    dialect: str,
+    limit: int | None,
+    max_candidates: int,
+    use_batches: bool,
+    dry_run: bool,
+) -> None:
+    """Generate premise-targeted LLM rewrite candidates for a dbt project."""
+    summary = generate_candidates(
+        project_path,
+        out_dir,
+        dialect=dialect,
+        limit=limit,
+        max_candidates=max_candidates,
+        use_batches=use_batches,
+        dry_run=dry_run,
+        log=lambda message: click.echo(message, err=True),
+    )
+    click.echo(json.dumps(summary, indent=2))
 
 
 @corpus_group.command(name="run")
