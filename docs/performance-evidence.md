@@ -21,7 +21,7 @@ measurement where the two sides return different row counts is marked
 mean the synthetic data violated the premises.
 
 ```bash
-uv run python scripts/benchmark_proven_candidates.py \
+uv run snowprove llm benchmark \
   snowprove-runs/llm-candidates/gitlab-full-verification-final.json \
   snowprove-runs/llm-candidates/gitlab-full \
   --report-file bench.json --rows 100000,1000000

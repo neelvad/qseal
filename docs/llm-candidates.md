@@ -7,9 +7,9 @@ The generator proposes; only `PROVEN_EQUIVALENT` survives.
 
 ```bash
 export ANTHROPIC_API_KEY=...
-uv run python scripts/generate_llm_candidates.py PROJECT --out BUNDLES_DIR --limit 5
-uv run python scripts/generate_llm_candidates.py PROJECT --out BUNDLES_DIR --use-batches
-uv run python scripts/generate_llm_candidates.py PROJECT --out BUNDLES_DIR --dry-run
+uv run snowprove llm generate PROJECT --out BUNDLES_DIR --limit 5
+uv run snowprove llm generate PROJECT --out BUNDLES_DIR --use-batches
+uv run snowprove llm generate PROJECT --out BUNDLES_DIR --dry-run
 ```
 
 Targets are models that survive Jinja preprocessing, parse (whole-query or at
@@ -31,16 +31,14 @@ while VeriEQL runs natively on macOS:
 
 ```bash
 # Phase A (macOS): parse -> identity -> builtin -> VeriEQL refute/cross-check
-uv run python scripts/verify_llm_candidates.py BUNDLES_DIR \
-  --project PROJECT --verieql-dir ~/workspace/snowprove-eval/VeriEQL \
-  --report-file report-a.json
+uv run snowprove llm verify BUNDLES_DIR \
+  --verieql-dir ~/workspace/snowprove-eval/VeriEQL --report-file report-a.json
 
 # Phase B (container): parse -> identity -> builtin -> SQLSolver
 scripts/run_llm_verification_sqlsolver.sh BUNDLES_DIR PROJECT report-b.json
 
 # Merge: best verdict per candidate; proven-vs-refuted conflicts alarm
-uv run python scripts/verify_llm_candidates.py \
-  --merge-reports report-a.json report-b.json --report-file final.json
+uv run snowprove llm merge report-a.json report-b.json --report-file final.json
 ```
 
 ## Buckets
@@ -194,3 +192,10 @@ join-and-aggregate-heavy models, not corpus availability. A second corpus
 helps only where its *simple* models read from *tested* tables - which is a
 property of project style, not project size. This reprioritizes manifest
 ingestion and join/aggregate parser coverage over corpus hunting.
+
+## CLI vs scripts
+
+The pipeline is exposed as first-class CLI commands: `snowprove llm
+generate | verify | merge | benchmark | explain`. The `scripts/*.py` files
+are thin shims over the same `snowprove.candidates` package functions, kept
+because the Modal apps and the SQLSolver container wrapper invoke them.

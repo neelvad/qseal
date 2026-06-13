@@ -5,7 +5,9 @@ import click
 from rich.console import Console
 
 from snowprove.benchmark import BenchmarkStatus, benchmark_query_pair
+from snowprove.candidates.benchmarking import benchmark_proven
 from snowprove.candidates.bundle import load_candidate_metadata
+from snowprove.candidates.explain import explain_proven
 from snowprove.candidates.generation import generate_candidates
 from snowprove.candidates.verification import merge_reports, verify_bundles
 from snowprove.constraints.loader import load_constraint_catalog
@@ -310,6 +312,84 @@ def _bundle_constraints(
             "provide --project or a constraints snapshot (constraints.json)."
         )
     return ConstraintCatalog.model_validate_json(path.read_text())
+
+
+@llm_group.command(name="benchmark")
+@click.argument("report_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument("bundles_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option(
+    "--report-file",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the benchmark report JSON here.",
+)
+@click.option("--rows", default="100000,1000000", show_default=True, help="Comma-separated scales.")
+@click.option("--dialect", type=DialectChoice, default=DEFAULT_DIALECT, show_default=True)
+@click.option("--warmups", type=click.IntRange(min=0), default=1, show_default=True)
+@click.option("--repetitions", type=click.IntRange(min=1), default=3, show_default=True)
+@click.option("--timeout", type=click.FloatRange(min=0, min_open=True), default=30.0,
+              show_default=True)
+@click.option("--only", help="Comma-separated model names.")
+def llm_benchmark(
+    report_path: Path,
+    bundles_dir: Path,
+    report_file: Path,
+    rows: str,
+    dialect: str,
+    warmups: int,
+    repetitions: int,
+    timeout: float,
+    only: str | None,
+) -> None:
+    """Tier-1: DuckDB micro-benchmarks for the proven rewrites in a report."""
+    result = benchmark_proven(
+        report_path,
+        bundles_dir,
+        rows=[int(float(scale)) for scale in rows.split(",")],
+        dialect=dialect,
+        warmups=warmups,
+        repetitions=repetitions,
+        timeout=timeout,
+        only=set(only.split(",")) if only else None,
+        report_file=report_file,
+        log=lambda message: click.echo(message, err=True),
+    )
+    click.echo(
+        json.dumps({"measurements": result["measurement_count"], **result["outcomes"]}, indent=2)
+    )
+
+
+@llm_group.command(name="explain")
+@click.argument("report_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument("bundles_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option(
+    "--report-file",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the EXPLAIN-diff report JSON here.",
+)
+@click.option("--dialect", type=DialectChoice, default=DEFAULT_DIALECT, show_default=True)
+@click.option("--only", help="Comma-separated model names.")
+def llm_explain(
+    report_path: Path,
+    bundles_dir: Path,
+    report_file: Path,
+    dialect: str,
+    only: str | None,
+) -> None:
+    """Tier-2: Snowflake EXPLAIN plan diffs for the proven rewrites in a report.
+
+    Requires SNOWFLAKE_ACCOUNT / SNOWFLAKE_USER / SNOWFLAKE_PASSWORD.
+    """
+    result = explain_proven(
+        report_path,
+        bundles_dir,
+        dialect=dialect,
+        only=set(only.split(",")) if only else None,
+        report_file=report_file,
+        log=lambda message: click.echo(message, err=True),
+    )
+    click.echo(json.dumps({"pairs": result["pair_count"], **result["verdicts"]}, indent=2))
 
 
 @corpus_group.command(name="run")
