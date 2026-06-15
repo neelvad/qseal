@@ -115,19 +115,15 @@ def check_equivalence(
 
 
 def _same_normalized_query(left: SelectQuery, right: SelectQuery) -> bool:
-    return (
-        left.table == right.table
-        and left.table_sql == right.table_sql
-        and left.table_alias == right.table_alias
-        and left.subquery == right.subquery
-        and left.alias == right.alias
-        and left.joins == right.joins
-        and left.projections == right.projections
-        and left.predicates == right.predicates
-        and left.group_by == right.group_by
-        and left.having == right.having
-        and left.distinct == right.distinct
-        and left.dialect == right.dialect
+    # Compare every semantic IR field via full structural equality, blanking only
+    # the non-semantic ``raw_sql`` provenance string (which always differs between
+    # a rule's rendered output and the candidate it is checked against). Enumerating
+    # fields by hand here is a soundness hazard: any field omitted from the
+    # comparison -- as ``qualify`` once was -- lets a row-changing difference slip
+    # through as PROVEN_EQUIVALENT. Comparing whole models means a newly added
+    # SelectQuery field is included automatically.
+    return left.model_copy(update={"raw_sql": ""}) == right.model_copy(
+        update={"raw_sql": ""}
     )
 
 
@@ -141,18 +137,14 @@ def _parse_expected(sql: str, fallback: SelectQuery) -> SelectQuery:
 
 
 def _is_distinct_removal(original: SelectQuery, rewritten: SelectQuery) -> bool:
-    return (
-        original.distinct
-        and not rewritten.distinct
-        and original.table == rewritten.table
-        and original.table_sql == rewritten.table_sql
-        and original.table_alias == rewritten.table_alias
-        and original.subquery == rewritten.subquery
-        and original.joins == rewritten.joins
-        and original.projections == rewritten.projections
-        and original.predicates == rewritten.predicates
-        and original.group_by == rewritten.group_by
-        and original.having == rewritten.having
+    # A clean DISTINCT removal means the rewrite is identical to the original with
+    # only the DISTINCT flag dropped. Comparing the original-without-DISTINCT to the
+    # candidate over the full IR (including qualify) ensures a rewrite that also
+    # drops a QUALIFY or any other row-affecting clause is not mistaken for one.
+    if not (original.distinct and not rewritten.distinct):
+        return False
+    return _same_normalized_query(
+        original.model_copy(update={"distinct": False}), rewritten
     )
 
 

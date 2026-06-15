@@ -210,3 +210,70 @@ def test_check_compares_having_predicates_for_identity() -> None:
     result = check_equivalence(original, rewritten, ConstraintCatalog())
 
     assert result.status == VerificationStatus.UNKNOWN
+
+
+# --- QUALIFY soundness: a rewrite that drops a QUALIFY changes which rows are
+# returned and must never be proven equivalent, even when an unrelated rule
+# (DISTINCT removal, not-null filter removal) would otherwise apply. ---
+
+_USERS_NON_NULL_UNIQUE = ConstraintCatalog(
+    tables={
+        "users": TableConstraints(
+            columns={"user_id": {"nullable": False}, "email": {"nullable": False}},
+            unique=[("user_id",)],
+        )
+    }
+)
+
+
+def test_check_does_not_prove_distinct_removal_that_also_drops_qualify() -> None:
+    original = parse_select(
+        "SELECT DISTINCT user_id FROM users "
+        "QUALIFY ROW_NUMBER() OVER (ORDER BY ts) = 1"
+    )
+    rewritten = parse_select("SELECT user_id FROM users")
+
+    result = check_equivalence(original, rewritten, _USERS_NON_NULL_UNIQUE)
+
+    assert result.status == VerificationStatus.UNKNOWN
+
+
+def test_check_does_not_prove_not_null_removal_that_also_drops_qualify() -> None:
+    original = parse_select(
+        "SELECT user_id FROM users WHERE email IS NOT NULL "
+        "QUALIFY ROW_NUMBER() OVER (ORDER BY ts) = 1"
+    )
+    rewritten = parse_select("SELECT user_id FROM users")
+
+    result = check_equivalence(original, rewritten, _USERS_NON_NULL_UNIQUE)
+
+    assert result.status == VerificationStatus.UNKNOWN
+
+
+def test_check_does_not_prove_identity_that_drops_qualify() -> None:
+    original = parse_select(
+        "SELECT user_id FROM users QUALIFY ROW_NUMBER() OVER (ORDER BY ts) = 1"
+    )
+    rewritten = parse_select("SELECT user_id FROM users")
+
+    result = check_equivalence(original, rewritten, _USERS_NON_NULL_UNIQUE)
+
+    assert result.status == VerificationStatus.UNKNOWN
+
+
+def test_check_proves_distinct_removal_with_matching_qualify() -> None:
+    # When the QUALIFY is identical on both sides, DISTINCT removal over a
+    # non-null unique key is still sound: the window filter selects the same
+    # subset and a unique key stays unique within any subset.
+    original = parse_select(
+        "SELECT DISTINCT user_id FROM users "
+        "QUALIFY ROW_NUMBER() OVER (ORDER BY ts) = 1"
+    )
+    rewritten = parse_select(
+        "SELECT user_id FROM users QUALIFY ROW_NUMBER() OVER (ORDER BY ts) = 1"
+    )
+
+    result = check_equivalence(original, rewritten, _USERS_NON_NULL_UNIQUE)
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "remove_redundant_distinct"

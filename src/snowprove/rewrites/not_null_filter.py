@@ -114,7 +114,9 @@ class RemoveRedundantNotNullFilter:
         redundant_indexes = tuple(
             index
             for index, predicate in enumerate(query.predicates)
-            if _is_trusted_not_null_predicate(predicate, query.table_alias, table)
+            if _is_trusted_not_null_predicate(
+                predicate, query.table_alias, table_name, table
+            )
         )
         if not redundant_indexes:
             return RewriteSuggestion(
@@ -157,7 +159,9 @@ def _redundant_predicate_context(
     redundant_indexes = tuple(
         index
         for index, predicate in enumerate(query.predicates)
-        if _is_trusted_not_null_predicate(predicate, query.table_alias, table)
+        if _is_trusted_not_null_predicate(
+            predicate, query.table_alias, table_name, table
+        )
     )
     if not redundant_indexes:
         return None
@@ -167,14 +171,23 @@ def _redundant_predicate_context(
 def _is_trusted_not_null_predicate(
     predicate: Predicate,
     table_alias: str | None,
+    table_name: str,
     table,
 ) -> bool:
     if not isinstance(predicate, Predicate):
         return False
     if predicate.operator != "IS NOT NULL":
         return False
-    if predicate.left.table is not None and predicate.left.table != table_alias:
-        return False
+    # A table-qualified predicate (``users.email IS NOT NULL``) must refer to this
+    # query's single source. When the source is aliased the only valid prefix is
+    # the alias; when it is not, the table name (or its final identifier) is valid.
+    if predicate.left.table is not None:
+        if table_alias is not None:
+            valid_prefixes = {table_alias}
+        else:
+            valid_prefixes = {table_name, table_name.split(".")[-1]}
+        if predicate.left.table not in valid_prefixes:
+            return False
 
     column = table.columns.get(predicate.left.name)
     return column is not None and column.nullable is False
