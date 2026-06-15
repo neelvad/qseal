@@ -1,0 +1,37 @@
+name: "Snowprove dbt scan"
+description: "Comment proven-safe SQL rewrites on changed dbt models."
+branding:
+  icon: "check-circle"
+  color: "blue"
+
+inputs:
+  project:
+    description: "Path to the dbt project (contains models/)."
+    required: false
+    default: "."
+  base-ref:
+    description: "Scan only models changed versus this git ref (e.g. origin/main). Empty scans all."
+    required: false
+    default: ""
+  fail-on:
+    description: "Set to 'findings' to fail the check when proven rewrites are found."
+    required: false
+    default: "none"
+  comment:
+    description: "Post or update a PR comment with the findings."
+    required: false
+    default: "true"
+  dialect:
+    description: "SQL dialect (snowflake or duckdb)."
+    required: false
+    default: "snowflake"
+
+runs:
+  using: "docker"
+  image: "docker/action.Dockerfile"
+  env:
+    INPUT_PROJECT: ${{ inputs.project }}
+    INPUT_BASE_REF: ${{ inputs.base-ref }}
+    INPUT_FAIL_ON: ${{ inputs.fail-on }}
+    INPUT_COMMENT: ${{ inputs.comment }}
+    INPUT_DIALECT: ${{ inputs.dialect }}
