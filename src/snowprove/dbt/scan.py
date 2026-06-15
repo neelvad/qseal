@@ -116,12 +116,20 @@ def scan_dbt_project(
     include_all: bool = False,
     compiled_path: Path | None = None,
     dialect: SqlDialect = DEFAULT_DIALECT,
+    only_paths: set[Path] | None = None,
 ) -> DbtScanResult:
     project = discover_dbt_project(project_path, compiled_path=compiled_path)
     constraints = _load_project_constraints(project.schema_yml_files)
-    results = []
 
-    for model_path in project.model_sql_files:
+    model_paths = project.model_sql_files
+    if only_paths is not None:
+        wanted = {path.resolve() for path in only_paths}
+        model_paths = tuple(
+            path for path in model_paths if path.resolve() in wanted
+        )
+
+    results = []
+    for model_path in model_paths:
         suggestions = _scan_model(model_path, constraints, rules, include_all, dialect)
         if suggestions:
             source_sql = model_path.read_text()
@@ -142,7 +150,7 @@ def scan_dbt_project(
     return DbtScanResult(
         project_path=project_path,
         dialect=dialect,
-        model_count=len(project.model_sql_files),
+        model_count=len(model_paths),
         results=tuple(results),
     )
 

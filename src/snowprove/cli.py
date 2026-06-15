@@ -30,6 +30,7 @@ from snowprove.corpus import (
     write_corpus_aggregate,
     write_corpus_summary,
 )
+from snowprove.dbt.git_diff import GitDiffError, changed_model_paths
 from snowprove.dbt.project import (
     DbtProjectDiscoveryError,
     discover_compiled_sql_path,
@@ -1906,6 +1907,12 @@ def benchmark(
     help="Auto-discover and scan compiled SQL under target/compiled/.",
 )
 @click.option(
+    "--changed-since",
+    "changed_since",
+    metavar="GIT_REF",
+    help="Scan only model SQL files changed versus this git ref (for CI).",
+)
+@click.option(
     "--dialect",
     type=DialectChoice,
     default=DEFAULT_DIALECT,
@@ -1924,6 +1931,7 @@ def dbt_scan(
     patch_dir: Path | None,
     apply_patches: bool,
     use_compiled: bool,
+    changed_since: str | None,
     dialect: str,
 ) -> None:
     """Scan dbt model SQL files for verified rewrite opportunities."""
@@ -1939,6 +1947,15 @@ def dbt_scan(
         raise click.ClickException("--apply-patches and --write-patches cannot be used together.")
     if compiled_path is not None and use_compiled:
         raise click.ClickException("--compiled-dir and --use-compiled cannot be used together.")
+    if changed_since is not None and (use_compiled or compiled_path is not None):
+        raise click.ClickException("--changed-since scans source models, not compiled SQL.")
+
+    only_paths: set[Path] | None = None
+    if changed_since is not None:
+        try:
+            only_paths = changed_model_paths(project_path, changed_since)
+        except GitDiffError as error:
+            raise click.ClickException(str(error)) from error
 
     try:
         if use_compiled:
@@ -1949,6 +1966,7 @@ def dbt_scan(
             include_all=show_all,
             compiled_path=compiled_path,
             dialect=dialect,
+            only_paths=only_paths,
         )
     except DbtProjectDiscoveryError as error:
         raise click.ClickException(str(error)) from error
