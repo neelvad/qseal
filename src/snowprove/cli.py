@@ -72,6 +72,7 @@ from snowprove.report.json import (
     render_suggestions_json,
     render_verification_json,
 )
+from snowprove.report.markdown import render_dbt_scan_markdown
 from snowprove.report.patch import apply_dbt_scan_patches, write_dbt_scan_patch_results
 from snowprove.report.text import (
     render_candidate_verifications_report,
@@ -101,6 +102,7 @@ from snowprove.verifier.model import VerificationResult
 console = Console()
 
 OutputFormat = click.Choice(["text", "json"], case_sensitive=False)
+ScanFormat = click.Choice(["text", "json", "markdown"], case_sensitive=False)
 SchemaFormat = click.Choice(["auto", "snowprove", "dbt"], case_sensitive=False)
 RuleChoice = click.Choice(rule_names(), case_sensitive=False)
 FailOn = click.Choice(["none", "findings"], case_sensitive=False)
@@ -1861,7 +1863,7 @@ def benchmark(
 @click.option(
     "--format",
     "output_format",
-    type=OutputFormat,
+    type=ScanFormat,
     default="text",
     show_default=True,
     help="Output format.",
@@ -1935,11 +1937,11 @@ def dbt_scan(
     dialect: str,
 ) -> None:
     """Scan dbt model SQL files for verified rewrite opportunities."""
-    if show_diff and output_format == "json":
+    if show_diff and output_format != "text":
         raise click.ClickException("--diff is only supported with --format text.")
-    if patch_dir is not None and output_format == "json":
+    if patch_dir is not None and output_format != "text":
         raise click.ClickException("--write-patches is only supported with --format text.")
-    if apply_patches and output_format == "json":
+    if apply_patches and output_format != "text":
         raise click.ClickException("--apply-patches is only supported with --format text.")
     if apply_patches and show_all:
         raise click.ClickException("--apply-patches cannot be used with --all.")
@@ -1979,6 +1981,8 @@ def dbt_scan(
 
     if output_format == "json":
         click.echo(json_report)
+    elif output_format == "markdown":
+        click.echo(render_dbt_scan_markdown(result))
     elif show_diff:
         click.echo(render_dbt_scan_diff_report(result))
     else:
