@@ -13,6 +13,7 @@ from qseal.corpus import (
 )
 from qseal.corpus.trajectories import load_corpus_trajectory_records
 from qseal.policy import (
+    STOP_ACTION_ID,
     PolicyDataFilter,
     compare_policy_holdouts,
     evaluate_baseline_policy,
@@ -24,6 +25,8 @@ from qseal.policy import (
     train_linear_policy,
 )
 from qseal.policy.baseline import (
+    BaselinePolicyModel,
+    FeatureStat,
     PolicyHoldoutEvaluation,
     render_baseline_policy_inspection,
     render_policy_holdout_evaluation,
@@ -177,7 +180,7 @@ def test_linear_policy_trains_and_evaluates_choice_states(tmp_path) -> None:
     filtered_model = train_linear_policy(
         trajectory_path,
         epochs=3,
-        training_margin=0.25,
+        training_margin=0.35,
     )
     evaluation = evaluate_baseline_policy(trajectory_path, model)
     inspection = inspect_baseline_policy(trajectory_path, model, mode="all")
@@ -210,9 +213,9 @@ def test_linear_policy_trains_and_evaluates_choice_states(tmp_path) -> None:
     assert evaluation.correct_count == 1
     assert evaluation.accuracy == 1.0
     assert inspection.rows[0].predicted_action_id == second_predicate
-    assert filtered_model.training_margin == 0.25
+    assert filtered_model.training_margin == 0.35
     assert filtered_model.update_count == 0
-    assert filtered_model.skipped_preference_count == 3
+    assert filtered_model.skipped_preference_count == 6
     assert filtered_model.feature_weights == ()
 
 
@@ -266,6 +269,7 @@ def test_linear_policy_can_skip_unknown_reward_preferences(tmp_path) -> None:
     )
     group_key = (
         "action_set="
+        "__stop__+"
         "remove_redundant_distinct::query:distinct+"
         "remove_redundant_not_null_filter::predicate:0 | table=table:none"
     )
@@ -278,15 +282,15 @@ def test_linear_policy_can_skip_unknown_reward_preferences(tmp_path) -> None:
 
     assert model.choice_state_count == 1
     assert model.unknown_preference_scale == 0.0
-    assert model.update_count == 0
+    assert model.update_count == 3
     assert model.skipped_unknown_preference_count == 3
-    assert model.feature_weights == ()
+    assert model.feature_weights
     assert group_skipped_model.unknown_preference_scale == 1.0
     assert group_skipped_model.unknown_preference_group_by == ("action_set", "table")
     assert group_skipped_model.unknown_preference_group_scales == {group_key: 0.0}
-    assert group_skipped_model.update_count == 0
+    assert group_skipped_model.update_count == 3
     assert group_skipped_model.skipped_unknown_preference_count == 3
-    assert group_skipped_model.feature_weights == ()
+    assert group_skipped_model.feature_weights
     assert not_null_action in next(
         record.available_action_ids
         for record in load_corpus_trajectory_records(trajectory_path)
@@ -420,13 +424,142 @@ def test_baseline_policy_inspection_reports_misses_and_unacceptable_rows(tmp_pat
     assert misses.row_count == 1
     assert misses.rows[0].task_id == task.definition.task_id
     assert misses.rows[0].oracle_action_id == not_null_action
-    assert misses.rows[0].predicted_action_id == distinct_action
+    assert misses.rows[0].predicted_action_id == STOP_ACTION_ID
     assert misses.rows[0].reward_gap is not None
-    assert abs(misses.rows[0].reward_gap - 0.2) < 0.000001
-    assert set(misses.rows[0].action_scores) == {distinct_action, not_null_action}
+    assert abs(misses.rows[0].reward_gap - 0.3) < 0.000001
+    assert set(misses.rows[0].action_scores) == {
+        distinct_action,
+        not_null_action,
+        STOP_ACTION_ID,
+    }
     assert acceptable.row_count == 0
     assert "Baseline policy inspection" in rendered
-    assert "Reward gap: 0.200000" in rendered
+    assert "Reward gap: 0.300000" in rendered
+
+
+def test_policy_evaluation_accepts_endpoint_equivalent_ordering(tmp_path) -> None:
+    corpus = load_task_corpus(bundled_corpus_path())
+    task = corpus.task("distinct-and-not-null")
+    trajectory_path = tmp_path / "trajectories.jsonl"
+    distinct_action = "remove_redundant_distinct::query:distinct"
+    not_null_action = "remove_redundant_not_null_filter::predicate:0"
+    final_sql = "SELECT user_id\nFROM users;"
+    export_corpus_trajectories(
+        CorpusRunReport(
+            generated_at=datetime.now(UTC),
+            corpus_id=corpus.manifest.corpus_id,
+            corpus_version=corpus.manifest.corpus_version,
+            corpus_fingerprint=corpus.fingerprint,
+            config=CorpusRunConfig(strategies=("fixed_order", "greedy")),
+            environment=CorpusRunEnvironment(
+                python_version="test",
+                duckdb_version="test",
+                platform="test",
+            ),
+            tasks=(
+                CorpusTaskRun(
+                    task_id=task.definition.task_id,
+                    task_fingerprint=task.fingerprint,
+                    fixture_id=task.fixture.fixture_id,
+                    enabled_rules=task.definition.enabled_rules,
+                    tags=task.definition.tags,
+                    results=(
+                        _two_step_result(
+                            "fixed_order",
+                            task.definition.task_id,
+                            task.environment_task.sql,
+                            distinct_action,
+                            "SELECT user_id\nFROM users\nWHERE user_id IS NOT NULL;",
+                            not_null_action,
+                            final_sql,
+                            first_reward=0.1,
+                            second_reward=0.1,
+                        ),
+                        _two_step_result(
+                            "greedy",
+                            task.definition.task_id,
+                            task.environment_task.sql,
+                            not_null_action,
+                            "SELECT DISTINCT user_id\nFROM users;",
+                            distinct_action,
+                            final_sql,
+                            first_reward=0.6,
+                            second_reward=0.2,
+                        ),
+                    ),
+                ),
+            ),
+            strategy_summaries=(),
+        ),
+        corpus,
+        trajectory_path,
+    )
+    model = BaselinePolicyModel(
+        generated_at=datetime.now(UTC),
+        state_count=1,
+        labeled_state_count=1,
+        feature_stats=(
+            FeatureStat(
+                feature=f"action:{distinct_action}",
+                appearances=1,
+                oracle_count=1,
+                win_rate=1.0,
+            ),
+        ),
+        default_score=0.0,
+    )
+    inspection = inspect_baseline_policy(
+        trajectory_path,
+        model,
+        data_filter=PolicyDataFilter(include_tasks=(task.definition.task_id,)),
+        mode="all",
+    )
+
+    initial_row = next(
+        row
+        for row in inspection.rows
+        if row.step_index == 0 and row.state_sql == task.environment_task.sql
+    )
+    assert initial_row.oracle_action_id == not_null_action
+    assert initial_row.predicted_action_id == distinct_action
+    assert initial_row.endpoint_equivalent is True
+    assert initial_row.acceptable is True
+
+
+def test_stop_margin_can_make_noop_the_offline_oracle(tmp_path) -> None:
+    corpus = load_task_corpus(bundled_corpus_path())
+    task = corpus.task("distinct-and-not-null")
+    trajectory_path = tmp_path / "trajectories.jsonl"
+    distinct_action = "remove_redundant_distinct::query:distinct"
+    not_null_action = "remove_redundant_not_null_filter::predicate:0"
+    export_corpus_trajectories(
+        _report(
+            corpus,
+            task.definition.task_id,
+            task.fingerprint,
+            task.fixture.fixture_id,
+            task.definition.enabled_rules,
+            task.definition.tags,
+            task.environment_task.sql,
+            distinct_action,
+            not_null_action,
+            first_reward=0.01,
+            second_reward=0.03,
+        ),
+        corpus,
+        trajectory_path,
+    )
+
+    model = train_baseline_policy(trajectory_path, stop_margin=0.05)
+    evaluation = evaluate_baseline_policy(
+        trajectory_path,
+        model,
+        stop_margin=0.05,
+    )
+
+    assert model.stop_margin == 0.05
+    assert evaluation.correct_count == 1
+    assert evaluation.per_oracle_rule[0].rule_name == STOP_ACTION_ID
 
 
 def test_renders_policy_holdout_evaluation(tmp_path) -> None:
@@ -616,17 +749,17 @@ def test_policy_label_inspection_groups_train_holdout_disagreements(tmp_path) ->
     rendered = render_policy_label_inspection(inspection)
 
     assert inspection.artifact_type == "policy_label_inspection"
-    assert inspection.train_preference_count == 1
-    assert inspection.holdout_preference_count == 1
-    assert inspection.train_preferences == {distinct_action: 1}
-    assert inspection.holdout_preferences == {not_null_action: 1}
+    assert inspection.train_preference_count == 2
+    assert inspection.holdout_preference_count == 2
+    assert inspection.train_preferences == {distinct_action: 2}
+    assert inspection.holdout_preferences == {not_null_action: 2}
     assert inspection.disagreement_group_count == 1
     assert inspection.train_only_group_count == 0
     assert inspection.holdout_only_group_count == 0
     assert inspection.groups[0].coverage_status == "matched"
-    assert inspection.groups[0].disagreement_count == 1
-    assert inspection.groups[0].train_preferences == {distinct_action: 1}
-    assert inspection.groups[0].holdout_preferences == {not_null_action: 1}
+    assert inspection.groups[0].disagreement_count == 2
+    assert inspection.groups[0].train_preferences == {distinct_action: 2}
+    assert inspection.groups[0].holdout_preferences == {not_null_action: 2}
     assert inspection.groups[0].train_majority_preference == distinct_action
     assert inspection.groups[0].holdout_majority_preference == not_null_action
     assert inspection.groups[0].train_majority_ratio == 1.0
@@ -734,6 +867,64 @@ def _result(
             terminated=True,
             truncated=False,
             explored_nodes=1,
+        ),
+    )
+
+
+def _two_step_result(
+    strategy: str,
+    task_id: str,
+    initial_sql: str,
+    first_action_id: str,
+    first_next_sql: str,
+    second_action_id: str,
+    final_sql: str,
+    *,
+    first_reward: float,
+    second_reward: float,
+) -> StrategyRunResult:
+    return StrategyRunResult(
+        strategy=strategy,
+        status="COMPLETED",
+        elapsed_seconds=0.1,
+        verification_calls=_calls(),
+        benchmark_calls=_calls(),
+        search_result=SearchResult(
+            strategy=strategy,
+            task_id=task_id,
+            initial_sql=initial_sql,
+            final_sql=final_sql,
+            action_ids=(first_action_id, second_action_id),
+            steps=(
+                SearchStep(
+                    step_index=0,
+                    action_id=first_action_id,
+                    state_sql=initial_sql,
+                    proposed_sql=first_next_sql,
+                    next_sql=first_next_sql,
+                    reward=first_reward,
+                    cumulative_reward=first_reward,
+                    verification_status=VerificationStatus.PROVEN_EQUIVALENT,
+                    terminated=False,
+                    truncated=False,
+                ),
+                SearchStep(
+                    step_index=1,
+                    action_id=second_action_id,
+                    state_sql=first_next_sql,
+                    proposed_sql=final_sql,
+                    next_sql=final_sql,
+                    reward=second_reward,
+                    cumulative_reward=first_reward + second_reward,
+                    verification_status=VerificationStatus.PROVEN_EQUIVALENT,
+                    terminated=True,
+                    truncated=False,
+                ),
+            ),
+            cumulative_reward=first_reward + second_reward,
+            terminated=True,
+            truncated=False,
+            explored_nodes=2,
         ),
     )
 

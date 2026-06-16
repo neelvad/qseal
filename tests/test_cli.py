@@ -299,7 +299,7 @@ def test_corpus_run_cli_writes_comparison_artifact(tmp_path) -> None:
     assert ranker["artifact_type"] == "linear_policy_model"
     assert ranker["model_type"] == "linear_action_ranker"
     assert ranker["state_count"] == 1
-    assert ranker["choice_state_count"] == 0
+    assert ranker["choice_state_count"] == 1
     assert ranker["training_margin"] == 0.2
     assert ranker["unknown_preference_scale"] == 1.0
     assert ranker["unknown_preference_group_by"] == ["action_set"]

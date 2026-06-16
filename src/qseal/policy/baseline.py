@@ -17,6 +17,8 @@ from qseal.dialects import DEFAULT_DIALECT, SqlDialect
 from qseal.ir.model import Predicate, SelectQuery
 from qseal.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 
+STOP_ACTION_ID = "__stop__"
+
 
 class PolicyDataFilter(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -67,6 +69,7 @@ class BaselinePolicyModel(BaseModel):
     data_filter: PolicyDataFilter = Field(default_factory=PolicyDataFilter)
     state_count: int
     labeled_state_count: int
+    stop_margin: float = Field(default=0.0, ge=0)
     feature_stats: tuple[FeatureStat, ...]
     default_score: float
 
@@ -83,6 +86,7 @@ class LinearPolicyModel(BaseModel):
     state_count: int
     labeled_state_count: int
     choice_state_count: int
+    stop_margin: float = Field(default=0.0, ge=0)
     epochs: int = Field(ge=1)
     learning_rate: float = Field(gt=0)
     training_margin: float = Field(default=0.0, ge=0)
@@ -92,6 +96,7 @@ class LinearPolicyModel(BaseModel):
     update_count: int = Field(ge=0)
     skipped_preference_count: int = Field(default=0, ge=0)
     skipped_unknown_preference_count: int = Field(default=0, ge=0)
+    skipped_equivalent_preference_count: int = Field(default=0, ge=0)
     feature_weights: tuple[FeatureWeight, ...]
     default_score: float = 0.0
 
@@ -127,6 +132,8 @@ class BaselinePolicyEvaluation(BaseModel):
     accuracy: float | None
     adjusted_accuracy: float | None = None
     reward_margin: float = Field(default=0.0, ge=0)
+    stop_margin: float = Field(default=0.0, ge=0)
+    endpoint_equivalent_count: int = 0
     known_reward_gap_count: int
     mean_known_reward_gap: float | None
     max_known_reward_gap: float | None
@@ -146,6 +153,7 @@ class BaselinePolicyInspectionRow(BaseModel):
     predicted_action_id: str
     correct: bool
     acceptable: bool
+    endpoint_equivalent: bool = False
     reward_gap: float | None
     oracle_suffix_reward: float | None
     predicted_suffix_reward: float | None
@@ -168,6 +176,7 @@ class BaselinePolicyInspection(BaseModel):
     miss_count: int
     unacceptable_count: int
     rows: tuple[BaselinePolicyInspectionRow, ...]
+    stop_margin: float = Field(default=0.0, ge=0)
 
 
 class PolicyHoldoutEvaluation(BaseModel):
@@ -262,6 +271,7 @@ class PolicyLabelInspection(BaseModel):
     holdout_filter: PolicyDataFilter
     group_by: tuple[str, ...]
     reward_margin: float = Field(ge=0)
+    stop_margin: float = Field(default=0.0, ge=0)
     train_preference_count: int
     holdout_preference_count: int
     train_preferences: dict[str, int]
@@ -284,6 +294,7 @@ class _StateExample:
     oracle_action_id: str | None
     oracle_suffix_reward: float | None
     observed_suffix_rewards: dict[str, float]
+    observed_final_sql_by_action: dict[str, str]
 
 
 def train_baseline_policy(
@@ -291,10 +302,16 @@ def train_baseline_policy(
     *,
     source_trajectories: str | None = None,
     data_filter: PolicyDataFilter | None = None,
+    stop_margin: float = 0.0,
 ) -> BaselinePolicyModel:
+    if stop_margin < 0:
+        raise ValueError("stop_margin must be zero or greater.")
     data_filter = data_filter or PolicyDataFilter()
     records = load_corpus_trajectory_records(trajectory_path)
-    examples = _filter_examples(_state_examples(records), data_filter)
+    examples = _filter_examples(
+        _state_examples(records, stop_margin=stop_margin),
+        data_filter,
+    )
     labeled = [example for example in examples if example.oracle_action_id is not None]
     feature_counts: dict[str, list[int]] = defaultdict(lambda: [0, 0])
 
@@ -303,7 +320,11 @@ def train_baseline_policy(
             continue
         assert example.oracle_action_id is not None
         for action_id in example.available_action_ids:
-            is_oracle = action_id == example.oracle_action_id
+            is_oracle = _action_is_acceptable(
+                example,
+                action_id,
+                reward_margin=stop_margin,
+            )
             for feature in _features(example, action_id):
                 feature_counts[feature][0] += 1
                 feature_counts[feature][1] += int(is_oracle)
@@ -325,6 +346,7 @@ def train_baseline_policy(
         data_filter=data_filter,
         state_count=len(examples),
         labeled_state_count=len(labeled),
+        stop_margin=stop_margin,
         feature_stats=stats,
         default_score=total_oracle / total_appearances if total_appearances else 0.0,
     )
@@ -335,6 +357,7 @@ def train_linear_policy(
     *,
     source_trajectories: str | None = None,
     data_filter: PolicyDataFilter | None = None,
+    stop_margin: float = 0.0,
     epochs: int = 20,
     learning_rate: float = 1.0,
     training_margin: float = 0.0,
@@ -346,6 +369,8 @@ def train_linear_policy(
         raise ValueError("epochs must be one or greater.")
     if learning_rate <= 0:
         raise ValueError("learning_rate must be greater than zero.")
+    if stop_margin < 0:
+        raise ValueError("stop_margin must be zero or greater.")
     if training_margin < 0:
         raise ValueError("training_margin must be zero or greater.")
     if unknown_preference_scale < 0:
@@ -362,7 +387,10 @@ def train_linear_policy(
 
     data_filter = data_filter or PolicyDataFilter()
     records = load_corpus_trajectory_records(trajectory_path)
-    examples = _filter_examples(_state_examples(records), data_filter)
+    examples = _filter_examples(
+        _state_examples(records, stop_margin=stop_margin),
+        data_filter,
+    )
     labeled = [example for example in examples if example.oracle_action_id is not None]
     choice_examples = [
         example for example in labeled if len(example.available_action_ids) >= 2
@@ -371,6 +399,7 @@ def train_linear_policy(
     update_count = 0
     skipped_preference_count = 0
     skipped_unknown_preference_count = 0
+    skipped_equivalent_preference_count = 0
 
     for _ in range(epochs):
         for example in choice_examples:
@@ -383,6 +412,13 @@ def train_linear_policy(
                 continue
             reward_span = _reward_span(example)
             for action_id in non_oracle_actions:
+                if _same_observed_endpoint(
+                    example,
+                    example.oracle_action_id,
+                    action_id,
+                ):
+                    skipped_equivalent_preference_count += 1
+                    continue
                 reward_gap = _known_reward_gap(example, action_id)
                 if reward_gap == float("inf"):
                     scale = _unknown_preference_scale(
@@ -413,6 +449,7 @@ def train_linear_policy(
         state_count=len(examples),
         labeled_state_count=len(labeled),
         choice_state_count=len(choice_examples),
+        stop_margin=stop_margin,
         epochs=epochs,
         learning_rate=learning_rate,
         training_margin=training_margin,
@@ -422,6 +459,7 @@ def train_linear_policy(
         update_count=update_count,
         skipped_preference_count=skipped_preference_count,
         skipped_unknown_preference_count=skipped_unknown_preference_count,
+        skipped_equivalent_preference_count=skipped_equivalent_preference_count,
         feature_weights=tuple(
             FeatureWeight(feature=feature, weight=weight)
             for feature, weight in sorted(weights.items())
@@ -438,14 +476,20 @@ def evaluate_baseline_policy(
     model_path: str | None = None,
     data_filter: PolicyDataFilter | None = None,
     reward_margin: float = 0.0,
+    stop_margin: float = 0.0,
 ) -> BaselinePolicyEvaluation:
     if reward_margin < 0:
         raise ValueError("reward_margin must be zero or greater.")
+    if stop_margin < 0:
+        raise ValueError("stop_margin must be zero or greater.")
     data_filter = data_filter or PolicyDataFilter()
     examples = [
         example
         for example in _filter_examples(
-            _state_examples(load_corpus_trajectory_records(trajectory_path)),
+            _state_examples(
+                load_corpus_trajectory_records(trajectory_path),
+                stop_margin=stop_margin,
+            ),
             data_filter,
         )
         if example.oracle_action_id is not None
@@ -454,6 +498,7 @@ def evaluate_baseline_policy(
     acceptable = 0
     predicted = 0
     known_gaps = []
+    endpoint_equivalent_count = 0
     by_rule: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
 
     for example in examples:
@@ -470,10 +515,18 @@ def evaluate_baseline_policy(
         oracle_reward = example.observed_suffix_rewards.get(example.oracle_action_id or "")
         predicted_reward = example.observed_suffix_rewards.get(prediction)
         is_acceptable = is_correct
+        endpoint_equivalent = _same_observed_endpoint(
+            example,
+            example.oracle_action_id,
+            prediction,
+        )
+        endpoint_equivalent_count += int(endpoint_equivalent and not is_correct)
         if oracle_reward is not None and predicted_reward is not None:
             reward_gap = oracle_reward - predicted_reward
             known_gaps.append(reward_gap)
-            is_acceptable = reward_gap <= reward_margin
+            is_acceptable = reward_gap <= reward_margin or endpoint_equivalent
+        elif endpoint_equivalent:
+            is_acceptable = True
         acceptable += int(is_acceptable)
         by_rule[rule_name][2] += int(is_acceptable)
 
@@ -490,6 +543,8 @@ def evaluate_baseline_policy(
         accuracy=correct / predicted if predicted else None,
         adjusted_accuracy=acceptable / predicted if predicted else None,
         reward_margin=reward_margin,
+        stop_margin=stop_margin,
+        endpoint_equivalent_count=endpoint_equivalent_count,
         known_reward_gap_count=len(known_gaps),
         mean_known_reward_gap=(
             sum(known_gaps) / len(known_gaps) if known_gaps else None
@@ -517,10 +572,13 @@ def inspect_baseline_policy(
     model_path: str | None = None,
     data_filter: PolicyDataFilter | None = None,
     reward_margin: float = 0.0,
+    stop_margin: float = 0.0,
     mode: Literal["misses", "unacceptable", "all"] = "misses",
 ) -> BaselinePolicyInspection:
     if reward_margin < 0:
         raise ValueError("reward_margin must be zero or greater.")
+    if stop_margin < 0:
+        raise ValueError("stop_margin must be zero or greater.")
     if mode not in ("misses", "unacceptable", "all"):
         raise ValueError(f"Unknown inspection mode: {mode}.")
 
@@ -528,7 +586,10 @@ def inspect_baseline_policy(
     examples = [
         example
         for example in _filter_examples(
-            _state_examples(load_corpus_trajectory_records(trajectory_path)),
+            _state_examples(
+                load_corpus_trajectory_records(trajectory_path),
+                stop_margin=stop_margin,
+            ),
             data_filter,
         )
         if example.oracle_action_id is not None
@@ -551,9 +612,16 @@ def inspect_baseline_policy(
         predicted_reward = example.observed_suffix_rewards.get(prediction)
         reward_gap = None
         acceptable = correct
+        endpoint_equivalent = _same_observed_endpoint(
+            example,
+            example.oracle_action_id,
+            prediction,
+        )
         if oracle_reward is not None and predicted_reward is not None:
             reward_gap = oracle_reward - predicted_reward
-            acceptable = reward_gap <= reward_margin
+            acceptable = reward_gap <= reward_margin or endpoint_equivalent
+        elif endpoint_equivalent:
+            acceptable = True
         unacceptable_count += int(not acceptable)
 
         if mode == "misses" and correct:
@@ -573,6 +641,7 @@ def inspect_baseline_policy(
                 predicted_action_id=prediction,
                 correct=correct,
                 acceptable=acceptable,
+                endpoint_equivalent=endpoint_equivalent,
                 reward_gap=reward_gap,
                 oracle_suffix_reward=oracle_reward,
                 predicted_suffix_reward=predicted_reward,
@@ -595,6 +664,7 @@ def inspect_baseline_policy(
         miss_count=miss_count,
         unacceptable_count=unacceptable_count,
         rows=tuple(sorted(rows, key=_inspection_sort_key)),
+        stop_margin=stop_margin,
     )
 
 
@@ -606,15 +676,21 @@ def inspect_policy_labels(
     holdout_filter: PolicyDataFilter | None = None,
     group_by: tuple[str, ...] = ("action_set", "table"),
     reward_margin: float = 0.0,
+    stop_margin: float = 0.0,
     examples_per_group: int = 3,
 ) -> PolicyLabelInspection:
     if reward_margin < 0:
         raise ValueError("reward_margin must be zero or greater.")
+    if stop_margin < 0:
+        raise ValueError("stop_margin must be zero or greater.")
     if examples_per_group < 0:
         raise ValueError("examples_per_group must be zero or greater.")
     train_filter = train_filter or PolicyDataFilter()
     holdout_filter = holdout_filter or PolicyDataFilter()
-    examples = _state_examples(load_corpus_trajectory_records(trajectory_path))
+    examples = _state_examples(
+        load_corpus_trajectory_records(trajectory_path),
+        stop_margin=stop_margin,
+    )
     train_preferences = _preference_examples(
         _filter_examples(examples, train_filter),
         reward_margin=reward_margin,
@@ -687,6 +763,7 @@ def inspect_policy_labels(
         holdout_filter=holdout_filter,
         group_by=group_by,
         reward_margin=reward_margin,
+        stop_margin=stop_margin,
         train_preference_count=len(train_preferences),
         holdout_preference_count=len(holdout_preferences),
         train_preferences=_preference_counts(list(train_preferences)),
@@ -771,6 +848,7 @@ def render_baseline_policy_training(model: BaselinePolicyModel) -> str:
             f"Model: {model.model_type}",
             f"States: {model.state_count}",
             f"Labeled states: {model.labeled_state_count}",
+            f"Stop margin: {model.stop_margin:.6f}",
             f"Feature stats: {len(model.feature_stats)}",
             f"Default score: {model.default_score:.6f}",
             f"Filter: {_render_filter(model.data_filter)}",
@@ -785,6 +863,7 @@ def render_linear_policy_training(model: LinearPolicyModel) -> str:
             f"States: {model.state_count}",
             f"Labeled states: {model.labeled_state_count}",
             f"Choice states: {model.choice_state_count}",
+            f"Stop margin: {model.stop_margin:.6f}",
             f"Epochs: {model.epochs}",
             f"Learning rate: {model.learning_rate:.6f}",
             f"Training margin: {model.training_margin:.6f}",
@@ -797,6 +876,8 @@ def render_linear_policy_training(model: LinearPolicyModel) -> str:
             f"Updates: {model.update_count}",
             f"Skipped preferences: {model.skipped_preference_count}",
             f"Skipped unknown preferences: {model.skipped_unknown_preference_count}",
+            f"Skipped endpoint-equivalent preferences: "
+            f"{model.skipped_equivalent_preference_count}",
             f"Feature weights: {len(model.feature_weights)}",
             f"Filter: {_render_filter(model.data_filter)}",
         ]
@@ -822,6 +903,8 @@ def render_baseline_policy_evaluation(evaluation: BaselinePolicyEvaluation) -> s
         f"Top-1 accuracy: {accuracy}",
         f"Adjusted accuracy: {adjusted_accuracy}",
         f"Reward margin: {evaluation.reward_margin:.6f}",
+        f"Stop margin: {evaluation.stop_margin:.6f}",
+        f"Endpoint-equivalent misses: {evaluation.endpoint_equivalent_count}",
         f"Known reward gaps: {evaluation.known_reward_gap_count}",
         f"Mean known reward gap: {mean_gap}",
         f"Filter: {_render_filter(evaluation.data_filter)}",
@@ -858,6 +941,7 @@ def render_baseline_policy_inspection(
         f"Unacceptable: {inspection.unacceptable_count}",
         f"Rows shown: {len(rows)}/{inspection.row_count}",
         f"Reward margin: {inspection.reward_margin:.6f}",
+        f"Stop margin: {inspection.stop_margin:.6f}",
         f"Filter: {_render_filter(inspection.data_filter)}",
     ]
     if not rows:
@@ -878,6 +962,7 @@ def render_baseline_policy_inspection(
                 f"  Predicted: {row.predicted_action_id}",
                 f"  Correct: {row.correct}",
                 f"  Acceptable: {row.acceptable}",
+                f"  Endpoint equivalent: {row.endpoint_equivalent}",
                 f"  Reward gap: {gap}",
                 "  Scores:",
             ]
@@ -910,6 +995,7 @@ def render_policy_label_inspection(
         f"Rows shown: {len(groups)}/{inspection.group_count}",
         f"Group by: {', '.join(inspection.group_by)}",
         f"Reward margin: {inspection.reward_margin:.6f}",
+        f"Stop margin: {inspection.stop_margin:.6f}",
         f"Train filter: {_render_filter(inspection.train_filter)}",
         f"Holdout filter: {_render_filter(inspection.holdout_filter)}",
         f"Global train prefs: {_render_preference_counts(inspection.train_preferences)}",
@@ -1092,7 +1178,10 @@ def _strategy_oracle_requests(
 
 def _state_examples(
     records: tuple[CorpusTrajectoryRecord, ...],
+    *,
+    stop_margin: float = 0.0,
 ) -> tuple[_StateExample, ...]:
+    final_sql_by_result = _final_sql_by_result(records)
     grouped: dict[tuple[str, str], list[CorpusTrajectoryRecord]] = defaultdict(list)
     for record in records:
         grouped[(record.task_id, record.state_sql)].append(record)
@@ -1101,10 +1190,20 @@ def _state_examples(
     for (task_id, state_sql), state_records in sorted(grouped.items()):
         first = state_records[0]
         rewards: dict[str, float] = {}
+        final_sql_by_action: dict[str, str] = {}
         for record in state_records:
             existing = rewards.get(record.action_id)
             if existing is None or record.suffix_reward > existing:
                 rewards[record.action_id] = record.suffix_reward
+                final_sql_by_action[record.action_id] = final_sql_by_result[
+                    (record.task_id, record.strategy)
+                ]
+        rewards[STOP_ACTION_ID] = 0.0
+        final_sql_by_action[STOP_ACTION_ID] = state_sql
+        oracle_action_id, oracle_suffix_reward = _oracle_action(
+            rewards,
+            stop_margin=stop_margin,
+        )
         examples.append(
             _StateExample(
                 task_id=task_id,
@@ -1112,13 +1211,47 @@ def _state_examples(
                 fixture_id=first.fixture_id,
                 tags=first.tags,
                 step_index=first.step_index,
-                available_action_ids=first.available_action_ids,
-                oracle_action_id=first.state_oracle_best_action_id,
-                oracle_suffix_reward=first.state_oracle_best_suffix_reward,
+                available_action_ids=_policy_action_ids(first.available_action_ids),
+                oracle_action_id=oracle_action_id,
+                oracle_suffix_reward=oracle_suffix_reward,
                 observed_suffix_rewards=rewards,
+                observed_final_sql_by_action=final_sql_by_action,
             )
         )
     return tuple(examples)
+
+
+def _final_sql_by_result(
+    records: tuple[CorpusTrajectoryRecord, ...],
+) -> dict[tuple[str, str], str]:
+    grouped: dict[tuple[str, str], list[CorpusTrajectoryRecord]] = defaultdict(list)
+    for record in records:
+        grouped[(record.task_id, record.strategy)].append(record)
+    return {
+        key: sorted(items, key=lambda item: item.step_index)[-1].next_sql
+        for key, items in grouped.items()
+    }
+
+
+def _policy_action_ids(action_ids: tuple[str, ...]) -> tuple[str, ...]:
+    items = tuple(action_id for action_id in action_ids if action_id != STOP_ACTION_ID)
+    return (*items, STOP_ACTION_ID)
+
+
+def _oracle_action(
+    rewards: dict[str, float],
+    *,
+    stop_margin: float,
+) -> tuple[str | None, float | None]:
+    if not rewards:
+        return None, None
+    action_id, reward = sorted(
+        rewards.items(),
+        key=lambda item: (-item[1], item[0]),
+    )[0]
+    if action_id != STOP_ACTION_ID and reward <= stop_margin:
+        return STOP_ACTION_ID, rewards[STOP_ACTION_ID]
+    return action_id, reward
 
 
 def _filter_examples(
@@ -1160,7 +1293,11 @@ def _preference_examples(
         if example.oracle_action_id is None or len(example.available_action_ids) < 2:
             continue
         for action_id in example.available_action_ids:
-            if action_id == example.oracle_action_id:
+            if _action_is_acceptable(
+                example,
+                action_id,
+                reward_margin=reward_margin,
+            ):
                 continue
             gap = _known_reward_gap(example, action_id)
             if gap != float("inf") and gap < reward_margin:
@@ -1398,6 +1535,38 @@ def _known_reward_gap(example: _StateExample, action_id: str) -> float:
     return oracle_reward - action_reward
 
 
+def _action_is_acceptable(
+    example: _StateExample,
+    action_id: str,
+    *,
+    reward_margin: float,
+) -> bool:
+    if action_id == example.oracle_action_id:
+        return True
+    gap = _known_reward_gap(example, action_id)
+    if gap != float("inf") and gap <= reward_margin:
+        return True
+    return _same_observed_endpoint(example, example.oracle_action_id, action_id)
+
+
+def _same_observed_endpoint(
+    example: _StateExample,
+    left_action_id: str | None,
+    right_action_id: str | None,
+) -> bool:
+    if left_action_id is None or right_action_id is None:
+        return False
+    left = example.observed_final_sql_by_action.get(left_action_id)
+    right = example.observed_final_sql_by_action.get(right_action_id)
+    if left is None or right is None:
+        return False
+    return _canonical_endpoint_sql(left) == _canonical_endpoint_sql(right)
+
+
+def _canonical_endpoint_sql(sql: str) -> str:
+    return " ".join(sql.split())
+
+
 def _inspection_sort_key(row: BaselinePolicyInspectionRow) -> tuple[int, float, str, int]:
     reward_gap = row.reward_gap if row.reward_gap is not None else 0.0
     return (
@@ -1431,14 +1600,24 @@ def _feature_values(
 ) -> tuple[str, ...]:
     rule_name = _rule_name(action_id)
     target_kind, target_index = _action_target(action_id)
-    available_rules = tuple(sorted({_rule_name(item) for item in available_action_ids}))
+    real_action_ids = tuple(
+        item for item in available_action_ids if item != STOP_ACTION_ID
+    )
+    stop_available = STOP_ACTION_ID in available_action_ids
+    available_rules = tuple(sorted({_rule_name(item) for item in real_action_ids}))
+    policy_available_rules = tuple(
+        sorted({_rule_name(item) for item in available_action_ids})
+    )
     same_rule_actions = tuple(
-        sorted(item for item in available_action_ids if _rule_name(item) == rule_name)
+        sorted(item for item in real_action_ids if _rule_name(item) == rule_name)
     )
     same_rule_position = (
         same_rule_actions.index(action_id) if action_id in same_rule_actions else None
     )
     available_rule_key = "+".join(available_rules) if available_rules else "none"
+    policy_available_rule_key = (
+        "+".join(policy_available_rules) if policy_available_rules else "none"
+    )
     return (
         f"action:{action_id}",
         f"rule:{rule_name}",
@@ -1450,6 +1629,23 @@ def _feature_values(
         f"action_available_rules:{action_id}:{available_rule_key}",
         f"rule_available_rules:{rule_name}:{available_rule_key}",
         *(f"competes_with:{rule_name}:{other}" for other in available_rules if other != rule_name),
+        *(
+            (
+                "stop_available:true",
+                f"action_stop_available:{action_id}:true",
+                f"rule_stop_available:{rule_name}:true",
+                f"policy_available_rules:{policy_available_rule_key}",
+                f"action_policy_available_rules:{action_id}:{policy_available_rule_key}",
+                f"rule_policy_available_rules:{rule_name}:{policy_available_rule_key}",
+            )
+            if stop_available
+            else ()
+        ),
+        *(
+            f"policy_competes_with:{rule_name}:{other}"
+            for other in policy_available_rules
+            if stop_available and other != rule_name
+        ),
         *(
             (f"target_index:{target_index}", f"rule_target_index:{rule_name}:{target_index}")
             if target_index is not None
@@ -1475,10 +1671,14 @@ def _feature_values(
 
 
 def _rule_name(action_id: str) -> str:
+    if action_id == STOP_ACTION_ID:
+        return STOP_ACTION_ID
     return action_id.split("::", 1)[0]
 
 
 def _action_target(action_id: str) -> tuple[str, int | None]:
+    if action_id == STOP_ACTION_ID:
+        return "stop", None
     if "::" not in action_id:
         return "unknown", None
     match_id = action_id.split("::", 1)[1]

@@ -901,6 +901,13 @@ def corpus_export_trajectories(
 @click.option("--include-tag", "include_tags", multiple=True)
 @click.option("--exclude-tag", "exclude_tags", multiple=True)
 @click.option(
+    "--stop-margin",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Minimum observed suffix reward required before a rewrite beats no-op.",
+)
+@click.option(
     "--format",
     "output_format",
     type=OutputFormat,
@@ -916,6 +923,7 @@ def policy_train_baseline(
     exclude_fixtures: tuple[str, ...],
     include_tags: tuple[str, ...],
     exclude_tags: tuple[str, ...],
+    stop_margin: float,
     output_format: str,
 ) -> None:
     """Train a simple feature-mean action ranker from trajectory JSONL."""
@@ -930,6 +938,7 @@ def policy_train_baseline(
             include_tags=include_tags,
             exclude_tags=exclude_tags,
         ),
+        stop_margin=stop_margin,
     )
     write_baseline_policy(model, model_file)
 
@@ -970,6 +979,13 @@ def policy_train_baseline(
     default=0.0,
     show_default=True,
     help="Skip ranker training preferences whose known reward gap is below this margin.",
+)
+@click.option(
+    "--stop-margin",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Minimum observed suffix reward required before a rewrite beats no-op.",
 )
 @click.option(
     "--unknown-preference-scale",
@@ -1015,6 +1031,7 @@ def policy_train_ranker(
     epochs: int,
     learning_rate: float,
     training_margin: float,
+    stop_margin: float,
     unknown_preference_scale: float,
     unknown_preference_group_by: tuple[str, ...],
     unknown_preference_group_scale: tuple[tuple[str, str], ...],
@@ -1036,6 +1053,7 @@ def policy_train_ranker(
             include_tags=include_tags,
             exclude_tags=exclude_tags,
         ),
+        stop_margin=stop_margin,
         epochs=epochs,
         learning_rate=learning_rate,
         training_margin=training_margin,
@@ -1082,6 +1100,13 @@ def policy_train_ranker(
     help="Reward gap tolerated when computing adjusted offline accuracy.",
 )
 @click.option(
+    "--stop-margin",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Minimum observed suffix reward required before a rewrite beats no-op.",
+)
+@click.option(
     "--format",
     "output_format",
     type=OutputFormat,
@@ -1099,6 +1124,7 @@ def policy_evaluate_baseline(
     include_tags: tuple[str, ...],
     exclude_tags: tuple[str, ...],
     reward_margin: float,
+    stop_margin: float,
     output_format: str,
 ) -> None:
     """Evaluate a baseline policy model against trajectory oracle labels."""
@@ -1116,6 +1142,7 @@ def policy_evaluate_baseline(
             exclude_tags=exclude_tags,
         ),
         reward_margin=reward_margin,
+        stop_margin=stop_margin,
     )
     if report_file is not None:
         report_file.parent.mkdir(parents=True, exist_ok=True)
@@ -1159,6 +1186,13 @@ def policy_evaluate_baseline(
     help="Reward gap tolerated when classifying acceptable predictions.",
 )
 @click.option(
+    "--stop-margin",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Minimum observed suffix reward required before a rewrite beats no-op.",
+)
+@click.option(
     "--mode",
     type=click.Choice(("misses", "unacceptable", "all")),
     default="misses",
@@ -1188,6 +1222,7 @@ def policy_inspect_baseline(
     include_tags: tuple[str, ...],
     exclude_tags: tuple[str, ...],
     reward_margin: float,
+    stop_margin: float,
     mode: str,
     limit: int | None,
     output_format: str,
@@ -1207,6 +1242,7 @@ def policy_inspect_baseline(
             exclude_tags=exclude_tags,
         ),
         reward_margin=reward_margin,
+        stop_margin=stop_margin,
         mode=mode,
     )
     if report_file is not None:
@@ -1261,6 +1297,13 @@ def policy_inspect_baseline(
     help="Skip known preference gaps below this margin.",
 )
 @click.option(
+    "--stop-margin",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Minimum observed suffix reward required before a rewrite beats no-op.",
+)
+@click.option(
     "--examples-per-group",
     type=click.IntRange(min=0),
     default=3,
@@ -1296,6 +1339,7 @@ def policy_inspect_labels(
     holdout_exclude_tags: tuple[str, ...],
     group_by: tuple[str, ...],
     reward_margin: float,
+    stop_margin: float,
     examples_per_group: int,
     limit: int | None,
     output_format: str,
@@ -1322,6 +1366,7 @@ def policy_inspect_labels(
         ),
         group_by=group_by or ("action_set", "table"),
         reward_margin=reward_margin,
+        stop_margin=stop_margin,
         examples_per_group=examples_per_group,
     )
     if report_file is not None:
@@ -1500,6 +1545,7 @@ def policy_holdout_evaluate(
             trajectory_path,
             source_trajectories=str(trajectory_path),
             data_filter=train_filter,
+            stop_margin=reward_margin,
             epochs=epochs,
             learning_rate=learning_rate,
             training_margin=training_margin,
@@ -1512,6 +1558,7 @@ def policy_holdout_evaluate(
             trajectory_path,
             source_trajectories=str(trajectory_path),
             data_filter=train_filter,
+            stop_margin=reward_margin,
         )
     write_policy_model(model, model_path)
     offline_evaluation = evaluate_baseline_policy(
@@ -1521,6 +1568,7 @@ def policy_holdout_evaluate(
         model_path=str(model_path),
         data_filter=holdout_filter,
         reward_margin=label_margin if label_margin is not None else reward_margin,
+        stop_margin=reward_margin,
     )
     evaluation_path.write_text(offline_evaluation.model_dump_json(indent=2))
     corpus_report = run_task_corpus(

@@ -401,18 +401,17 @@ def _policy_scorer(
     task: LoadedCorpusTask,
     model: Any,
 ) -> Callable[[EnvironmentObservation, str], float]:
-    from qseal.policy import PolicyActionContext, score_policy_action
+    from qseal.policy import STOP_ACTION_ID, PolicyActionContext, score_policy_action
 
     def score(observation: EnvironmentObservation, action_id: str) -> float:
+        available_action_ids = tuple(action.action_id for action in observation.actions)
         return score_policy_action(
             model,
             PolicyActionContext(
                 fixture_id=task.fixture.fixture_id,
                 tags=task.definition.tags,
                 step_index=observation.step_index,
-                available_action_ids=tuple(
-                    action.action_id for action in observation.actions
-                ),
+                available_action_ids=(*available_action_ids, STOP_ACTION_ID),
                 state_sql=observation.current_sql,
                 dialect=task.environment_task.dialect,
             ),

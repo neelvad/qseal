@@ -1,4 +1,5 @@
 from qseal.policy.baseline import (
+    STOP_ACTION_ID,
     BaselinePolicyEvaluation,
     BaselinePolicyInspection,
     BaselinePolicyInspectionRow,
@@ -51,6 +52,7 @@ __all__ = [
     "PolicyLabelInspection",
     "PolicyPreferenceExample",
     "PolicyPreferenceGroup",
+    "STOP_ACTION_ID",
     "PolicyModel",
     "compare_policy_holdouts",
     "evaluate_baseline_policy",

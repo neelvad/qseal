@@ -277,7 +277,15 @@ into corpus search.
 Offline evaluation reports exact top-1 accuracy and adjusted accuracy.
 Adjusted accuracy treats a predicted action as acceptable when its observed
 suffix reward is within `--reward-margin` of the oracle action, which avoids
-over-penalizing near-tie action-order labels.
+over-penalizing near-tie action-order labels. It also treats action orders that
+reach the same observed final SQL as acceptable endpoint-equivalent choices.
+
+Policy labels include a synthetic `__stop__` no-op action. Pass
+`--stop-margin` to `train-baseline`, `train-ranker`, `evaluate-baseline`,
+`inspect-baseline`, or `inspect-labels` to require a rewrite path to beat
+stopping by that observed suffix reward before it becomes the oracle label.
+`holdout-evaluate` sets this stop margin from its search `--reward-margin` so
+offline labels match the abstaining policy's stop decision.
 
 Both training and evaluation support simple split filters:
 
