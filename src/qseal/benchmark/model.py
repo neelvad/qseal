@@ -14,6 +14,7 @@ class QueryBenchmark(BaseModel):
 
     status: BenchmarkStatus
     sql: str
+    query_ids: tuple[str, ...] = Field(default_factory=tuple)
     timings_ms: tuple[float, ...] = Field(default_factory=tuple)
     batch_timings_ms: tuple[float, ...] = Field(default_factory=tuple)
     executions_per_sample: int = Field(default=1, ge=1)
@@ -24,12 +25,25 @@ class QueryBenchmark(BaseModel):
     row_count: int | None = None
     explain: str | None = None
     error: str | None = None
+    bytes_scanned: tuple[int, ...] = Field(default_factory=tuple)
+    compilation_time_ms: tuple[float, ...] = Field(default_factory=tuple)
+    execution_time_ms: tuple[float, ...] = Field(default_factory=tuple)
+    total_elapsed_time_ms: tuple[float, ...] = Field(default_factory=tuple)
 
 
 class BenchmarkEnvironment(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    duckdb_version: str
+    engine: str = "duckdb"
+    duckdb_version: str = ""
+    snowflake_connector_version: str | None = None
+    snowflake_account: str | None = None
+    snowflake_user: str | None = None
+    snowflake_role: str | None = None
+    snowflake_warehouse: str | None = None
+    snowflake_database: str | None = None
+    snowflake_schema: str | None = None
+    snowflake_query_tag: str | None = None
     python_version: str
     platform: str
     database_path: str

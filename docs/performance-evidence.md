@@ -61,8 +61,9 @@ may matter on a billed, distributed warehouse and vice versa.
   into a Snowflake trial account and diff plan trees for proven pairs —
   work-eliminated evidence on the actual target engine without production
   data.
-- **Tier 3 (design partner):** the benchmark harness against a real
-  warehouse with real distributions.
+- **Tier 3 (Snowflake benchmark backend):** run verified pairs on a real
+  Snowflake warehouse, first with scratch synthetic/setup SQL and later with
+  design-partner data distributions.
 
 ## Tier 2: Snowflake EXPLAIN plan diffing (first sweep, 2026-06-12)
 
@@ -100,3 +101,31 @@ Findings:
 Caveat: empty-table plans show compile-time structure only; stats-driven
 effects (pruning, join strategies) need loaded data, and execution timings
 need Tier 3.
+
+## Tier 3: Snowflake execution benchmarks
+
+The `qseal benchmark` command can now run the same original/rewritten pair on
+Snowflake:
+
+```bash
+uv run qseal benchmark original.sql rewritten.sql \
+  --engine snowflake \
+  --setup setup.sql \
+  --query-tag qseal-tier3 \
+  --repetitions 5 \
+  --report-file snowflake-benchmark.json
+```
+
+Configuration comes from `QSEAL_SNOWFLAKE_ACCOUNT`,
+`QSEAL_SNOWFLAKE_USER`, `QSEAL_SNOWFLAKE_PASSWORD`,
+`QSEAL_SNOWFLAKE_WAREHOUSE`, `QSEAL_SNOWFLAKE_DATABASE`, and
+`QSEAL_SNOWFLAKE_SCHEMA`; `QSEAL_SNOWFLAKE_ROLE` is optional. The harness
+uses the configured scratch database/schema, disables the session result
+cache, alternates original and rewritten executions, captures Snowflake query
+IDs, and records query-history metadata such as bytes scanned and
+compilation/execution timing when available.
+
+This is the first step toward real warehouse evidence. Synthetic setup SQL is
+enough to learn which rewrite classes survive Snowflake compiler
+normalization; copied or sampled project data is still needed before making
+dollar-savings claims.

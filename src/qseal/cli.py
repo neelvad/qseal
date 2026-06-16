@@ -4,7 +4,11 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from qseal.benchmark import BenchmarkStatus, benchmark_query_pair
+from qseal.benchmark import (
+    BenchmarkStatus,
+    benchmark_query_pair,
+    benchmark_snowflake_query_pair,
+)
 from qseal.candidates.benchmarking import benchmark_proven
 from qseal.candidates.bundle import load_candidate_metadata
 from qseal.candidates.explain import explain_proven
@@ -68,6 +72,7 @@ from qseal.report.json import (
     render_dbt_scan_json,
     render_duckdb_benchmark_json,
     render_duckdb_fixture_json,
+    render_snowflake_benchmark_json,
     render_suggestion_json,
     render_suggestions_json,
     render_verification_json,
@@ -80,6 +85,7 @@ from qseal.report.text import (
     render_dbt_scan_report,
     render_duckdb_benchmark_report,
     render_duckdb_fixture_report,
+    render_snowflake_benchmark_report,
     render_suggestion_report,
     render_suggestions_report,
     render_verification_report,
@@ -1784,6 +1790,13 @@ def fixtures_create(
 @click.argument("original_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.argument("rewritten_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option(
+    "--engine",
+    type=click.Choice(("duckdb", "snowflake")),
+    default="duckdb",
+    show_default=True,
+    help="Execution engine used for the benchmark.",
+)
+@click.option(
     "--database",
     "database_path",
     type=click.Path(dir_okay=False, path_type=Path),
@@ -1822,7 +1835,7 @@ def fixtures_create(
     type=click.IntRange(min=1),
     default=1,
     show_default=True,
-    help="DuckDB worker threads.",
+    help="DuckDB worker threads. Ignored by Snowflake.",
 )
 @click.option(
     "--minimum-duration-ms",
@@ -1844,9 +1857,17 @@ def fixtures_create(
     type=click.Path(dir_okay=False, path_type=Path),
     help="Write a versioned JSON benchmark artifact to this file.",
 )
+@click.option(
+    "--query-tag",
+    help=(
+        "Snowflake query tag. Defaults to QSEAL_SNOWFLAKE_QUERY_TAG or "
+        "qseal-tier3."
+    ),
+)
 def benchmark(
     original_path: Path,
     rewritten_path: Path,
+    engine: str,
     database_path: Path | None,
     setup_path: Path | None,
     warmups: int,
@@ -1856,33 +1877,57 @@ def benchmark(
     minimum_duration_ms: float,
     output_format: str,
     report_file: Path | None,
+    query_tag: str | None,
 ) -> None:
-    """Benchmark an original and rewritten query in DuckDB."""
-    result = benchmark_query_pair(
-        original_path.read_text(),
-        rewritten_path.read_text(),
-        database_path=database_path or ":memory:",
-        setup_sql=setup_path.read_text() if setup_path is not None else None,
-        warmups=warmups,
-        repetitions=repetitions,
-        timeout_seconds=timeout_seconds,
-        threads=threads,
-        minimum_duration_ms=minimum_duration_ms,
-    ).model_copy(
+    """Benchmark an original and rewritten query."""
+    if engine == "snowflake":
+        result = benchmark_snowflake_query_pair(
+            original_path.read_text(),
+            rewritten_path.read_text(),
+            setup_sql=setup_path.read_text() if setup_path is not None else None,
+            warmups=warmups,
+            repetitions=repetitions,
+            timeout_seconds=timeout_seconds,
+            minimum_duration_ms=minimum_duration_ms,
+            query_tag=query_tag,
+        )
+    else:
+        result = benchmark_query_pair(
+            original_path.read_text(),
+            rewritten_path.read_text(),
+            database_path=database_path or ":memory:",
+            setup_sql=setup_path.read_text() if setup_path is not None else None,
+            warmups=warmups,
+            repetitions=repetitions,
+            timeout_seconds=timeout_seconds,
+            threads=threads,
+            minimum_duration_ms=minimum_duration_ms,
+        )
+
+    result = result.model_copy(
         update={
             "inputs": {
                 "original_path": str(original_path),
                 "rewritten_path": str(rewritten_path),
                 "setup_path": str(setup_path) if setup_path is not None else "",
+                "engine": engine,
             }
         }
     )
-    json_report = render_duckdb_benchmark_json(result)
+    json_report = (
+        render_snowflake_benchmark_json(result)
+        if engine == "snowflake"
+        else render_duckdb_benchmark_json(result)
+    )
 
     if output_format == "json":
         click.echo(json_report)
     else:
-        console.print(render_duckdb_benchmark_report(result))
+        console.print(
+            render_snowflake_benchmark_report(result)
+            if engine == "snowflake"
+            else render_duckdb_benchmark_report(result)
+        )
 
     if report_file is not None:
         report_file.parent.mkdir(parents=True, exist_ok=True)

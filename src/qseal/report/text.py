@@ -30,6 +30,42 @@ def render_duckdb_benchmark_report(result: BenchmarkResult) -> Text:
     return output
 
 
+def render_snowflake_benchmark_report(result: BenchmarkResult) -> Text:
+    output = Text()
+    output.append(f"{result.status.value}\n", style="bold")
+    if result.status != BenchmarkStatus.COMPLETED:
+        output.append(f"{result.reason or 'Benchmark failed.'}\n")
+        return output
+
+    output.append(
+        f"Original median: {result.original.median_ms:.3f} ms\n"
+        f"Rewritten median: {result.rewritten.median_ms:.3f} ms\n"
+        f"Speedup: {result.speedup:.3f}x\n"
+        f"Rows: {result.original.row_count} / {result.rewritten.row_count}\n"
+        f"Row counts match: {result.row_counts_match}\n"
+        f"Timing confident: {result.timing_confident}\n"
+    )
+    if result.original.query_ids or result.rewritten.query_ids:
+        output.append(
+            "Query IDs: "
+            f"{', '.join(result.original.query_ids)} / "
+            f"{', '.join(result.rewritten.query_ids)}\n"
+        )
+    if result.original.bytes_scanned or result.rewritten.bytes_scanned:
+        output.append(
+            "Bytes scanned: "
+            f"{_sum_optional_ints(result.original.bytes_scanned)} / "
+            f"{_sum_optional_ints(result.rewritten.bytes_scanned)}\n"
+        )
+    if result.confidence_reason is not None:
+        output.append(f"Confidence: {result.confidence_reason}\n")
+    return output
+
+
+def _sum_optional_ints(values: tuple[int, ...]) -> int:
+    return sum(values)
+
+
 def render_duckdb_fixture_report(manifest: DuckDbFixtureManifest) -> Text:
     output = Text()
     output.append("DuckDB fixture created\n", style="bold")

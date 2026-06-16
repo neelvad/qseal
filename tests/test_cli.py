@@ -5,6 +5,12 @@ from shutil import copytree
 import yaml
 from click.testing import CliRunner
 
+from qseal.benchmark.model import (
+    BenchmarkEnvironment,
+    BenchmarkResult,
+    BenchmarkStatus,
+    QueryBenchmark,
+)
 from qseal.cli import main
 from qseal.corpora import bundled_corpus_path
 
@@ -105,6 +111,92 @@ FROM range(100) AS values(value);
     assert payload["row_counts_match"] is True
     assert payload["inputs"]["setup_path"] == str(setup)
     assert str(report) in result.output
+
+
+def test_benchmark_cli_writes_snowflake_artifact(tmp_path, monkeypatch) -> None:
+    original = tmp_path / "original.sql"
+    rewritten = tmp_path / "rewritten.sql"
+    setup = tmp_path / "setup.sql"
+    report = tmp_path / "benchmark.json"
+    original.write_text("SELECT DISTINCT user_id FROM users")
+    rewritten.write_text("SELECT user_id FROM users")
+    setup.write_text("CREATE TEMP TABLE users AS SELECT 1 AS user_id")
+
+    def fake_benchmark(original_sql, rewritten_sql, **kwargs):
+        assert original_sql == original.read_text()
+        assert rewritten_sql == rewritten.read_text()
+        assert kwargs["setup_sql"] == setup.read_text()
+        assert kwargs["query_tag"] == "qseal-test"
+        return BenchmarkResult(
+            status=BenchmarkStatus.COMPLETED,
+            original=QueryBenchmark(
+                status=BenchmarkStatus.COMPLETED,
+                sql=original_sql,
+                timings_ms=(10.0,),
+                batch_timings_ms=(10.0,),
+                median_ms=10.0,
+                row_count=1,
+                query_ids=("qid-1",),
+                bytes_scanned=(100,),
+            ),
+            rewritten=QueryBenchmark(
+                status=BenchmarkStatus.COMPLETED,
+                sql=rewritten_sql,
+                timings_ms=(5.0,),
+                batch_timings_ms=(5.0,),
+                median_ms=5.0,
+                row_count=1,
+                query_ids=("qid-2",),
+                bytes_scanned=(50,),
+            ),
+            environment=BenchmarkEnvironment(
+                engine="snowflake",
+                python_version="test",
+                platform="test",
+                database_path="QSEAL_DEV.BENCHMARKS",
+                threads=1,
+                warmups=0,
+                repetitions=1,
+                timeout_seconds=30.0,
+                snowflake_warehouse="QSEAL_WH",
+            ),
+            speedup=2.0,
+            row_counts_match=True,
+        )
+
+    monkeypatch.setattr("qseal.cli.benchmark_snowflake_query_pair", fake_benchmark)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "benchmark",
+            str(original),
+            str(rewritten),
+            "--engine",
+            "snowflake",
+            "--setup",
+            str(setup),
+            "--warmups",
+            "0",
+            "--repetitions",
+            "1",
+            "--query-tag",
+            "qseal-test",
+            "--report-file",
+            str(report),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(report.read_text())
+    assert payload["artifact_type"] == "snowflake_benchmark"
+    assert payload["dialect"] == "snowflake"
+    assert payload["environment"]["engine"] == "snowflake"
+    assert payload["original"]["query_ids"] == ["qid-1"]
+    assert payload["rewritten"]["bytes_scanned"] == [50]
+    assert payload["inputs"]["engine"] == "snowflake"
 
 
 def test_fixtures_create_cli_writes_database_and_manifest(tmp_path) -> None:

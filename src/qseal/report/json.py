@@ -60,6 +60,14 @@ def render_duckdb_benchmark_json(result: BenchmarkResult) -> str:
     return _dumps(payload)
 
 
+def render_snowflake_benchmark_json(result: BenchmarkResult) -> str:
+    payload = result.model_dump(mode="json")
+    payload["schema_version"] = 1
+    payload["artifact_type"] = "snowflake_benchmark"
+    payload["dialect"] = "snowflake"
+    return _dumps(payload)
+
+
 def render_duckdb_fixture_json(manifest: DuckDbFixtureManifest) -> str:
     return _dumps(manifest.model_dump(mode="json"))
 

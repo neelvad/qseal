@@ -60,6 +60,40 @@ The evaluator materializes every result and alternates original/rewritten
 execution order. Row-count equality is not semantic equivalence; benchmark only
 after a verifier has approved the pair.
 
+## `snowflake_benchmark`
+
+Emitted by:
+
+```bash
+qseal benchmark original.sql rewritten.sql \
+  --engine snowflake \
+  --setup setup.sql \
+  --query-tag qseal-tier3 \
+  --report-file benchmark.json \
+  --format json
+```
+
+Required environment variables are `QSEAL_SNOWFLAKE_ACCOUNT`,
+`QSEAL_SNOWFLAKE_USER`, `QSEAL_SNOWFLAKE_PASSWORD`,
+`QSEAL_SNOWFLAKE_WAREHOUSE`, `QSEAL_SNOWFLAKE_DATABASE`, and
+`QSEAL_SNOWFLAKE_SCHEMA`. `QSEAL_SNOWFLAKE_ROLE` and
+`QSEAL_SNOWFLAKE_QUERY_TAG` are optional.
+
+Important Snowflake-specific fields:
+
+- `environment`: account, user, role, warehouse, database, schema, connector
+  version, query tag, Python, platform, warmup, repetition, and timeout
+  metadata. Passwords are never written to artifacts.
+- `original.query_ids` and `rewritten.query_ids`: Snowflake query IDs for
+  measured samples.
+- `bytes_scanned`, `compilation_time_ms`, `execution_time_ms`, and
+  `total_elapsed_time_ms`: per-sample query-history metadata when available.
+
+Snowflake benchmarking disables the result cache for the session, applies the
+query tag, alternates original/rewritten execution order, and requires both
+queries to parse as SELECT-style statements. Optional setup SQL is executed
+before warmups and measurements, so it should target a scratch schema.
+
 Corpus search steps copy the benchmark medians, speedup, batch sizes, and
 confidence into the run report so aggregate inspection does not depend on
 external cache files for newly generated reports.
