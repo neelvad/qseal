@@ -1,7 +1,7 @@
-from snowprove.constraints.model import ConstraintCatalog, TableConstraints
-from snowprove.parser.sqlglot_parser import parse_select
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.rewrites.registry import (
+from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.parser.sqlglot_parser import parse_select
+from qseal.rewrites.base import VerificationStatus
+from qseal.rewrites.registry import (
     first_applicable_suggestion,
     rule_names,
     select_rules,

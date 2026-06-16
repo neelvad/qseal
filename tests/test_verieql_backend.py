@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from snowprove.constraints.model import ConstraintCatalog, TableConstraints
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.verifier.backends.verieql import VeriEqlBackend, _build_request
+from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.rewrites.base import VerificationStatus
+from qseal.verifier.backends.verieql import VeriEqlBackend, _build_request
 
 UNIQUE_NON_NULL_USERS = ConstraintCatalog(
     tables={
@@ -155,7 +155,7 @@ models:
 def test_dbt_crosscheck_passes_when_findings_survive(tmp_path: Path) -> None:
     from click.testing import CliRunner
 
-    from snowprove.cli import main
+    from qseal.cli import main
 
     project = _write_scan_project(tmp_path)
     fake = tmp_path / "fake-python"
@@ -183,7 +183,7 @@ def test_dbt_crosscheck_passes_when_findings_survive(tmp_path: Path) -> None:
 def test_dbt_crosscheck_fails_on_refuted_finding(tmp_path: Path) -> None:
     from click.testing import CliRunner
 
-    from snowprove.cli import main
+    from qseal.cli import main
 
     project = _write_scan_project(tmp_path)
     fake = tmp_path / "fake-python"

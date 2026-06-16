@@ -1,7 +1,7 @@
-from snowprove.constraints.model import ColumnConstraint, ConstraintCatalog, TableConstraints
-from snowprove.parser.sqlglot_parser import parse_select
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.rewrites.not_null_filter import RemoveRedundantNotNullFilter
+from qseal.constraints.model import ColumnConstraint, ConstraintCatalog, TableConstraints
+from qseal.parser.sqlglot_parser import parse_select
+from qseal.rewrites.base import VerificationStatus
+from qseal.rewrites.not_null_filter import RemoveRedundantNotNullFilter
 
 
 def test_removes_redundant_not_null_filter() -> None:
@@ -117,9 +117,9 @@ def test_does_not_remove_nullable_not_null_filter() -> None:
 
 
 def test_matches_tolerates_in_and_exists_predicates() -> None:
-    from snowprove.constraints.model import ConstraintCatalog, TableConstraints
-    from snowprove.parser.sqlglot_parser import parse_select
-    from snowprove.rewrites.not_null_filter import RemoveRedundantNotNullFilter
+    from qseal.constraints.model import ConstraintCatalog, TableConstraints
+    from qseal.parser.sqlglot_parser import parse_select
+    from qseal.rewrites.not_null_filter import RemoveRedundantNotNullFilter
 
     query = parse_select(
         """

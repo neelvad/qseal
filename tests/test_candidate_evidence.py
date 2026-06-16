@@ -1,6 +1,6 @@
-from snowprove.candidates.benchmarking import benchmark_pair
-from snowprove.candidates.explain import _diff_plans, explain_pair
-from snowprove.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.candidates.benchmarking import benchmark_pair
+from qseal.candidates.explain import _diff_plans, explain_pair
+from qseal.constraints.model import ConstraintCatalog, TableConstraints
 
 UNIQUE_NON_NULL = ConstraintCatalog(
     tables={

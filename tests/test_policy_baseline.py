@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
-from snowprove.corpora import bundled_corpus_path
-from snowprove.corpus import (
+from qseal.corpora import bundled_corpus_path
+from qseal.corpus import (
     CorpusRunConfig,
     CorpusRunEnvironment,
     CorpusRunReport,
@@ -11,8 +11,8 @@ from snowprove.corpus import (
     export_corpus_trajectories,
     load_task_corpus,
 )
-from snowprove.corpus.trajectories import load_corpus_trajectory_records
-from snowprove.policy import (
+from qseal.corpus.trajectories import load_corpus_trajectory_records
+from qseal.policy import (
     PolicyDataFilter,
     compare_policy_holdouts,
     evaluate_baseline_policy,
@@ -23,13 +23,13 @@ from snowprove.policy import (
     train_baseline_policy,
     train_linear_policy,
 )
-from snowprove.policy.baseline import (
+from qseal.policy.baseline import (
     PolicyHoldoutEvaluation,
     render_baseline_policy_inspection,
     render_policy_holdout_evaluation,
 )
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.search import SearchResult, SearchStep
+from qseal.rewrites.base import VerificationStatus
+from qseal.search import SearchResult, SearchStep
 
 
 def test_baseline_policy_trains_and_evaluates_state_oracle_actions(tmp_path) -> None:

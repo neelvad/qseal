@@ -1,13 +1,13 @@
 [project]
-name = "snowprove"
+name = "qseal"
 version = "0.1.0"
-description = "Verified-safe SQL rewrites for a constrained Snowflake and DuckDB SQL subset."
+description = "QuerySeal verifies safe SQL rewrites for a constrained Snowflake and DuckDB SQL subset."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
-    { name = "snowprove contributors" },
+    { name = "QuerySeal contributors" },
 ]
 keywords = ["sql", "snowflake", "dbt", "formal-verification", "query-optimization"]
 classifiers = [
@@ -31,12 +31,13 @@ dependencies = [
 ]
 
 [project.scripts]
-snowprove = "snowprove.cli:main"
+qseal = "qseal.cli:main"
+snowprove = "qseal.cli:main"
 
 [project.urls]
-Repository = "https://github.com/neelvad/snowprove"
-Issues = "https://github.com/neelvad/snowprove/issues"
-Documentation = "https://github.com/neelvad/snowprove#readme"
+Repository = "https://github.com/neelvad/qseal"
+Issues = "https://github.com/neelvad/qseal/issues"
+Documentation = "https://github.com/neelvad/qseal#readme"
 
 [dependency-groups]
 dev = [
@@ -50,6 +51,9 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qseal", "src/snowprove"]
 
 [tool.ruff]
 line-length = 100

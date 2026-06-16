@@ -1,15 +1,15 @@
-# Snowprove in CI
+# QuerySeal in CI
 
 The deterministic rule scanner runs in CI with no external solvers — a pure
-`pip install snowprove`. On a pull request it scans only the dbt models the PR
+`pip install qseal`. On a pull request it scans only the dbt models the PR
 changed and comments the proven-safe rewrites it finds.
 
 ## GitHub Action
 
-Add `.github/workflows/snowprove.yml` to your dbt repo:
+Add `.github/workflows/qseal.yml` to your dbt repo:
 
 ```yaml
-name: snowprove
+name: qseal
 on:
   pull_request:
     paths:
@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # full history so --changed-since can diff
-      - uses: your-org/snowprove@v0
+      - uses: your-org/qseal@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -37,7 +37,7 @@ jobs:
 ```
 
 The action posts (and idempotently updates) a single PR comment marked with
-`<!-- snowprove-scan -->`, listing each proven rewrite, the dbt tests that keep
+`<!-- qseal-scan -->`, listing each proven rewrite, the dbt tests that keep
 it valid, apply-readiness, and a diff. Each rewrite returns the same rows under
 the listed dbt-test assumptions; no performance claim is made.
 
@@ -56,8 +56,8 @@ the listed dbt-test assumptions; no performance claim is made.
 The Action is a thin wrapper over the CLI. Any CI system can run:
 
 ```bash
-pip install snowprove
-snowprove dbt scan transform/snowflake-dbt \
+pip install qseal
+qseal dbt scan transform/snowflake-dbt \
   --changed-since origin/main --format markdown
 ```
 
@@ -68,6 +68,6 @@ nonzero exit when proven rewrites are found.
 
 This page covers the **deterministic** tier (hand-written rules, zero external
 dependencies) — the right default for CI. The prover-backed and
-LLM-generated tiers (`snowprove llm ...`) need the QED/SQLSolver toolchain and
+LLM-generated tiers (`qseal llm ...`) need the QED/SQLSolver toolchain and
 an API key and are run out-of-band, not on every PR. See
 [llm-candidates.md](llm-candidates.md).

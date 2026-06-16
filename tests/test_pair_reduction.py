@@ -1,4 +1,4 @@
-from snowprove.verifier.pair_reduction import reduce_pair
+from qseal.verifier.pair_reduction import reduce_pair
 
 ORIGINAL = """
 with a as (select x, y from base_a),

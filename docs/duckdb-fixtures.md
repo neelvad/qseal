@@ -1,11 +1,11 @@
 # DuckDB Fixtures
 
-Snowprove generates benchmark data with deterministic set-based SQL. It does
+QuerySeal generates benchmark data with deterministic set-based SQL. It does
 not use DuckDB `random()`, Python row loops, timestamps, or machine-specific
 inputs.
 
 ```bash
-snowprove fixtures create fixture.duckdb \
+qseal fixtures create fixture.duckdb \
   --seed 42 \
   --users 10000 \
   --orders 100000 \
@@ -32,7 +32,7 @@ to overwrite either output by default.
 The fixture is directly reusable by the evaluator:
 
 ```bash
-snowprove benchmark original.sql rewritten.sql \
+qseal benchmark original.sql rewritten.sql \
   --database fixture.duckdb \
   --report-file benchmark.json
 ```

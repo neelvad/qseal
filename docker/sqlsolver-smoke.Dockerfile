@@ -14,7 +14,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ENV PATH="/root/.local/bin:${PATH}"
 ENV UV_LINK_MODE=copy
-ENV UV_PROJECT_ENVIRONMENT=/tmp/snowprove-venv
-ENV UV_CACHE_DIR=/tmp/snowprove-uv-cache
+ENV UV_PROJECT_ENVIRONMENT=/tmp/qseal-venv
+ENV UV_CACHE_DIR=/tmp/qseal-uv-cache
 
 WORKDIR /sqlsolver

@@ -2,15 +2,15 @@ import math
 
 import pytest
 
-from snowprove.benchmark.model import (
+from qseal.benchmark.model import (
     BenchmarkEnvironment,
     BenchmarkResult,
     BenchmarkStatus,
     QueryBenchmark,
 )
-from snowprove.constraints.model import ColumnConstraint, ConstraintCatalog, TableConstraints
-from snowprove.environment import EnvironmentTask, RewriteEnvironment
-from snowprove.search import (
+from qseal.constraints.model import ColumnConstraint, ConstraintCatalog, TableConstraints
+from qseal.environment import EnvironmentTask, RewriteEnvironment
+from qseal.search import (
     beam_search,
     exhaustive_search,
     fixed_order_search,

@@ -1,7 +1,7 @@
-from snowprove.constraints.model import ConstraintCatalog
-from snowprove.parser.sqlglot_parser import parse_select
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.rewrites.join_distinct_exists import RewriteJoinDistinctToExists
+from qseal.constraints.model import ConstraintCatalog
+from qseal.parser.sqlglot_parser import parse_select
+from qseal.rewrites.base import VerificationStatus
+from qseal.rewrites.join_distinct_exists import RewriteJoinDistinctToExists
 
 
 def test_rewrites_join_distinct_to_exists() -> None:

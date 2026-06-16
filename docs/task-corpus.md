@@ -7,24 +7,24 @@ depending on the repository checkout location:
 ```python
 from pathlib import Path
 
-from snowprove.corpora import bundled_corpus_path
-from snowprove.corpus import load_task_corpus, materialize_corpus_fixtures
+from qseal.corpora import bundled_corpus_path
+from qseal.corpus import load_task_corpus, materialize_corpus_fixtures
 
 corpus = load_task_corpus(bundled_corpus_path())
-materialize_corpus_fixtures(corpus, Path("snowprove-corpus-data"))
+materialize_corpus_fixtures(corpus, Path("qseal-corpus-data"))
 ```
 
 The corpus runner executes search baselines and writes a versioned comparison
 artifact:
 
 ```bash
-uv run snowprove corpus run snowprove-runs/corpus
+uv run qseal corpus run qseal-runs/corpus
 ```
 
 For a short smoke run:
 
 ```bash
-uv run snowprove corpus run snowprove-runs/corpus-smoke \
+uv run qseal corpus run qseal-runs/corpus-smoke \
   --task distinct-and-not-null \
   --strategy fixed_order \
   --strategy greedy \
@@ -41,7 +41,7 @@ repeated runs reuse both.
 To compare a trained baseline policy as a corpus strategy:
 
 ```bash
-uv run snowprove corpus run snowprove-runs/corpus-policy \
+uv run qseal corpus run qseal-runs/corpus-policy \
   --strategy policy_baseline \
   --strategy policy_baseline_abstain \
   --policy-model policy.json
@@ -58,7 +58,7 @@ Use `--reward-margin` to require a meaningful cumulative improvement before
 greedy, beam, or exhaustive search prefers a longer path:
 
 ```bash
-uv run snowprove corpus run snowprove-runs/corpus-margin \
+uv run qseal corpus run qseal-runs/corpus-margin \
   --reward-margin 0.05 \
   --warmups 2 \
   --repetitions 5
@@ -71,12 +71,12 @@ Use `--minimum-duration-ms` to amortize timer and scheduler noise for fast
 queries:
 
 ```bash
-uv run snowprove corpus run snowprove-runs/corpus-confidence \
+uv run qseal corpus run qseal-runs/corpus-confidence \
   --minimum-duration-ms 5.0 \
   --reward-margin 0.05
 ```
 
-Snowprove calibrates each query independently, repeats it enough times to reach
+QuerySeal calibrates each query independently, repeats it enough times to reach
 the target duration, and divides the batch time back into a per-execution
 latency. Artifacts record both batch timings and executions per sample. A
 transition receives zero reward only if the batching safety cap still cannot
@@ -89,7 +89,7 @@ together. It currently gives the most stable corpus-level measurements.
 computes transition rewards from those absolute runtimes:
 
 ```bash
-uv run snowprove corpus repeat snowprove-runs/corpus-state \
+uv run qseal corpus repeat qseal-runs/corpus-state \
   --runs 3 \
   --reward-model state \
   --reward-margin 0.05 \
@@ -115,7 +115,7 @@ partial path.
 For repeated independent measurements and an automatic stability aggregate:
 
 ```bash
-uv run snowprove corpus repeat snowprove-runs/corpus-repeat \
+uv run qseal corpus repeat qseal-runs/corpus-repeat \
   --runs 3 \
   --reward-margin 0.05 \
   --minimum-duration-ms 5.0 \
@@ -137,11 +137,11 @@ classification changes.
 Inspect unstable tasks and their per-run timing paths with:
 
 ```bash
-uv run snowprove corpus inspect-aggregate \
-  snowprove-runs/corpus-repeat/corpus-aggregate.json
+uv run qseal corpus inspect-aggregate \
+  qseal-runs/corpus-repeat/corpus-aggregate.json
 
-uv run snowprove corpus inspect-aggregate \
-  snowprove-runs/corpus-repeat/corpus-aggregate.json \
+uv run qseal corpus inspect-aggregate \
+  qseal-runs/corpus-repeat/corpus-aggregate.json \
   --task distinct-not-null-users-standard-compact
 ```
 
@@ -234,7 +234,7 @@ exits nonzero after writing the artifact if any strategy failed.
 
 ## Trajectory Export
 
-`snowprove corpus export-trajectories REPORT.json --output trajectories.jsonl`
+`qseal corpus export-trajectories REPORT.json --output trajectories.jsonl`
 converts a completed corpus run into JSONL training/evaluation rows. Each row
 captures one chosen search step with the current SQL, available action IDs,
 chosen action, proposed and next SQL, reward, suffix reward, verifier status,
@@ -257,10 +257,10 @@ learned or LLM-based candidate generation.
 The first policy workflow is intentionally simple and interpretable:
 
 ```bash
-uv run snowprove policy train-baseline trajectories.jsonl \
+uv run qseal policy train-baseline trajectories.jsonl \
   --model-file policy.json
 
-uv run snowprove policy evaluate-baseline trajectories.jsonl \
+uv run qseal policy evaluate-baseline trajectories.jsonl \
   --model-file policy.json \
   --report-file policy-evaluation.json
 ```
@@ -282,11 +282,11 @@ over-penalizing near-tie action-order labels.
 Both training and evaluation support simple split filters:
 
 ```bash
-uv run snowprove policy train-baseline trajectories.jsonl \
+uv run qseal policy train-baseline trajectories.jsonl \
   --exclude-fixture standard-medium \
   --model-file policy-without-medium.json
 
-uv run snowprove policy evaluate-baseline trajectories.jsonl \
+uv run qseal policy evaluate-baseline trajectories.jsonl \
   --include-fixture standard-medium \
   --model-file policy-without-medium.json
 ```
@@ -298,8 +298,8 @@ adds more accepted or rejected values.
 For a complete held-out search experiment, use:
 
 ```bash
-uv run snowprove policy holdout-evaluate trajectories.jsonl \
-  snowprove-runs/policy-holdout-medium \
+uv run qseal policy holdout-evaluate trajectories.jsonl \
+  qseal-runs/policy-holdout-medium \
   --include-fixture standard-medium \
   --reward-margin 0.05 \
   --label-margin 0.055 \
@@ -319,14 +319,14 @@ with `greedy` and `policy_baseline_abstain`. It writes `policy.json`,
 Use the summary command after a corpus run:
 
 ```bash
-uv run snowprove corpus summarize snowprove-runs/corpus/corpus-run.json
+uv run qseal corpus summarize qseal-runs/corpus/corpus-run.json
 ```
 
 To persist a machine-readable summary:
 
 ```bash
-uv run snowprove corpus summarize snowprove-runs/corpus/corpus-run.json \
-  --summary-file snowprove-runs/corpus/corpus-summary.json \
+uv run qseal corpus summarize qseal-runs/corpus/corpus-run.json \
+  --summary-file qseal-runs/corpus/corpus-summary.json \
   --format json
 ```
 
@@ -352,10 +352,10 @@ effective neutral threshold so reported winners match the search policy.
 separately, pass two or more compatible run reports explicitly:
 
 ```bash
-uv run snowprove corpus aggregate \
-  snowprove-runs/run-1/corpus-run.json \
-  snowprove-runs/run-2/corpus-run.json \
-  --aggregate-file snowprove-runs/corpus-aggregate.json
+uv run qseal corpus aggregate \
+  qseal-runs/run-1/corpus-run.json \
+  qseal-runs/run-2/corpus-run.json \
+  --aggregate-file qseal-runs/corpus-aggregate.json
 ```
 
 Reports must use the same corpus fingerprint, task set, run configuration, and

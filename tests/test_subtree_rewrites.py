@@ -1,10 +1,10 @@
-from snowprove.constraints.model import ConstraintCatalog, TableConstraints
-from snowprove.parser.fragments import parse_select_fragments, replace_fragment_sql
-from snowprove.parser.sqlglot_parser import parse_select
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.rewrites.distinct import RemoveRedundantDistinct
-from snowprove.rewrites.join_elimination import RemoveUnusedLeftJoin
-from snowprove.rewrites.subtree import suggest_subtree_rewrites
+from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.parser.fragments import parse_select_fragments, replace_fragment_sql
+from qseal.parser.sqlglot_parser import parse_select
+from qseal.rewrites.base import VerificationStatus
+from qseal.rewrites.distinct import RemoveRedundantDistinct
+from qseal.rewrites.join_elimination import RemoveUnusedLeftJoin
+from qseal.rewrites.subtree import suggest_subtree_rewrites
 
 UNSUPPORTED_OUTER_SQL = """
 with active_users as (

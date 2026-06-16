@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from snowprove.cli import main
-from snowprove.corpus import (
+from qseal.cli import main
+from qseal.corpus import (
     CorpusRunConfig,
     CorpusRunEnvironment,
     CorpusRunReport,
@@ -18,7 +18,7 @@ from snowprove.corpus import (
     render_corpus_summary,
     summarize_corpus_run,
 )
-from snowprove.search import SearchResult
+from qseal.search import SearchResult
 
 
 def test_summarizes_strategy_rankings_and_task_disagreement() -> None:

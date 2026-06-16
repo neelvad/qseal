@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
-from snowprove.corpora import bundled_corpus_path
-from snowprove.corpus import (
+from qseal.corpora import bundled_corpus_path
+from qseal.corpus import (
     CorpusRunConfig,
     CorpusRunEnvironment,
     CorpusRunReport,
@@ -12,8 +12,8 @@ from snowprove.corpus import (
     load_corpus_trajectory_records,
     load_task_corpus,
 )
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.search import SearchResult, SearchStep
+from qseal.rewrites.base import VerificationStatus
+from qseal.search import SearchResult, SearchStep
 
 
 def test_exports_state_and_task_oracle_labels(tmp_path) -> None:

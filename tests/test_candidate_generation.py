@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from snowprove.candidates.generation import (
+from qseal.candidates.generation import (
     build_requests,
     generate_candidates,
     write_bundle,
@@ -86,7 +86,7 @@ def test_write_bundle_conforms_to_candidate_contract(tmp_path: Path) -> None:
 def test_generate_via_cli_dry_run(tmp_path: Path) -> None:
     from click.testing import CliRunner
 
-    from snowprove.cli import main
+    from qseal.cli import main
 
     project = _write_project(tmp_path)
     result = CliRunner().invoke(

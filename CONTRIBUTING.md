@@ -1,6 +1,6 @@
 # Contributing
 
-Snowprove is early and intentionally conservative. Changes should keep the
+QuerySeal is early and intentionally conservative. Changes should keep the
 modeled SQL subset small, explicit, and easy to audit.
 
 ## Development
@@ -21,7 +21,7 @@ Prefer small, rule-specific changes:
 - add parser or IR support only for syntax the rule needs
 - reject unsupported SQL explicitly
 - add focused rewrite tests
-- add `snowprove check` verifier coverage
+- add `qseal check` verifier coverage
 - add example SQL under `examples/`
 - document any new assumptions in `docs/scope.md`
 
@@ -30,7 +30,7 @@ Rules should return `UNKNOWN` when a required assumption is missing and
 
 ## Constraints
 
-Snowprove treats YAML constraints as trusted input. Do not infer production
+QuerySeal treats YAML constraints as trusted input. Do not infer production
 truth from Snowflake metadata unless the source is clearly documented and the
 tool reports the assumption.
 

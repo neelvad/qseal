@@ -1,6 +1,6 @@
-from snowprove.dbt.scan import DbtModelScanResult, DbtScanResult
-from snowprove.report.text import render_dbt_scan_diff_report, render_suggestions_report
-from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
+from qseal.dbt.scan import DbtModelScanResult, DbtScanResult
+from qseal.report.text import render_dbt_scan_diff_report, render_suggestions_report
+from qseal.rewrites.base import RewriteSuggestion, VerificationStatus
 
 
 def test_render_suggestions_report_omits_not_applicable_results() -> None:
@@ -78,7 +78,7 @@ def test_render_dbt_scan_diff_report_uses_source_path() -> None:
 
 
 def test_render_dbt_scan_report_shows_source_and_scanned_paths() -> None:
-    from snowprove.report.text import render_dbt_scan_report
+    from qseal.report.text import render_dbt_scan_report
 
     report = render_dbt_scan_report(
         DbtScanResult(
@@ -115,7 +115,7 @@ def test_render_dbt_scan_report_shows_source_and_scanned_paths() -> None:
 
 
 def test_render_dbt_scan_report_shows_reason_counts() -> None:
-    from snowprove.report.text import render_dbt_scan_report
+    from qseal.report.text import render_dbt_scan_report
 
     report = render_dbt_scan_report(
         DbtScanResult(

@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from snowprove.dbt.project import discover_compiled_sql_path
-from snowprove.dbt.scan import scan_dbt_project
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.rewrites.registry import DEFAULT_RULES
+from qseal.dbt.project import discover_compiled_sql_path
+from qseal.dbt.scan import scan_dbt_project
+from qseal.rewrites.base import VerificationStatus
+from qseal.rewrites.registry import DEFAULT_RULES
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

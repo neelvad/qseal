@@ -1,14 +1,14 @@
 import pytest
 
-from snowprove.constraints.model import ColumnConstraint, ConstraintCatalog, TableConstraints
-from snowprove.parser.sqlglot_parser import parse_select
-from snowprove.rewrites.base import RewriteMatch, VerificationStatus
-from snowprove.rewrites.distinct import RemoveRedundantDistinct
-from snowprove.rewrites.join_distinct_exists import RewriteJoinDistinctToExists
-from snowprove.rewrites.join_elimination import RemoveUnusedLeftJoin
-from snowprove.rewrites.not_null_filter import RemoveRedundantNotNullFilter
-from snowprove.rewrites.predicate_pushdown import PredicatePushdown
-from snowprove.rewrites.registry import apply_rewrite_match, available_rewrite_matches
+from qseal.constraints.model import ColumnConstraint, ConstraintCatalog, TableConstraints
+from qseal.parser.sqlglot_parser import parse_select
+from qseal.rewrites.base import RewriteMatch, VerificationStatus
+from qseal.rewrites.distinct import RemoveRedundantDistinct
+from qseal.rewrites.join_distinct_exists import RewriteJoinDistinctToExists
+from qseal.rewrites.join_elimination import RemoveUnusedLeftJoin
+from qseal.rewrites.not_null_filter import RemoveRedundantNotNullFilter
+from qseal.rewrites.predicate_pushdown import PredicatePushdown
+from qseal.rewrites.registry import apply_rewrite_match, available_rewrite_matches
 
 
 @pytest.mark.parametrize(

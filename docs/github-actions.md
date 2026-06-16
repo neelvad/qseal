@@ -1,6 +1,6 @@
 # GitHub Actions
 
-These examples assume Snowprove is already available in the repository through
+These examples assume QuerySeal is already available in the repository through
 `uv sync`. They are intended for dbt projects that want CI-visible rewrite
 findings before any LLM-generated rewrite flow exists.
 
@@ -9,13 +9,13 @@ findings before any LLM-generated rewrite flow exists.
 This workflow records findings without failing the pull request.
 
 ```yaml
-name: Snowprove
+name: QuerySeal
 
 on:
   pull_request:
 
 jobs:
-  snowprove:
+  qseal:
     runs-on: ubuntu-latest
 
     steps:
@@ -37,33 +37,33 @@ jobs:
 
       - name: Scan dbt models
         run: |
-          uv run snowprove dbt scan . \
-            --report-file snowprove-report.json \
-            --write-patches snowprove-patches
+          uv run qseal dbt scan . \
+            --report-file qseal-report.json \
+            --write-patches qseal-patches
 
-      - name: Upload Snowprove report
+      - name: Upload QuerySeal report
         uses: actions/upload-artifact@v4
         with:
-          name: snowprove-report
+          name: qseal-report
           path: |
-            snowprove-report.json
-            snowprove-patches/**/*.patch
+            qseal-report.json
+            qseal-patches/**/*.patch
           if-no-files-found: ignore
 ```
 
 ## Finding-Gated Scan
 
-This workflow fails when Snowprove finds at least one proven rewrite opportunity.
+This workflow fails when QuerySeal finds at least one proven rewrite opportunity.
 `UNKNOWN` and `UNSUPPORTED` results do not fail this policy.
 
 ```yaml
-name: Snowprove
+name: QuerySeal
 
 on:
   pull_request:
 
 jobs:
-  snowprove:
+  qseal:
     runs-on: ubuntu-latest
 
     steps:
@@ -85,28 +85,28 @@ jobs:
 
       - name: Scan dbt models
         run: |
-          uv run snowprove dbt scan . \
-            --report-file snowprove-report.json \
-            --write-patches snowprove-patches \
+          uv run qseal dbt scan . \
+            --report-file qseal-report.json \
+            --write-patches qseal-patches \
             --fail-on findings
 
-      - name: Upload Snowprove report
+      - name: Upload QuerySeal report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: snowprove-report
+          name: qseal-report
           path: |
-            snowprove-report.json
-            snowprove-patches/**/*.patch
+            qseal-report.json
+            qseal-patches/**/*.patch
           if-no-files-found: ignore
 ```
 
 For Jinja-heavy projects, run `dbt compile` first and scan compiled SQL:
 
 ```bash
-uv run snowprove dbt scan . --use-compiled --report-file snowprove-report.json
+uv run qseal dbt scan . --use-compiled --report-file qseal-report.json
 ```
 
 Compiled scan findings are useful for review, but they are not directly
-apply-ready because Snowprove verified compiled SQL rather than the source model
+apply-ready because QuerySeal verified compiled SQL rather than the source model
 text.

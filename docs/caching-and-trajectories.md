@@ -1,21 +1,21 @@
 # Caching and Trajectories
 
 Search and policy training can reach the same SQL transition through different
-episodes. Snowprove provides protocol wrappers that avoid rerunning identical
+episodes. QuerySeal provides protocol wrappers that avoid rerunning identical
 solver and benchmark work.
 
 ```python
 from pathlib import Path
 
-from snowprove.cache import JsonFileCache
-from snowprove.environment import (
+from qseal.cache import JsonFileCache
+from qseal.environment import (
     CachedPerformanceEvaluator,
     CachedVerifier,
     JsonlTrajectoryRecorder,
     RewriteEnvironment,
 )
 
-cache = JsonFileCache(Path(".snowprove-cache"))
+cache = JsonFileCache(Path(".qseal-cache"))
 environment = RewriteEnvironment(
     verifier=CachedVerifier(
         verifier,
@@ -29,7 +29,7 @@ environment = RewriteEnvironment(
         context={"fixture_fingerprint": fixture_fingerprint},
     ),
     trajectory_recorder=JsonlTrajectoryRecorder(
-        Path("snowprove-runs/trajectories.jsonl")
+        Path("qseal-runs/trajectories.jsonl")
     ),
 )
 ```

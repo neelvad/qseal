@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from snowprove.candidates.verification import merge_reports, verify_candidate
-from snowprove.constraints.model import ConstraintCatalog, TableConstraints
-from snowprove.verifier.backends.builtin import BuiltinVerifierBackend
+from qseal.candidates.verification import merge_reports, verify_candidate
+from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.verifier.backends.builtin import BuiltinVerifierBackend
 
 UNIQUE_NON_NULL = ConstraintCatalog(
     tables={
@@ -81,7 +81,7 @@ def test_merge_reports_takes_best_verdict_and_flags_conflicts(tmp_path: Path) ->
 def test_llm_verify_cli_on_bundle(tmp_path: Path) -> None:
     from click.testing import CliRunner
 
-    from snowprove.cli import main
+    from qseal.cli import main
 
     bundle = tmp_path / "users_distinct"
     bundle.mkdir()

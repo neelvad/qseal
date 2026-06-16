@@ -1,6 +1,6 @@
 # Search Baselines
 
-Snowprove includes deterministic non-learning baselines for exploring the
+QuerySeal includes deterministic non-learning baselines for exploring the
 structured rewrite action space:
 
 - fixed-order applies the first available action until the episode ends
@@ -18,8 +18,8 @@ These are library APIs rather than CLI commands. Each search accepts an
 `EnvironmentTask` and a factory that creates a fresh `RewriteEnvironment`:
 
 ```python
-from snowprove.environment import EnvironmentTask, RewriteEnvironment
-from snowprove.search import beam_search
+from qseal.environment import EnvironmentTask, RewriteEnvironment
+from qseal.search import beam_search
 
 task = EnvironmentTask(task_id="example", sql="SELECT DISTINCT user_id FROM users")
 

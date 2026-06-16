@@ -2,16 +2,16 @@ import math
 
 import pytest
 
-from snowprove.benchmark.model import (
+from qseal.benchmark.model import (
     BenchmarkEnvironment,
     BenchmarkResult,
     BenchmarkStatus,
     QueryBenchmark,
     QueryBenchmarkResult,
 )
-from snowprove.cache import JsonFileCache, content_hash
-from snowprove.constraints.model import ConstraintCatalog, TableConstraints
-from snowprove.environment import (
+from qseal.cache import JsonFileCache, content_hash
+from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.environment import (
     CachedPerformanceEvaluator,
     CachedVerifier,
     EnvironmentTask,
@@ -19,8 +19,8 @@ from snowprove.environment import (
     RewriteEnvironment,
     load_trajectory,
 )
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.verifier.model import VerificationResult
+from qseal.rewrites.base import VerificationStatus
+from qseal.verifier.model import VerificationResult
 
 
 def _task() -> EnvironmentTask:

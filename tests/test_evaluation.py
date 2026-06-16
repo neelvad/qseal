@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from snowprove.evaluation import (
+from qseal.evaluation import (
     comparison_payload,
     discover_project_reports,
     load_project_report,

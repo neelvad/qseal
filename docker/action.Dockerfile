@@ -1,8 +1,8 @@
-# Container image for the snowprove GitHub Action (deterministic tier only:
+# Container image for the QuerySeal GitHub Action (deterministic tier only:
 # the builtin rule scanner needs no external solvers).
 FROM python:3.12-slim
 
-WORKDIR /opt/snowprove
+WORKDIR /opt/qseal
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY scripts/action_entrypoint.py ./action_entrypoint.py
@@ -16,4 +16,4 @@ RUN apt-get update \
 # The dbt project is mounted at the GitHub workspace; trust it for git ops.
 RUN git config --system --add safe.directory '*'
 
-ENTRYPOINT ["python", "/opt/snowprove/action_entrypoint.py"]
+ENTRYPOINT ["python", "/opt/qseal/action_entrypoint.py"]

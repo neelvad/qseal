@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from snowprove.dbt.project import (
+from qseal.dbt.project import (
     DbtProjectDiscoveryError,
     discover_compiled_sql_path,
     discover_dbt_project,
@@ -74,11 +74,11 @@ def test_discovers_unambiguous_compiled_sql_path(tmp_path: Path) -> None:
 
 
 def test_use_compiled_prefers_dbt_project_name_when_packages_exist(tmp_path: Path) -> None:
-    project_compiled = tmp_path / "target" / "compiled" / "snowprove" / "models"
+    project_compiled = tmp_path / "target" / "compiled" / "qseal" / "models"
     package_compiled = tmp_path / "target" / "compiled" / "dbt_utils" / "models"
     project_compiled.mkdir(parents=True)
     package_compiled.mkdir(parents=True)
-    (tmp_path / "dbt_project.yml").write_text("name: snowprove\n")
+    (tmp_path / "dbt_project.yml").write_text("name: qseal\n")
     (project_compiled / "dim_users.sql").write_text("SELECT user_id FROM dim_users")
     (package_compiled / "helper.sql").write_text("SELECT helper_id FROM helper")
 

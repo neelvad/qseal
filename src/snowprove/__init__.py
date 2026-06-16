@@ -1,3 +1,8 @@
-__all__ = ["__version__"]
+"""Compatibility import shim for the former ``snowprove`` package name."""
 
-__version__ = "0.1.0"
+from __future__ import annotations
+
+import qseal as _qseal
+from qseal import *  # noqa: F403
+
+__path__ = _qseal.__path__

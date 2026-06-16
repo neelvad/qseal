@@ -1,7 +1,7 @@
-from snowprove.constraints.model import ConstraintCatalog, TableConstraints
-from snowprove.parser.sqlglot_parser import parse_select
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.rewrites.join_elimination import RemoveUnusedLeftJoin
+from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.parser.sqlglot_parser import parse_select
+from qseal.rewrites.base import VerificationStatus
+from qseal.rewrites.join_elimination import RemoveUnusedLeftJoin
 
 
 def test_removes_unused_left_join_when_right_key_is_unique() -> None:

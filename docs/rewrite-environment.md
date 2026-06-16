@@ -5,7 +5,7 @@ reinforcement-learning experiments. It has no dependency on Gymnasium, Ray,
 PyTorch, or another training framework.
 
 ```python
-from snowprove.environment import EnvironmentTask, RewriteEnvironment
+from qseal.environment import EnvironmentTask, RewriteEnvironment
 
 environment = RewriteEnvironment()
 observation = environment.reset(
@@ -39,7 +39,7 @@ Optional cached verifier/evaluator wrappers and a JSONL recorder can be
 injected without changing the environment. See
 [`caching-and-trajectories.md`](caching-and-trajectories.md).
 
-The default verifier is Snowprove's builtin backend. A different verifier and
+The default verifier is QuerySeal's builtin backend. A different verifier and
 performance evaluator can be injected through protocols.
 
 ## Reward
@@ -64,7 +64,7 @@ runtimes. State rewards eliminate order-dependent cumulative rewards for paths
 that reach the same final SQL.
 
 DuckDB state measurements are interleaved in related pairs. When one state is
-already cached, Snowprove uses it as an anchor: the new state's paired timing is
+already cached, QuerySeal uses it as an anchor: the new state's paired timing is
 normalized onto the cached state's timing scale before the new state is stored.
 This reduces session-to-session drift while preserving one stable cache entry
 per SQL state. State mode fails explicitly if the configured evaluator cannot

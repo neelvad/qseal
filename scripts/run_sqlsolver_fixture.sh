@@ -2,12 +2,12 @@
 set -euo pipefail
 
 CASE_NAME="${CASE_NAME:-redundant_distinct}"
-SNOWPROVE_DIR="${SNOWPROVE_DIR:-/snowprove}"
+QSEAL_DIR="${QSEAL_DIR:-${SNOWPROVE_DIR:-/qseal}}"
 SQLSOLVER_DIR="${SQLSOLVER_DIR:-/sqlsolver}"
 RUN_DIR="${RUN_DIR:-/tmp/sqlsolver-run}"
 JAR_PATH="${JAR_PATH:-$SQLSOLVER_DIR/build/libs/sqlsolver-v1.1.0.jar}"
 LIB_DIR="${LIB_DIR:-$SQLSOLVER_DIR/lib}"
-CASES_MANIFEST="$SNOWPROVE_DIR/tests/fixtures/solver_compat/cases.yml"
+CASES_MANIFEST="$QSEAL_DIR/tests/fixtures/solver_compat/cases.yml"
 
 normalize_sql() {
   sed -e 's/--.*$//' -e 's/[[:space:]]\+/ /g' "$1" \
@@ -73,7 +73,7 @@ print_environment() {
 
 run_case() {
   local name="$1"
-  local case_dir="$SNOWPROVE_DIR/tests/fixtures/solver_compat/$name"
+  local case_dir="$QSEAL_DIR/tests/fixtures/solver_compat/$name"
   local case_run_dir="$RUN_DIR/$name"
   local schema_path="$case_run_dir/schema.sql"
 

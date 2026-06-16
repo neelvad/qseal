@@ -1,8 +1,8 @@
 import duckdb
 import pytest
 
-from snowprove.benchmark.duckdb import benchmark_query, benchmark_query_pair
-from snowprove.benchmark.model import BenchmarkStatus
+from qseal.benchmark.duckdb import benchmark_query, benchmark_query_pair
+from qseal.benchmark.model import BenchmarkStatus
 
 SETUP_SQL = """
 CREATE TABLE users AS

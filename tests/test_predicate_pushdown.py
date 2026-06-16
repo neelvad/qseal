@@ -1,7 +1,7 @@
-from snowprove.constraints.model import ConstraintCatalog
-from snowprove.parser.sqlglot_parser import parse_select
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.rewrites.predicate_pushdown import PredicatePushdown
+from qseal.constraints.model import ConstraintCatalog
+from qseal.parser.sqlglot_parser import parse_select
+from qseal.rewrites.base import VerificationStatus
+from qseal.rewrites.predicate_pushdown import PredicatePushdown
 
 
 def test_pushes_predicate_through_simple_projection_subquery() -> None:

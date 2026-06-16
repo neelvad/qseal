@@ -1,4 +1,4 @@
-from snowprove.dbt.jinja import preprocess_dbt_sql
+from qseal.dbt.jinja import preprocess_dbt_sql
 
 
 def test_preprocess_leaves_plain_sql_unchanged() -> None:

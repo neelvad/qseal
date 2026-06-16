@@ -1,6 +1,6 @@
 # Real Project Evaluation
 
-Before treating Snowprove as public CI tooling, test it on real dbt projects in
+Before treating QuerySeal as public CI tooling, test it on real dbt projects in
 advisory mode. The goal is to learn unsupported SQL/Jinja patterns and confirm
 that reports are understandable.
 
@@ -15,8 +15,8 @@ that reports are understandable.
 
 ## Batch Evaluation Script
 
-Snowprove includes a helper that clones a curated set of public dbt projects
-into `/tmp` and writes reports under `snowprove-runs/`:
+QuerySeal includes a helper that clones a curated set of public dbt projects
+into `/tmp` and writes reports under `qseal-runs/`:
 
 ```bash
 scripts/evaluate_real_projects.sh
@@ -26,7 +26,7 @@ Useful overrides:
 
 ```bash
 REFRESH=1 scripts/evaluate_real_projects.sh
-REPORT_ROOT="$PWD/snowprove-runs/real-projects/manual" scripts/evaluate_real_projects.sh
+REPORT_ROOT="$PWD/qseal-runs/real-projects/manual" scripts/evaluate_real_projects.sh
 RUN_COMPILED=1 scripts/evaluate_real_projects.sh
 DBT_PROFILES_DIR="$HOME/.dbt" RUN_COMPILED=1 scripts/evaluate_real_projects.sh
 DUCKDB_DBT_COMMAND="uvx --from dbt-duckdb dbt" RUN_COMPILED=1 scripts/evaluate_real_projects.sh
@@ -46,25 +46,25 @@ Compare one or more completed run directories:
 ```bash
 uv run scripts/compare_real_project_reports.py \
   --scan-kind compiled \
-  snowprove-runs/real-projects/RUN_A \
-  snowprove-runs/real-projects/RUN_B
+  qseal-runs/real-projects/RUN_A \
+  qseal-runs/real-projects/RUN_B
 
 uv run scripts/compare_real_project_reports.py \
   --format json \
-  snowprove-runs/real-projects/RUN_A
+  qseal-runs/real-projects/RUN_A
 ```
 
-If an individual repository has an unexpected layout or Snowprove rejects it
+If an individual repository has an unexpected layout or QuerySeal rejects it
 before producing a report, the script records `raw-skipped.txt` and continues to
 the next project.
 
 ## Static Raw SQL Scan
 
 ```bash
-uv run snowprove dbt scan . \
+uv run qseal dbt scan . \
   --all \
-  --report-file snowprove-report.json \
-  --write-patches snowprove-patches
+  --report-file qseal-report.json \
+  --write-patches qseal-patches
 ```
 
 Review:
@@ -80,11 +80,11 @@ For Jinja-heavy projects, compile first:
 
 ```bash
 dbt compile
-uv run snowprove dbt scan . \
+uv run qseal dbt scan . \
   --use-compiled \
   --all \
-  --report-file snowprove-compiled-report.json \
-  --write-patches snowprove-compiled-patches
+  --report-file qseal-compiled-report.json \
+  --write-patches qseal-compiled-patches
 ```
 
 Review:
@@ -94,7 +94,7 @@ Review:
 - generated SQL readability
 - whether findings are useful even when not apply-ready
 
-Snowprove scans only compiled SQL files that map back to existing source models
+QuerySeal scans only compiled SQL files that map back to existing source models
 under `models/`. Compiled dbt test SQL under paths such as
 `target/compiled/<project>/models/schema.yml/...` and package-only compiled SQL
 are ignored so real-project summaries reflect model optimization opportunities.
@@ -104,18 +104,18 @@ are ignored so real-project summaries reflect model optimization opportunities.
 For a small query extracted from a real project:
 
 ```bash
-uv run snowprove candidates run model.sql \
+uv run qseal candidates run model.sql \
   --schema schema.yml \
-  --out snowprove-candidates \
-  --report-file snowprove-candidate-run.json
+  --out qseal-candidates \
+  --report-file qseal-candidate-run.json
 ```
 
 If an external/manual/LLM-like producer writes candidates:
 
 ```bash
-uv run snowprove candidates check model.sql \
+uv run qseal candidates check model.sql \
   --schema schema.yml \
-  --candidates-dir snowprove-candidates \
+  --candidates-dir qseal-candidates \
   --format json \
   --fail-on unproven
 ```
@@ -133,7 +133,7 @@ Before public release, capture:
 ## 2026-06-10 Run: Fragment Rewriting Baseline
 
 Full refresh run over all seven projects
-(`snowprove-runs/real-projects/20260610T163428Z`), after the non-null unique
+(`qseal-runs/real-projects/20260610T163428Z`), after the non-null unique
 key soundness fix and fragment (subtree) rewriting landed.
 
 Findings: 350 models scanned, 0 proven rewrites. The public demo corpora are

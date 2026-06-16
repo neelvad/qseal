@@ -17,10 +17,19 @@ def test_find_comment_id_matches_marker() -> None:
     module = _load_module()
     comments = [
         {"id": 1, "body": "unrelated"},
-        {"id": 2, "body": f"{module.COMMENT_MARKER}\nold report"},
+        {"id": 2, "body": f"{module.COMMENT_MARKERS[0]}\nold report"},
     ]
-    assert module.find_comment_id(comments, module.COMMENT_MARKER) == 2
-    assert module.find_comment_id([], module.COMMENT_MARKER) is None
+    assert module.find_comment_id(comments, module.COMMENT_MARKERS) == 2
+    assert module.find_comment_id([], module.COMMENT_MARKERS) is None
+
+
+def test_find_comment_id_matches_legacy_marker() -> None:
+    module = _load_module()
+    comments = [
+        {"id": 2, "body": "<!-- snowprove-scan -->\nold report"},
+    ]
+
+    assert module.find_comment_id(comments, module.COMMENT_MARKERS) == 2
 
 
 def _git(repo: Path, *args: str) -> None:

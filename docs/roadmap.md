@@ -1,6 +1,6 @@
 # Roadmap
 
-This roadmap is intentionally modest. Snowprove should become useful by staying
+This roadmap is intentionally modest. QuerySeal should become useful by staying
 conservative, not by pretending to verify all Snowflake SQL.
 
 ## v0.1: Local CLI Core

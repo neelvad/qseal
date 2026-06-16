@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SNOWPROVE_DIR="${SNOWPROVE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-SQLSOLVER_DIR="${SQLSOLVER_DIR:-$HOME/workspace/snowprove-eval/SQLSolver}"
+QSEAL_DIR="${QSEAL_DIR:-${SNOWPROVE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}}"
+SQLSOLVER_DIR="${SQLSOLVER_DIR:-$HOME/workspace/qseal-eval/SQLSolver}"
 COLIMA_PROFILE="${COLIMA_PROFILE:-sqlsolver-x86}"
 COLIMA_CPUS="${COLIMA_CPUS:-2}"
 COLIMA_MEMORY="${COLIMA_MEMORY:-4}"
@@ -17,9 +17,9 @@ PAIR_REWRITTEN_PATH="${PAIR_REWRITTEN_PATH:-}"
 PAIR_SCHEMA_PATH="${PAIR_SCHEMA_PATH:-}"
 PAIR_SCHEMA_FORMAT="${PAIR_SCHEMA_FORMAT:-auto}"
 PAIR_DIALECT="${PAIR_DIALECT:-snowflake}"
-SMOKE_IMAGE="${SMOKE_IMAGE:-snowprove-sqlsolver-smoke:latest}"
+SMOKE_IMAGE="${SMOKE_IMAGE:-qseal-sqlsolver-smoke:latest}"
 REBUILD_IMAGE="${REBUILD_IMAGE:-0}"
-REPORT_DIR="${REPORT_DIR:-$SNOWPROVE_DIR/snowprove-runs/sqlsolver-smoke/$(date -u +%Y%m%dT%H%M%SZ)}"
+REPORT_DIR="${REPORT_DIR:-$QSEAL_DIR/qseal-runs/sqlsolver-smoke/$(date -u +%Y%m%dT%H%M%SZ)}"
 colima_started=0
 
 cleanup() {
@@ -48,9 +48,9 @@ if [[ ! -d "$SQLSOLVER_DIR" ]]; then
 fi
 
 case "$REPORT_DIR" in
-  "$SNOWPROVE_DIR"/*) CONTAINER_REPORT_DIR="/snowprove/${REPORT_DIR#"$SNOWPROVE_DIR"/}" ;;
+  "$QSEAL_DIR"/*) CONTAINER_REPORT_DIR="/qseal/${REPORT_DIR#"$QSEAL_DIR"/}" ;;
   *)
-    echo "REPORT_DIR must be inside the Snowprove repo: $SNOWPROVE_DIR" >&2
+    echo "REPORT_DIR must be inside the QuerySeal repo: $QSEAL_DIR" >&2
     exit 2
     ;;
 esac
@@ -59,20 +59,20 @@ repo_container_path() {
   local path="$1"
   local absolute_path
 
-  if [[ ! -f "$path" && ! -f "$SNOWPROVE_DIR/$path" ]]; then
+  if [[ ! -f "$path" && ! -f "$QSEAL_DIR/$path" ]]; then
     echo "Pair input not found: $path" >&2
     exit 2
   fi
 
   if [[ "$path" != /* ]]; then
-    path="$SNOWPROVE_DIR/$path"
+    path="$QSEAL_DIR/$path"
   fi
   absolute_path="$(cd "$(dirname "$path")" && pwd -P)/$(basename "$path")"
 
   case "$absolute_path" in
-    "$SNOWPROVE_DIR"/*) printf '/snowprove/%s\n' "${absolute_path#"$SNOWPROVE_DIR"/}" ;;
+    "$QSEAL_DIR"/*) printf '/qseal/%s\n' "${absolute_path#"$QSEAL_DIR"/}" ;;
     *)
-      echo "Pair input must be inside the Snowprove repo: $absolute_path" >&2
+      echo "Pair input must be inside the QuerySeal repo: $absolute_path" >&2
       exit 2
       ;;
   esac
@@ -122,11 +122,11 @@ if [[ "$REBUILD_IMAGE" == "1" ]] || ! image_exists; then
   echo "Building cached smoke-test image '$SMOKE_IMAGE'..."
   docker --context "colima-$COLIMA_PROFILE" build \
     -t "$SMOKE_IMAGE" \
-    -f "$SNOWPROVE_DIR/docker/sqlsolver-smoke.Dockerfile" \
-    "$SNOWPROVE_DIR"
+    -f "$QSEAL_DIR/docker/sqlsolver-smoke.Dockerfile" \
+    "$QSEAL_DIR"
 fi
 
-echo "Running Snowprove SQLSolver smoke test in $SMOKE_IMAGE..."
+echo "Running QuerySeal SQLSolver smoke test in $SMOKE_IMAGE..."
 mkdir -p "$REPORT_DIR"
 echo "Reports will be written to: $REPORT_DIR"
 docker --context "colima-$COLIMA_PROFILE" run --rm "${docker_tty_args[@]}" \
@@ -140,11 +140,11 @@ docker --context "colima-$COLIMA_PROFILE" run --rm "${docker_tty_args[@]}" \
   -e PAIR_SCHEMA_FORMAT="$PAIR_SCHEMA_FORMAT" \
   -e PAIR_DIALECT="$PAIR_DIALECT" \
   -e REPORT_DIR="$CONTAINER_REPORT_DIR" \
-  -e UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-/tmp/snowprove-venv}" \
-  -e UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/snowprove-uv-cache}" \
+  -e UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-/tmp/qseal-venv}" \
+  -e UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/qseal-uv-cache}" \
   -e UV_LINK_MODE="${UV_LINK_MODE:-copy}" \
   -v "$SQLSOLVER_DIR:/sqlsolver" \
-  -v "$SNOWPROVE_DIR:/snowprove" \
+  -v "$QSEAL_DIR:/qseal" \
   -w /sqlsolver \
   "$SMOKE_IMAGE" \
   bash -lc '
@@ -155,15 +155,15 @@ docker --context "colima-$COLIMA_PROFILE" run --rm "${docker_tty_args[@]}" \
     fi
 
     if [[ "$RUN_FIXTURE_SMOKE" == "1" ]]; then
-      CASE_NAME="$CASE_NAME" /snowprove/scripts/run_snowprove_sqlsolver_fixture.sh
+      CASE_NAME="$CASE_NAME" /qseal/scripts/run_qseal_sqlsolver_fixture.sh
     fi
 
     if [[ "$RUN_CANDIDATE_SMOKE" == "1" ]]; then
       CASE_NAME="$CANDIDATE_CASE_NAME" \
-        /snowprove/scripts/run_snowprove_sqlsolver_candidate_smoke.sh
+        /qseal/scripts/run_qseal_sqlsolver_candidate_smoke.sh
     fi
 
     if [[ -n "$PAIR_ORIGINAL_PATH" ]]; then
-      /snowprove/scripts/run_snowprove_sqlsolver_pair.sh
+      /qseal/scripts/run_qseal_sqlsolver_pair.sh
     fi
   '

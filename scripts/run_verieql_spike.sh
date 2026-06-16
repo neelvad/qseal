@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Run the VeriEQL refuter spike against a local VeriEQL checkout.
 #
-# VeriEQL is licensed CC BY-NC-SA 4.0 (NonCommercial). Snowprove does not
+# VeriEQL is licensed CC BY-NC-SA 4.0 (NonCommercial). QuerySeal does not
 # bundle or depend on it; this script only drives a user-supplied checkout.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERIEQL_DIR="${VERIEQL_DIR:-$HOME/workspace/snowprove-eval/VeriEQL}"
+VERIEQL_DIR="${VERIEQL_DIR:-$HOME/workspace/qseal-eval/VeriEQL}"
 
 if [[ ! -d "$VERIEQL_DIR" ]]; then
   echo "VeriEQL checkout not found: $VERIEQL_DIR" >&2

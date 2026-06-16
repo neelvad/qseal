@@ -1,18 +1,18 @@
-# Thin shim for `snowprove llm verify` / `snowprove llm merge`; kept for the
+# Thin shim for `qseal llm verify` / `qseal llm merge`; kept for the
 # Modal app and the SQLSolver container wrapper, which invoke this path.
-# All logic lives in snowprove.candidates.verification.
+# All logic lives in qseal.candidates.verification.
 import argparse
 import json
 import sys
 from pathlib import Path
 
-from snowprove.candidates.verification import merge_reports, verify_bundles
-from snowprove.constraints.model import ConstraintCatalog
-from snowprove.dbt.project import discover_dbt_project
-from snowprove.dbt.scan import _load_project_constraints
-from snowprove.verifier.backends.qed import QedBackend
-from snowprove.verifier.backends.sqlsolver import SqlSolverBackend
-from snowprove.verifier.backends.verieql import VeriEqlBackend
+from qseal.candidates.verification import merge_reports, verify_bundles
+from qseal.constraints.model import ConstraintCatalog
+from qseal.dbt.project import discover_dbt_project
+from qseal.dbt.scan import _load_project_constraints
+from qseal.verifier.backends.qed import QedBackend
+from qseal.verifier.backends.sqlsolver import SqlSolverBackend
+from qseal.verifier.backends.verieql import VeriEqlBackend
 
 
 def main() -> int:

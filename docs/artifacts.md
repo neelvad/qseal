@@ -1,6 +1,6 @@
 # JSON Artifacts
 
-Snowprove JSON output is intended for CI and review tooling. Every artifact has:
+QuerySeal JSON output is intended for CI and review tooling. Every artifact has:
 
 - `schema_version`: currently `1`
 - `artifact_type`: identifies the payload shape
@@ -18,7 +18,7 @@ external solver approvals can report `SOLVER_PROVEN_EQUIVALENT`. `UNKNOWN`,
 Emitted by:
 
 ```bash
-snowprove fixtures create fixture.duckdb --seed 42 --format json
+qseal fixtures create fixture.duckdb --seed 42 --format json
 ```
 
 The same JSON is written beside the database by default as
@@ -37,7 +37,7 @@ Important fields:
 Emitted by:
 
 ```bash
-snowprove benchmark original.sql rewritten.sql \
+qseal benchmark original.sql rewritten.sql \
   --setup setup.sql \
   --report-file benchmark.json \
   --format json
@@ -84,7 +84,7 @@ measurement. Anchored entries also record `anchor_sql` and the applied
 Emitted by:
 
 ```bash
-snowprove check ... --format json
+qseal check ... --format json
 ```
 
 Important fields:
@@ -105,7 +105,7 @@ Important fields:
 Emitted by:
 
 ```bash
-snowprove candidates generate ... --format json
+qseal candidates generate ... --format json
 ```
 
 Important fields:
@@ -123,7 +123,7 @@ Important fields:
 Emitted by:
 
 ```bash
-snowprove candidates check ... --format json
+qseal candidates check ... --format json
 ```
 
 Important fields:
@@ -141,8 +141,8 @@ Candidate metadata is report context only. It does not affect verification.
 Emitted by:
 
 ```bash
-snowprove candidates run ... --format json
-snowprove candidates run ... --report-file candidate-run.json
+qseal candidates run ... --format json
+qseal candidates run ... --report-file candidate-run.json
 ```
 
 Important fields:
@@ -157,8 +157,8 @@ This is the preferred artifact for a candidate-producing CI step.
 Emitted by:
 
 ```bash
-snowprove dbt scan ... --format json
-snowprove dbt scan ... --report-file snowprove-report.json
+qseal dbt scan ... --format json
+qseal dbt scan ... --report-file qseal-report.json
 ```
 
 Important fields:

@@ -2,20 +2,20 @@ import math
 
 import pytest
 
-from snowprove.benchmark.model import (
+from qseal.benchmark.model import (
     BenchmarkEnvironment,
     BenchmarkResult,
     BenchmarkStatus,
     QueryBenchmark,
 )
-from snowprove.constraints.model import ColumnConstraint, ConstraintCatalog, TableConstraints
-from snowprove.environment import (
+from qseal.constraints.model import ColumnConstraint, ConstraintCatalog, TableConstraints
+from qseal.environment import (
     DuckDbPerformanceEvaluator,
     EnvironmentTask,
     RewriteEnvironment,
 )
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.verifier.model import VerificationResult
+from qseal.rewrites.base import VerificationStatus
+from qseal.verifier.model import VerificationResult
 
 
 def _task(*, max_steps: int = 8) -> EnvironmentTask:

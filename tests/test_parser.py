@@ -1,6 +1,6 @@
 import pytest
 
-from snowprove.parser.sqlglot_parser import UnsupportedSqlError, parse_select
+from qseal.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 
 
 def test_parse_select_with_explicit_duckdb_dialect() -> None:

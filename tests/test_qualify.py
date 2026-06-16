@@ -1,9 +1,9 @@
-from snowprove.constraints.model import ConstraintCatalog, TableConstraints
-from snowprove.parser.sqlglot_parser import parse_select
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.rewrites.distinct import RemoveRedundantDistinct
-from snowprove.rewrites.join_elimination import RemoveUnusedLeftJoin
-from snowprove.rewrites.not_null_filter import RemoveRedundantNotNullFilter
+from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.parser.sqlglot_parser import parse_select
+from qseal.rewrites.base import VerificationStatus
+from qseal.rewrites.distinct import RemoveRedundantDistinct
+from qseal.rewrites.join_elimination import RemoveUnusedLeftJoin
+from qseal.rewrites.not_null_filter import RemoveRedundantNotNullFilter
 
 UNIQUE_USERS = ConstraintCatalog(
     tables={

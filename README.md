@@ -1,13 +1,13 @@
-# snowprove
+# QuerySeal
 
-**Your dbt tests know things your warehouse optimizer can't use. Snowprove turns
+**Your dbt tests know things your warehouse optimizer can't use. QuerySeal turns
 them into verified-safe SQL rewrites.**
 
 A warehouse like Snowflake does not enforce `UNIQUE` or `NOT NULL`, so its
 optimizer cannot assume them — it must keep a defensive `SELECT DISTINCT` or an
 `IS NOT NULL` filter even when the data is, in fact, unique or non-null. But a
 dbt `unique` / `not_null` test *is* that guarantee, written down, version
-controlled, and re-checked on every run. Snowprove reads those tests as trusted
+controlled, and re-checked on every run. QuerySeal reads those tests as trusted
 premises and uses them to prove rewrites the engine structurally cannot perform
 — then emits the guarding tests that must keep passing for the rewrite to stay
 valid.
@@ -18,11 +18,11 @@ whether it helps (see [performance evidence](docs/performance-evidence.md)).
 
 ## How it works in CI
 
-On a pull request that touches dbt models, Snowprove scans only the changed
+On a pull request that touches dbt models, QuerySeal scans only the changed
 models and comments the proven-safe rewrites it finds:
 
 ```yaml
-# .github/workflows/snowprove.yml
+# .github/workflows/qseal.yml
 on:
   pull_request:
     paths: ["**/models/**/*.sql"]
@@ -35,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - uses: your-org/snowprove@v0
+      - uses: your-org/qseal@v0
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         with:
           project: transform/snowflake-dbt
@@ -47,14 +47,14 @@ apply-ready, and a diff. See [docs/ci.md](docs/ci.md). The same thing runs
 locally:
 
 ```bash
-snowprove dbt scan transform/snowflake-dbt --changed-since origin/main --format markdown
+qseal dbt scan transform/snowflake-dbt --changed-since origin/main --format markdown
 ```
 
 ## The three tiers
 
 | Tier | Engine | Dependencies | Use |
 |---|---|---|---|
-| **Deterministic** | Hand-written rules + rule-replay verification | Pure Python (`pip install snowprove`) | The CI scanner. Runs anywhere, no external solvers. |
+| **Deterministic** | Hand-written rules + rule-replay verification | Pure Python (`pip install qseal`) | The CI scanner. Runs anywhere, no external solvers. |
 | **Prover-backed** | + [QED](https://github.com/qed-solver) and [SQLSolver](https://github.com/SJTU-IPADS/SQLSolver) equivalence provers | Rust/Java toolchain | Verifies general rewrites beyond the rule shapes, with an independent proof. |
 | **LLM-generated** | + an LLM proposing candidates, gated by the prover cascade | Anthropic API key | Finds rewrites no rule encodes; every candidate is proven or discarded. |
 
@@ -65,10 +65,10 @@ refuted **zero** — see [docs/llm-candidates.md](docs/llm-candidates.md).
 
 ## What "proven" means
 
-Snowprove is a portfolio of sound verifiers; a finding is proven if **any** of
+QuerySeal is a portfolio of sound verifiers; a finding is proven if **any** of
 them certifies it, and the source is always reported:
 
-- **builtin** — the rewritten query matches what one of Snowprove's
+- **builtin** — the rewritten query matches what one of QuerySeal's
   hand-written rules would produce after IR normalization. Sound if the rules
   are sound (rule-replay, not an independent proof). Reported as
   `VERIFIED_BY_RULE`.
@@ -80,7 +80,7 @@ them certifies it, and the source is always reported:
   bundled; see [docs/verieql-spike.md](docs/verieql-spike.md).)
 
 Every constraint-dependent rewrite is conditional on a *time-varying* data
-contract: if Snowprove removes a `DISTINCT` because a column is unique, the dbt
+contract: if QuerySeal removes a `DISTINCT` because a column is unique, the dbt
 `unique` test must keep running or data drift can invalidate the rewrite. Scan
 output therefore names the **required ongoing tests** for each finding.
 
@@ -111,13 +111,13 @@ models:
 ```
 
 ```bash
-uv run snowprove suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
+uv run qseal suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
 # Result: PROVEN_EQUIVALENT  (remove_redundant_distinct)
 ```
 
 The `unique` + `not_null` tests become the premise; removing the `DISTINCT` is
 proven safe *because* of them. (Unique alone is not enough — a NULL-exempt dbt
-unique test still allows duplicate NULLs, so Snowprove requires the column be
+unique test still allows duplicate NULLs, so QuerySeal requires the column be
 non-null too.)
 
 ### Unused LEFT JOIN elimination
@@ -137,10 +137,10 @@ built-in rules: redundant `IS NOT NULL` removal, predicate pushdown, and
 
 ```bash
 # Prove a rewrite with an external solver
-snowprove check original.sql rewritten.sql --schema schema.yml --verifier qed
+qseal check original.sql rewritten.sql --schema schema.yml --verifier qed
 
 # Search for a counterexample database that disproves a pair
-snowprove refute original.sql rewritten.sql --schema schema.yml --verieql-dir /path/to/VeriEQL
+qseal refute original.sql rewritten.sql --schema schema.yml --verieql-dir /path/to/VeriEQL
 ```
 
 `check --fail-on unproven` exits nonzero unless the pair is certified — the
@@ -149,10 +149,10 @@ contract for gating untrusted (e.g. LLM-generated) candidates.
 ## The LLM + prover pipeline
 
 ```bash
-snowprove llm generate PROJECT --out bundles/        # premise-targeted candidates
-snowprove llm verify bundles/ --qed --report-file report.json
-snowprove llm benchmark report.json bundles/ --report-file bench.json   # Tier-1 DuckDB
-snowprove llm explain   report.json bundles/ --report-file plan.json     # Tier-2 Snowflake EXPLAIN
+qseal llm generate PROJECT --out bundles/        # premise-targeted candidates
+qseal llm verify bundles/ --qed --report-file report.json
+qseal llm benchmark report.json bundles/ --report-file bench.json   # Tier-1 DuckDB
+qseal llm explain   report.json bundles/ --report-file plan.json     # Tier-2 Snowflake EXPLAIN
 ```
 
 The generator proposes; the prover cascade gates; the evidence layers rank
@@ -163,7 +163,7 @@ out across containers via [Modal](docs/llm-candidates.md) (full corpus in ~70s).
 
 ## Scope
 
-Snowprove models a deliberately small SQL subset and grows it conservatively.
+QuerySeal models a deliberately small SQL subset and grows it conservatively.
 Currently supported:
 
 - direct / star / aliased scalar (incl. window) projections
@@ -174,7 +174,7 @@ Currently supported:
   opaque `QUALIFY` (treated conservatively)
 - `GROUP BY` / aggregate / window projections (parsed; rewritten only where a
   rule or prover applies)
-- trusted constraints from Snowprove YAML or dbt `schema.yml`; dbt project scans
+- trusted constraints from QuerySeal YAML or dbt `schema.yml`; dbt project scans
 
 Out of scope: `ORDER BY` / `LIMIT`, `OR` / `IN` / general subquery predicates,
 join reordering, recursive CTEs, UDFs, semi-structured `VARIANT` / `FLATTEN`,
@@ -190,9 +190,9 @@ dbt manifest ingestion (backlog). Full detail in [docs/scope.md](docs/scope.md).
 - [Scope](docs/scope.md) · [Architecture](docs/architecture.md) ·
   [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md)
 
-The research surfaces — `snowprove.environment.RewriteEnvironment`, the search
-baselines (`snowprove.search`), and the bundled DuckDB task corpus
-(`snowprove corpus`) — are documented in
+The research surfaces — `qseal.environment.RewriteEnvironment`, the search
+baselines (`qseal.search`), and the bundled DuckDB task corpus
+(`qseal corpus`) — are documented in
 [docs/rewrite-environment.md](docs/rewrite-environment.md),
 [docs/search-baselines.md](docs/search-baselines.md), and
 [docs/task-corpus.md](docs/task-corpus.md).

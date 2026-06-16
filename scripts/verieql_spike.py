@@ -1,4 +1,4 @@
-# Snowprove spike: exercise VeriEQL as a refuter on snowprove's rewrite shapes.
+# QuerySeal spike: exercise VeriEQL as a refuter on QuerySeal's rewrite shapes.
 import contextlib
 import io
 

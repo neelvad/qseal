@@ -1,7 +1,7 @@
-from snowprove.constraints.model import ConstraintCatalog, TableConstraints
-from snowprove.parser.sqlglot_parser import parse_select
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.verifier.check import check_equivalence
+from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.parser.sqlglot_parser import parse_select
+from qseal.rewrites.base import VerificationStatus
+from qseal.verifier.check import check_equivalence
 
 
 def test_check_proves_distinct_removal_with_unique_key() -> None:

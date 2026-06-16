@@ -1,17 +1,17 @@
-# Snowprove Handoff
+# QuerySeal Handoff
 
 This file summarizes the current project state and near-term plan so future
 sessions can resume quickly.
 
 ## Project Goal
 
-Snowprove is a CLI-first prototype for verified-safe SQL rewrites over a small
+QuerySeal is a CLI-first prototype for verified-safe SQL rewrites over a small
 SQL/dbt subset. Snowflake remains the likely commercial target, while DuckDB is
 the local research and benchmarking dialect. The eventual direction is:
 
 1. A user supplies a base SQL query.
 2. An untrusted generator, eventually an LLM, proposes an optimized candidate.
-3. Snowprove verifies semantic equivalence for supported cases.
+3. QuerySeal verifies semantic equivalence for supported cases.
 4. CI reports proven rewrites, patch files, and verification artifacts.
 
 The current product does not prove performance improvement. It proves semantic
@@ -33,23 +33,23 @@ The project is a Python/uv CLI package with tests and GitHub CI.
 Core commands:
 
 ```bash
-uv run snowprove suggest query.sql --schema schema.yml
-uv run snowprove suggest query.sql --schema schema.yml --all --format json
-uv run snowprove check original.sql rewritten.sql --schema schema.yml
-uv run snowprove check original.sql rewritten.sql --schema schema.yml --fail-on unproven --format json
-uv run snowprove check original.sql rewritten.sql --schema schema.yml --verifier sqlsolver --solver-command 'SQLSOLVER_COMMAND'
-uv run snowprove fixtures create fixture.duckdb --seed 42
-uv run snowprove benchmark original.sql rewritten.sql --setup setup.sql --report-file benchmark.json
-uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml
-uv run snowprove candidates check original.sql candidates/*.sql --schema schema.yml --format json
-uv run snowprove dbt scan .
-uv run snowprove dbt scan . --all
-uv run snowprove dbt scan . --diff
-uv run snowprove dbt scan . --report-file snowprove-report.json
-uv run snowprove dbt scan . --write-patches snowprove-patches
-uv run snowprove dbt scan . --apply-patches
-uv run snowprove dbt scan . --use-compiled
-uv run snowprove policy compare-holdouts HOLDOUT.json HOLDOUT.json --label default --label candidate
+uv run qseal suggest query.sql --schema schema.yml
+uv run qseal suggest query.sql --schema schema.yml --all --format json
+uv run qseal check original.sql rewritten.sql --schema schema.yml
+uv run qseal check original.sql rewritten.sql --schema schema.yml --fail-on unproven --format json
+uv run qseal check original.sql rewritten.sql --schema schema.yml --verifier sqlsolver --solver-command 'SQLSOLVER_COMMAND'
+uv run qseal fixtures create fixture.duckdb --seed 42
+uv run qseal benchmark original.sql rewritten.sql --setup setup.sql --report-file benchmark.json
+uv run qseal candidates check original.sql candidates/*.sql --schema schema.yml
+uv run qseal candidates check original.sql candidates/*.sql --schema schema.yml --format json
+uv run qseal dbt scan .
+uv run qseal dbt scan . --all
+uv run qseal dbt scan . --diff
+uv run qseal dbt scan . --report-file qseal-report.json
+uv run qseal dbt scan . --write-patches qseal-patches
+uv run qseal dbt scan . --apply-patches
+uv run qseal dbt scan . --use-compiled
+uv run qseal policy compare-holdouts HOLDOUT.json HOLDOUT.json --label default --label candidate
 ```
 
 Snowflake is the compatibility default. SQL-facing commands accept
@@ -93,7 +93,7 @@ Dialect handling:
 
 Trusted constraints:
 
-- Snowprove YAML
+- QuerySeal YAML
 - dbt `schema.yml` / `.yaml`
 - dbt `unique` and `not_null` column tests
 
@@ -155,7 +155,7 @@ Task corpus:
 - task and corpus content fingerprints are independent of checkout paths
 - fixture materialization generates one DuckDB database per named profile
 - loader rejects duplicate IDs, unknown rules/references, and unsafe paths
-- `snowprove corpus run OUTPUT_DIR` executes selected tasks and strategies
+- `qseal corpus run OUTPUT_DIR` executes selected tasks and strategies
 - run artifacts include paths, rewards, explored nodes, task-shared cache
   metrics, elapsed time, failures, and aggregate strategy summaries
 - repeated runs reuse fixture databases and content-addressed oracle caches
@@ -163,28 +163,28 @@ Task corpus:
   while per-strategy metrics retain logical request and cache-hit counts
 - `--reward-margin` requires a minimum cumulative improvement before
   greedy/beam/exhaustive prefer a longer path; fixed/random remain forced
-- `snowprove corpus summarize REPORT.json` ranks strategies and classifies task
+- `qseal corpus summarize REPORT.json` ranks strategies and classifies task
   rewards, path/reward disagreement, partial errors, and trivial cases
-- `snowprove corpus aggregate REPORT...` measures reward variance, winner and
+- `qseal corpus aggregate REPORT...` measures reward variance, winner and
   reward-class changes, and per-strategy path stability across compatible runs
 
 Policy workflows:
 
-- `snowprove corpus export-trajectories REPORT.json --output trajectories.jsonl`
+- `qseal corpus export-trajectories REPORT.json --output trajectories.jsonl`
   writes labeled trajectory rows from corpus search reports
-- `snowprove policy train-baseline trajectories.jsonl --model-file policy.json`
+- `qseal policy train-baseline trajectories.jsonl --model-file policy.json`
   trains the current feature-mean action ranker
-- `snowprove policy train-ranker trajectories.jsonl --model-file ranker.json`
+- `qseal policy train-ranker trajectories.jsonl --model-file ranker.json`
   trains a dependency-free linear pairwise action ranker over the same sparse
   action/context features. Pass `--training-margin X` to skip pairwise
   preferences with known reward gaps below `X`.
-- `snowprove policy evaluate-baseline trajectories.jsonl --model-file
+- `qseal policy evaluate-baseline trajectories.jsonl --model-file
   policy.json` reports aggregate offline accuracy and reward gaps for either
   policy model family
-- `snowprove policy inspect-baseline trajectories.jsonl --model-file
+- `qseal policy inspect-baseline trajectories.jsonl --model-file
   policy.json` reports per-state predictions, misses, unacceptable rows, action
   scores, reward gaps, and state SQL
-- `snowprove policy holdout-evaluate trajectories.jsonl OUT --include-fixture
+- `qseal policy holdout-evaluate trajectories.jsonl OUT --include-fixture
   standard-medium` trains excluding a held-out split, evaluates offline labels,
   and compares greedy against policy-abstain on held-out corpus tasks. Pass
   `--policy-kind ranker` to use the linear ranker instead of the feature-mean
@@ -232,7 +232,7 @@ CI/reporting:
 
 DuckDB performance evaluation:
 
-- `snowprove benchmark ORIGINAL REWRITTEN`
+- `qseal benchmark ORIGINAL REWRITTEN`
 - optional persistent `--database` and reproducible `--setup` SQL
 - fixed threads, warmups, alternating repeated measurements, and full result
   materialization
@@ -243,7 +243,7 @@ DuckDB performance evaluation:
 
 Seeded DuckDB fixtures:
 
-- `snowprove fixtures create DATABASE`
+- `qseal fixtures create DATABASE`
 - deterministic set-based generation with no `random()` calls
 - `users`, `orders`, and `events` tables cover selectivity, nullability,
   join cardinality, skew, duplicates, and table size
@@ -287,8 +287,8 @@ brew install qemu lima-additional-guestagents
 colima start --profile sqlsolver-x86 --arch x86_64 --cpu 2 --memory 4
 docker context use colima-sqlsolver-x86
 docker run --rm -it \
-  -v ~/workspace/snowprove-eval/SQLSolver:/sqlsolver \
-  -v ~/workspace/snowprove:/snowprove \
+  -v ~/workspace/qseal-eval/SQLSolver:/sqlsolver \
+  -v ~/workspace/qseal:/qseal \
   -w /sqlsolver \
   ubuntu:22.04 \
   bash
@@ -300,8 +300,8 @@ Inside the container:
 apt-get update
 apt-get install -y openjdk-17-jdk ca-certificates file
 ./gradlew fatjar
-/snowprove/scripts/run_sqlsolver_fixture.sh
-CASE_NAME=all /snowprove/scripts/run_sqlsolver_fixture.sh
+/qseal/scripts/run_sqlsolver_fixture.sh
+CASE_NAME=all /qseal/scripts/run_sqlsolver_fixture.sh
 ```
 
 Observed successful SQLSolver fixture results:
@@ -326,7 +326,7 @@ calling SQLSolver.
 - Do not trust Snowflake unenforced constraints unless explicitly supplied as
   trusted assumptions.
 - Keep LLM generation out of the trusted path; future LLM candidates must pass
-  `snowprove check ... --fail-on unproven`.
+  `qseal check ... --fail-on unproven`.
 - Use `rg` for search.
 - Use `apply_patch` for manual edits.
 - Do not revert user changes.
@@ -361,7 +361,7 @@ Completed:
     identifies unstable task labels and paths.
 12. Search and corpus runs support an explicit reward margin so benchmark
     differences below the configured threshold do not favor longer paths.
-13. `snowprove corpus repeat` runs isolated measurements and writes an automatic
+13. `qseal corpus repeat` runs isolated measurements and writes an automatic
     stability aggregate without reusing benchmark caches across runs.
 14. The first three-run 53-task measurement completed cleanly with 4 winner
     changes, 4 reward-class changes, and 8 path changes; 9 tasks were unstable,
@@ -374,7 +374,7 @@ Completed:
     changes, 4 to 1 reward-class changes, 8 to 2 path changes, and 9 to 3
     unstable tasks. Strategy reward standard deviation fell to roughly
     0.001-0.002.
-17. `snowprove corpus inspect-aggregate` drills into unstable tasks across
+17. `qseal corpus inspect-aggregate` drills into unstable tasks across
     source runs, including paths, rewards, medians, speedups, batch sizes, and
     timing confidence.
 18. A targeted five-run, 20 ms experiment stabilized left-join elimination as
@@ -410,24 +410,24 @@ Completed:
 25. A three-run, 20 ms, 75-task transition repeat completed with 5 winner
     changes, 3 reward-class changes, 0 uncertainty-adjusted reward-class
     changes, 3 uncertain tasks, and 6 path changes. The aggregate artifact was
-    written to `/tmp/snowprove-corpus-75-transition-20260608/corpus-aggregate.json`.
+    written to `/tmp/qseal-corpus-75-transition-20260608/corpus-aggregate.json`.
 26. A matching three-run, 20 ms, 75-task state repeat completed with 2 winner
     changes, 3 reward-class changes, 0 uncertainty-adjusted reward-class
     changes, 3 uncertain tasks, and 1 path change. It used roughly twice the
     benchmark requests, so transition remains the default and state remains an
     experimental comparison mode.
-27. `snowprove corpus export-trajectories REPORT.json --output
+27. `qseal corpus export-trajectories REPORT.json --output
     trajectories.jsonl` exports completed corpus search paths as JSONL rows.
     Rows include current SQL, available action IDs, chosen action, proposed and
     next SQL, rewards, verifier/timing fields, state-level oracle-best labels
     from observed suffix returns, and task-level oracle path labels.
-28. `snowprove policy train-baseline trajectories.jsonl --model-file
+28. `qseal policy train-baseline trajectories.jsonl --model-file
     policy.json` trains an interpretable feature-mean action ranker from
-    state-level oracle labels. `snowprove policy evaluate-baseline
+    state-level oracle labels. `qseal policy evaluate-baseline
     trajectories.jsonl --model-file policy.json` reports top-1 state accuracy,
     per-oracle-rule accuracy, and known reward gaps.
 29. A same-run sanity check on
-    `/tmp/snowprove-corpus-75-transition-20260608/run-001/corpus-run.json`
+    `/tmp/qseal-corpus-75-transition-20260608/run-001/corpus-run.json`
     exported 308 trajectory rows across 97 labeled states. The baseline policy
     evaluated on the same trajectories reached 96/97 top-1 state accuracy
     (0.9897) with a mean known reward gap of 0.000529. This confirms the
@@ -441,16 +441,16 @@ Completed:
     `standard-medium`: 18/18 top-1 state accuracy with zero mean known reward
     gap. This is still a small split, but confirms the filter workflow works.
 32. `policy_baseline` is available as a corpus search strategy:
-    `snowprove corpus run OUT --strategy policy_baseline --policy-model
+    `qseal corpus run OUT --strategy policy_baseline --policy-model
     policy.json`. It scores current available actions with the trained baseline
     model and executes the highest-scoring action as a forced rollout.
 33. A policy-only full-corpus smoke run using
-    `/tmp/snowprove-policy-baseline-20260608/policy.json` completed 75/75
+    `/tmp/qseal-policy-baseline-20260608/policy.json` completed 75/75
     tasks with mean reward 0.114065, 117 verifier requests, 117 benchmark
     requests, 96 new benchmarks, and no low-confidence steps. The report was
-    written to `/tmp/snowprove-policy-strategy-20260608/corpus-run.json`.
+    written to `/tmp/qseal-policy-strategy-20260608/corpus-run.json`.
 34. A shared six-strategy comparison run was written to
-    `/tmp/snowprove-policy-comparison-20260608/corpus-run.json`. With
+    `/tmp/qseal-policy-comparison-20260608/corpus-run.json`. With
     `--reward-margin 0.05` and 20 ms batches, greedy/beam/exhaustive won all
     75 tasks with mean reward 0.111497. `policy_baseline` matched fixed/random
     at mean reward 0.104772 and 68 wins, because the current policy rollout is
@@ -463,33 +463,33 @@ Completed:
     the top-scored action, and stops if that candidate does not beat the
     current state under the configured `reward_margin`.
 37. A greedy/forced-policy/abstaining-policy comparison was written to
-    `/tmp/snowprove-policy-abstain-20260608/corpus-run.json`. With
+    `/tmp/qseal-policy-abstain-20260608/corpus-run.json`. With
     `--reward-margin 0.05` and 20 ms batches, `policy_baseline_abstain` tied
     greedy at mean reward 0.134872 and 74 wins while using fewer evaluations
     (105 verifier/benchmark requests versus greedy's 118). Forced
     `policy_baseline` reached mean reward 0.120825 and 68 wins.
-38. `snowprove policy holdout-evaluate TRAJECTORIES OUT --include-fixture X`
+38. `qseal policy holdout-evaluate TRAJECTORIES OUT --include-fixture X`
     automates held-out experiments. It trains a baseline policy excluding the
     held-out filters, evaluates offline labels on the held-out split, then runs
     held-out corpus tasks with `greedy` and `policy_baseline_abstain`, writing
     `policy.json`, `offline-evaluation.json`, `corpus-run/corpus-run.json`, and
     `holdout-evaluation.json`.
 39. A standard-medium fixture holdout was written to
-    `/tmp/snowprove-policy-holdout-standard-medium-20260608`. Training used 79
+    `/tmp/qseal-policy-holdout-standard-medium-20260608`. Training used 79
     labeled states and held out 18 states across 15 tasks. Offline accuracy was
     18/18 with zero mean known reward gap. Held-out corpus search tied greedy
     reward/wins at 0.096018 and 15 wins, while `policy_baseline_abstain` used
     21 verifier/benchmark requests versus greedy's 24.
 40. Three additional holdout experiments completed:
-    - `/tmp/snowprove-policy-holdout-duplicate-heavy-20260608`: held out
+    - `/tmp/qseal-policy-holdout-duplicate-heavy-20260608`: held out
       `duplicate-heavy-small`, trained on 75 states, held out 22 states across
       17 tasks, offline accuracy 22/22, tied greedy at reward 0.086410 and
       17 wins, using 23 verifier/benchmark requests versus greedy's 26.
-    - `/tmp/snowprove-policy-holdout-events-20260608`: held out
+    - `/tmp/qseal-policy-holdout-events-20260608`: held out
       `table:events`, trained on 73 states, held out 24 states across 20 tasks,
       offline accuracy 24/24, tied greedy at reward 0.132048 and 20 wins,
       using 28 verifier/benchmark requests versus greedy's 32.
-    - `/tmp/snowprove-policy-holdout-multiaction-20260608`: held out
+    - `/tmp/qseal-policy-holdout-multiaction-20260608`: held out
       `multi-action`, trained on 54 states, held out 43 states across 21 tasks,
       offline accuracy 42/43 with mean known reward gap 0.001192, tied greedy
       at reward 0.180552 and 21 wins, using 47 verifier/benchmark requests
@@ -502,7 +502,7 @@ Completed:
     remains the search decision margin and `--label-margin` defaults to it.
 42. Rerunning the multi-action holdout with `--reward-margin 0.05` and
     `--label-margin 0.055` at
-    `/tmp/snowprove-policy-holdout-multiaction-label-margin-20260608` kept exact
+    `/tmp/qseal-policy-holdout-multiaction-label-margin-20260608` kept exact
     accuracy at 42/43 but raised adjusted accuracy to 43/43. Held-out corpus
     search still tied greedy at reward 0.166312 and 21 wins while using 47
     verifier/benchmark requests versus greedy's 60.
@@ -512,7 +512,7 @@ Completed:
     multi-action family over users, orders, and events. Focused corpus,
     trajectory, and policy tests passed after the expansion.
 44. A three-run, 20 ms, 102-task transition repeat completed at
-    `/tmp/snowprove-corpus-102-transition-20260608/corpus-aggregate.json`.
+    `/tmp/qseal-corpus-102-transition-20260608/corpus-aggregate.json`.
     It reported 20 winner changes, 20 raw reward-class changes, 0
     uncertainty-adjusted reward-class changes, 20 uncertain tasks, and 27 path
     changes. Beam and exhaustive won all 102 tasks with mean reward 0.095486;
@@ -520,29 +520,29 @@ Completed:
     result says the expanded corpus is usable, but many added tasks sit close
     to the neutral threshold.
 45. Fresh trajectories from
-    `/tmp/snowprove-corpus-102-transition-20260608/run-001/corpus-run.json`
-    were exported to `/tmp/snowprove-policy-102-20260608/trajectories.jsonl`:
+    `/tmp/qseal-corpus-102-transition-20260608/run-001/corpus-run.json`
+    were exported to `/tmp/qseal-policy-102-20260608/trajectories.jsonl`:
     425 rows, 147 labeled states, and oracle paths for all 102 tasks.
 46. Expanded holdout checks completed with `--reward-margin 0.05`,
     `--label-margin 0.055`, and 20 ms batches:
-    - `/tmp/snowprove-policy-102-holdout-multiaction-20260608`: held out
+    - `/tmp/qseal-policy-102-holdout-multiaction-20260608`: held out
       `multi-action`, trained on 59 states, held out 88 states across 43 tasks,
       exact offline accuracy 85/88 (0.9659), adjusted accuracy 86/88 (0.9773),
       and tied greedy at reward 0.083697 and 43 wins while using 69 oracle
       calls versus greedy's 97.
-    - `/tmp/snowprove-policy-102-holdout-standard-medium-20260608`: held out
+    - `/tmp/qseal-policy-102-holdout-standard-medium-20260608`: held out
       `standard-medium`, trained on 115 states, held out 32 states across 22
       tasks, exact/adjusted offline accuracy 30/32 (0.9375), and tied greedy
       at reward 0.060731 and 22 wins while using 28 oracle calls versus
       greedy's 34.
-    - `/tmp/snowprove-policy-102-holdout-events-20260608`: held out
+    - `/tmp/qseal-policy-102-holdout-events-20260608`: held out
       `table:events`, trained on 98 states, held out 49 states across 35 tasks,
       exact/adjusted offline accuracy 48/49 (0.9796), and tied greedy at
       reward 0.083988 and 35 wins while using 41 oracle calls versus greedy's
       50.
     The offline misses are concentrated in redundant non-null action ordering;
     so far they do not translate into worse held-out corpus search rewards.
-47. `snowprove policy inspect-baseline TRAJECTORIES --model-file policy.json`
+47. `qseal policy inspect-baseline TRAJECTORIES --model-file policy.json`
     now recomputes per-state policy predictions and emits a structured
     `baseline_policy_inspection` artifact. It supports the same include/exclude
     split filters as training/evaluation, `--reward-margin`, `--mode
@@ -561,14 +561,14 @@ Completed:
     target index, same-rule action counts, and same-rule positions.
 49. Rerunning the 102-task multi-action holdout with these choice-state
     features at
-    `/tmp/snowprove-policy-102-holdout-multiaction-choice-context-20260608`
+    `/tmp/qseal-policy-102-holdout-multiaction-choice-context-20260608`
     kept exact offline accuracy at 85/88 and adjusted accuracy at 86/88, but
     restored held-out search parity: policy-abstain tied greedy at reward
     0.090728 and 43 wins while using 73 oracle calls versus greedy's 101.
     Inspecting the misses still showed tied 0.0 scores because a full
     `multi-action` holdout leaves no choice-state examples to learn from.
 50. Rerunning the `standard-medium` holdout at
-    `/tmp/snowprove-policy-102-holdout-standard-medium-choice-context-20260608`
+    `/tmp/qseal-policy-102-holdout-standard-medium-choice-context-20260608`
     kept exact/adjusted offline accuracy at 30/32 and tied greedy at reward
     0.065391 and 22 wins while using 28 oracle calls versus greedy's 34.
     The remaining exact misses are fixture-specific ordering cases rather than
@@ -580,13 +580,13 @@ Completed:
     standard-medium fixtures. These tasks are meant to give held-out
     `multi-action` experiments some related choice-state training evidence.
 52. A one-run, 20 ms, 120-task transition run completed at
-    `/tmp/snowprove-corpus-120-transition-20260608/corpus-run.json`. All
+    `/tmp/qseal-corpus-120-transition-20260608/corpus-run.json`. All
     strategies completed all tasks. Mean rewards were fixed/random 0.113390,
     greedy 0.116516, and beam/exhaustive 0.121580. Fresh trajectories were
-    exported to `/tmp/snowprove-policy-120-20260608/trajectories.jsonl`: 539
+    exported to `/tmp/qseal-policy-120-20260608/trajectories.jsonl`: 539
     rows, 185 labeled states, and oracle paths for all 120 tasks.
 53. Rerunning the multi-action holdout with the v6 trajectories at
-    `/tmp/snowprove-policy-120-holdout-multiaction-20260608` increased the
+    `/tmp/qseal-policy-120-holdout-multiaction-20260608` increased the
     training split from 59 to 95 states and held out 90 states across 43 tasks.
     Policy-abstain still tied greedy search at reward 0.092186 and 43 wins
     while using 75 oracle calls versus greedy's 103, but offline exact and
@@ -597,13 +597,13 @@ Completed:
     This suggests corpus examples alone are not enough for the current
     averaging scorer; a small supervised ranker is now better justified.
 54. A dependency-free linear pairwise action ranker is available via
-    `snowprove policy train-ranker`. It trains on choice states only and stores
+    `qseal policy train-ranker`. It trains on choice states only and stores
     a `linear_policy_model` artifact with sparse feature weights. Generic
     policy loading/scoring now lets `corpus run`, `corpus repeat`,
     `evaluate-baseline`, `inspect-baseline`, and `holdout-evaluate` consume
     either the feature-mean baseline or the linear ranker.
 55. Rerunning the v6 multi-action holdout with `--policy-kind ranker` at
-    `/tmp/snowprove-policy-120-holdout-multiaction-ranker-pairwise-20260608`
+    `/tmp/qseal-policy-120-holdout-multiaction-ranker-pairwise-20260608`
     trained on 95 states, including 18 choice states, and made 360 pairwise
     preference updates. It tied greedy search at reward 0.081031 and 43 wins
     while using 69 oracle calls versus greedy's 97. Offline exact/adjusted
@@ -611,7 +611,7 @@ Completed:
     learned strong preferences from the choice-calibration families, but those
     preferences conflict with several held-out multi-action trajectory labels.
 56. Rerunning the standard-medium holdout with `--policy-kind ranker` at
-    `/tmp/snowprove-policy-120-holdout-standard-medium-ranker-pairwise-20260608`
+    `/tmp/qseal-policy-120-holdout-standard-medium-ranker-pairwise-20260608`
     reached 43/44 offline exact/adjusted accuracy (0.9773), tied greedy search
     at reward 0.085675 and 28 wins, and used 42 oracle calls versus greedy's
     54. This is a better search result than the first ranker attempt, but the
@@ -625,21 +625,21 @@ Completed:
 58. Rerunning the v6 multi-action holdout with ranker training margins showed
     that 0.02, 0.05, and 0.10 skipped zero preferences in the current training
     split. Offline exact/adjusted accuracy stayed 84/90. A 0.10 run at
-    `/tmp/snowprove-policy-120-holdout-multiaction-ranker-margin010-20260608`
+    `/tmp/qseal-policy-120-holdout-multiaction-ranker-margin010-20260608`
     tied greedy search at reward 0.094938 and 43 wins while using 69 oracle
     calls versus greedy's 97. A 0.05 run lost one search win. This means the
     current label conflict is not coming from tiny known training gaps.
 59. Rerunning the standard-medium holdout with ranker `--training-margin 0.05`
-    at `/tmp/snowprove-policy-120-holdout-standard-medium-ranker-margin005-20260608`
+    at `/tmp/qseal-policy-120-holdout-standard-medium-ranker-margin005-20260608`
     kept 43/44 offline exact/adjusted accuracy and tied greedy search at
     reward 0.085962 and 28 wins while using 44 oracle calls versus greedy's 56.
-60. `snowprove policy inspect-labels` now compares train and holdout oracle
+60. `qseal policy inspect-labels` now compares train and holdout oracle
     preference labels from trajectory JSONL without running benchmarks. It can
     group preference counts by action set, rule pair, table tag, fixture, and
     target context, then reports where holdout labels disagree with the train
     majority.
 61. Running:
-    `uv run snowprove policy inspect-labels /tmp/snowprove-policy-120-20260608/trajectories.jsonl --train-exclude-tag multi-action --holdout-include-tag multi-action --reward-margin 0.055 --group-by action_set --group-by table --limit 8`
+    `uv run qseal policy inspect-labels /tmp/qseal-policy-120-20260608/trajectories.jsonl --train-exclude-tag multi-action --holdout-include-tag multi-action --reward-margin 0.055 --group-by action_set --group-by table --limit 8`
     found 18 train preferences, 28 holdout preferences, 7 groups, and 5
     disagreement groups. The largest disagreement was double not-null on
     `table:orders`; other disagreements were distinct-vs-not-null choices on
@@ -666,11 +666,11 @@ Completed:
     action sets include `query:distinct` vs `predicate:0` and `predicate:0` vs
     `predicate:1`.
 64. A full v7, one-run, 20 ms transition corpus run completed at
-    `/tmp/snowprove-corpus-138-transition-20260609/corpus-run.json`. All five
+    `/tmp/qseal-corpus-138-transition-20260609/corpus-run.json`. All five
     strategies completed all 138 tasks. Mean rewards were fixed/random
     0.108453, greedy 0.114144, and beam/exhaustive 0.122630. Fresh
     trajectories were exported to
-    `/tmp/snowprove-policy-138-20260609/trajectories.jsonl`: 640 rows, 223
+    `/tmp/qseal-policy-138-20260609/trajectories.jsonl`: 640 rows, 223
     labeled states, and oracle paths for all 138 tasks.
 65. Rerunning `policy inspect-labels` on v7 reduced the target-pair
     multi-action split from 6 holdout-only groups to 2 holdout-only groups.
@@ -679,7 +679,7 @@ Completed:
     `remove_redundant_not_null_filter::predicate:0` over
     `remove_redundant_distinct::query:distinct`.
 66. Rerunning the multi-action holdout with the v7 trajectories and ranker at
-    `/tmp/snowprove-policy-138-holdout-multiaction-ranker-20260609` improved
+    `/tmp/qseal-policy-138-holdout-multiaction-ranker-20260609` improved
     offline exact/adjusted accuracy from the v6 84/90 to 86/89 (0.9663). It
     did not fully improve search: policy-abstain reached reward 0.109150 and
     42 wins versus greedy reward 0.110957 and 43 wins, while using 69 oracle
@@ -709,20 +709,20 @@ Completed:
     aggressive: offline multi-action accuracy dropped to 0.7191. Scaling
     unknown preferences to 0.25 kept offline exact/adjusted accuracy at
     86/89 (0.9663), but restored held-out search parity:
-    `/tmp/snowprove-policy-138-holdout-multiaction-ranker-unknown025-20260609`
+    `/tmp/qseal-policy-138-holdout-multiaction-ranker-unknown025-20260609`
     tied greedy at reward 0.104679 and 43 wins while using 73 oracle calls
     versus greedy's 101.
 71. The same `--unknown-preference-scale 0.25` regressed the standard-medium
     holdout at
-    `/tmp/snowprove-policy-138-holdout-standard-medium-ranker-unknown025-20260609`:
+    `/tmp/qseal-policy-138-holdout-standard-medium-ranker-unknown025-20260609`:
     offline exact/adjusted accuracy fell to 47/56 and 48/56, and policy-abstain
     reached only 25 wins versus greedy's 34. The default scale 1.0 on the same
     v7 split at
-    `/tmp/snowprove-policy-138-holdout-standard-medium-ranker-default-20260609`
+    `/tmp/qseal-policy-138-holdout-standard-medium-ranker-default-20260609`
     reached 54/56 exact and 55/56 adjusted accuracy, with 33 wins versus
     greedy's 34. The 0.25 scale is therefore useful for the multi-action split
     but not a safe global recommendation.
-72. `snowprove policy compare-holdouts` compares holdout artifacts by offline
+72. `qseal policy compare-holdouts` compares holdout artifacts by offline
     exact/adjusted accuracy, greedy/policy reward, win deltas, and oracle
     request deltas. It confirmed the tradeoff above: on the multi-action
     split, unknown scale 0.25 tied greedy with 43 wins and used 56 fewer oracle
@@ -738,9 +738,9 @@ Completed:
     instead of changing the global unknown preference scale.
 74. Targeted group-scaling experiments were run against v7 trajectories for
     the distinct-vs-not-null `orders` and `users` groups:
-    `/tmp/snowprove-policy-138-holdout-multiaction-ranker-group025-20260609`
+    `/tmp/qseal-policy-138-holdout-multiaction-ranker-group025-20260609`
     and
-    `/tmp/snowprove-policy-138-holdout-standard-medium-ranker-group025-20260609`.
+    `/tmp/qseal-policy-138-holdout-standard-medium-ranker-group025-20260609`.
     The result was not good enough to keep as a recommendation. Multi-action
     stayed at 86/89 offline accuracy but reached only 42 wins and reward
     0.098211 versus greedy's 43 wins and reward 0.110216. Standard-medium
@@ -755,10 +755,10 @@ Completed:
     columns, action-specific target columns, and whether an action column is
     projected. A v7 smoke holdout with global unknown scale 1.0 improved the
     practical tradeoff without scalar tuning:
-    `/tmp/snowprove-policy-138-holdout-standard-medium-ranker-richfeatures-20260609`
+    `/tmp/qseal-policy-138-holdout-standard-medium-ranker-richfeatures-20260609`
     tied greedy at 34 wins and reward 0.095288 while using 112 oracle calls
     versus greedy's 148, with 54/56 exact and 55/56 adjusted offline accuracy.
-    `/tmp/snowprove-policy-138-holdout-multiaction-ranker-richfeatures-20260609`
+    `/tmp/qseal-policy-138-holdout-multiaction-ranker-richfeatures-20260609`
     tied greedy at 43 wins and reward 0.091774 while using 146 oracle calls
     versus greedy's 202, with 86/89 exact/adjusted offline accuracy. This
     looks better than global or group-specific unknown-preference scaling.
@@ -771,10 +771,10 @@ Completed:
     metadata now include `required_tests` derived from trusted assumptions, for
     example `dbt test: unique on dim_users.user_id`.
 77. Fresh real-project scans were run after the reporting changes:
-    `/snowprove-runs/real-projects/20260609T184252Z-raw-post-claims`,
-    `/snowprove-runs/real-projects/20260609T184426Z-duckdb-compiled-post-claims`,
+    `/qseal-runs/real-projects/20260609T184252Z-raw-post-claims`,
+    `/qseal-runs/real-projects/20260609T184426Z-duckdb-compiled-post-claims`,
     and
-    `/snowprove-runs/real-projects/20260609T184557Z-kestra-compiled-post-claims`.
+    `/qseal-runs/real-projects/20260609T184557Z-kestra-compiled-post-claims`.
     Raw scans across seven cloned dbt projects found 10 model SQL files, 8
     unsupported Jinja/block-syntax results, and 0 proven/apply-ready findings.
     Compiled scans for `dbt-labs/jaffle_shop_duckdb` and `kestra-io/dbt-demo`
@@ -785,9 +785,9 @@ Completed:
 78. `--use-compiled` now filters compiled SQL to files that map back to existing
     source model files under `models/`, excluding compiled dbt tests and
     package-only SQL. Filtered real-project reruns:
-    `/snowprove-runs/real-projects/20260609T185507Z-duckdb-compiled-filtered`
+    `/qseal-runs/real-projects/20260609T185507Z-duckdb-compiled-filtered`
     and
-    `/snowprove-runs/real-projects/20260609T185520Z-kestra-compiled-filtered`.
+    `/qseal-runs/real-projects/20260609T185520Z-kestra-compiled-filtered`.
     Each compiled scan now reports 5 models, 1 `UNKNOWN` unused-left-join
     finding in `orders.sql`, and 0 proven findings. The previous dbt-test
     redundant-not-null noise is gone.
@@ -829,13 +829,13 @@ CI/product:
 - PR comments or annotations
 - SARIF output
 - changed-files-only scanning
-- optional `snowprove ci dbt .` wrapper if command lines become too long
+- optional `qseal ci dbt .` wrapper if command lines become too long
 
 LLM phase, later:
 
 - add an untrusted candidate-generation command
 - run every candidate through `check --fail-on unproven`
-- never apply or recommend an LLM rewrite unless Snowprove proves equivalence
+- never apply or recommend an LLM rewrite unless QuerySeal proves equivalence
 
 RL research phase:
 
@@ -968,7 +968,7 @@ Next, in rough priority:
   correctness by execution accuracy - run predicted vs gold SQL on one DB,
   compare result sets. This is unsound (the FLEX paper found BIRD EX agrees
   with human experts only ~62% of the time, ~38% wrong, mostly false
-  negatives). Snowprove's prover/refuter cascade is the sound replacement:
+  negatives). QuerySeal's prover/refuter cascade is the sound replacement:
   prove the predicted query equivalent to the gold query, or refute with a
   counterexample database. Use cases: (1) a sounder text-to-SQL eval metric
   for the supported SQL fragment (formal where possible, bounded-refute

@@ -1,15 +1,15 @@
 import json
 
-from snowprove.dbt.scan import DbtScanResult
-from snowprove.report.json import (
+from qseal.dbt.scan import DbtScanResult
+from qseal.report.json import (
     render_dbt_scan_json,
     render_suggestion_json,
     render_suggestions_json,
     render_verification_json,
 )
-from snowprove.report.patch import PatchWriteResult
-from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
-from snowprove.verifier.model import VerificationResult
+from qseal.report.patch import PatchWriteResult
+from qseal.rewrites.base import RewriteSuggestion, VerificationStatus
+from qseal.verifier.model import VerificationResult
 
 
 def test_render_suggestion_json() -> None:

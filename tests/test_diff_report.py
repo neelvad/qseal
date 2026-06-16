@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from snowprove.report.diff import render_rewrite_diff
-from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
+from qseal.report.diff import render_rewrite_diff
+from qseal.rewrites.base import RewriteSuggestion, VerificationStatus
 
 
 def test_render_rewrite_diff() -> None:

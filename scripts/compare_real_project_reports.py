@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from snowprove.evaluation import (
+from qseal.evaluation import (
     comparison_payload,
     discover_project_reports,
     load_project_report,
@@ -14,7 +14,7 @@ from snowprove.evaluation import (
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Compare Snowprove dbt scan reports across real projects."
+        description="Compare QuerySeal dbt scan reports across real projects."
     )
     parser.add_argument(
         "paths",

@@ -5,10 +5,10 @@ from shutil import copytree
 import pytest
 import yaml
 
-from snowprove.corpora import bundled_corpus_path
-from snowprove.corpus import load_task_corpus, materialize_corpus_fixtures
-from snowprove.environment import RewriteEnvironment
-from snowprove.rewrites.registry import select_rules
+from qseal.corpora import bundled_corpus_path
+from qseal.corpus import load_task_corpus, materialize_corpus_fixtures
+from qseal.environment import RewriteEnvironment
+from qseal.rewrites.registry import select_rules
 
 CORPUS_PATH = bundled_corpus_path()
 

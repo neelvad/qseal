@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from snowprove.dbt.git_diff import GitDiffError, changed_model_paths
-from snowprove.dbt.scan import scan_dbt_project
-from snowprove.rewrites.registry import DEFAULT_RULES
+from qseal.dbt.git_diff import GitDiffError, changed_model_paths
+from qseal.dbt.scan import scan_dbt_project
+from qseal.rewrites.registry import DEFAULT_RULES
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -88,7 +88,7 @@ def test_changed_model_paths_errors_outside_git(tmp_path: Path) -> None:
 def test_dbt_scan_cli_changed_since(tmp_path: Path) -> None:
     from click.testing import CliRunner
 
-    from snowprove.cli import main
+    from qseal.cli import main
 
     project, base = _init_project(tmp_path)
     (project / "models" / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")

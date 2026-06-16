@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from snowprove.dbt.scan import scan_dbt_project
-from snowprove.report.markdown import COMMENT_MARKER, render_dbt_scan_markdown
-from snowprove.rewrites.registry import DEFAULT_RULES
+from qseal.dbt.scan import scan_dbt_project
+from qseal.report.markdown import COMMENT_MARKER, render_dbt_scan_markdown
+from qseal.rewrites.registry import DEFAULT_RULES
 
 
 def _project(tmp_path: Path, model_sql: str) -> Path:
@@ -47,7 +47,7 @@ def test_markdown_clean_when_no_findings(tmp_path: Path) -> None:
 def test_markdown_cli_format(tmp_path: Path) -> None:
     from click.testing import CliRunner
 
-    from snowprove.cli import main
+    from qseal.cli import main
 
     project = _project(tmp_path, "SELECT DISTINCT user_id FROM dim_users")
     result = CliRunner().invoke(main, ["dbt", "scan", str(project), "--format", "markdown"])

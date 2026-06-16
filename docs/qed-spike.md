@@ -33,7 +33,7 @@ non-null** (`scripts/qed_spike_unknowns.py` implements this).
 
 ## Coverage: complementary, not dominant
 
-On snowprove's rule shapes, QED is *weaker* than SQLSolver: unused LEFT
+On QuerySeal's rule shapes, QED is *weaker* than SQLSolver: unused LEFT
 JOIN elimination (with or without non-null unique keys) and JOIN+DISTINCT
 to EXISTS are NotProvable, while SQLSolver proves both. DISTINCT removal
 and redundant IS NOT NULL removal prove fine.
@@ -65,5 +65,5 @@ The funnel also reprioritizes earlier ideas with data:
 
 Integrate QED as a third prover backend (cascade: builtin -> SQLSolver ->
 QED; any sound prover's EQ suffices). Operationally it is the cheapest
-backend snowprove has: native arm binaries, no container, millisecond-to-
+backend qseal has: native arm binaries, no container, millisecond-to-
 second verdicts. License: prover is MIT, parser is Apache 2.0 — both compatible with bundling or CI use, unlike VeriEQL's NonCommercial license.

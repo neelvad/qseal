@@ -1,11 +1,11 @@
-# Thin shim for `snowprove llm generate`; kept for existing docs/automation.
-# All logic lives in snowprove.candidates.generation.
+# Thin shim for `qseal llm generate`; kept for existing docs/automation.
+# All logic lives in qseal.candidates.generation.
 import argparse
 import json
 import sys
 from pathlib import Path
 
-from snowprove.candidates.generation import generate_candidates
+from qseal.candidates.generation import generate_candidates
 
 
 def main() -> int:

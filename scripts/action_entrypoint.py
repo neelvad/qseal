@@ -13,10 +13,10 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from snowprove.dbt.git_diff import GitDiffError, changed_model_paths
-from snowprove.dbt.scan import scan_dbt_project
-from snowprove.report.markdown import COMMENT_MARKER, render_dbt_scan_markdown
-from snowprove.rewrites.registry import DEFAULT_RULES
+from qseal.dbt.git_diff import GitDiffError, changed_model_paths
+from qseal.dbt.scan import scan_dbt_project
+from qseal.report.markdown import COMMENT_MARKERS, render_dbt_scan_markdown
+from qseal.rewrites.registry import DEFAULT_RULES
 
 API = "https://api.github.com"
 
@@ -33,10 +33,10 @@ def main() -> int:
         try:
             only_paths = changed_model_paths(project, base_ref)
         except GitDiffError as error:
-            print(f"snowprove: {error}", file=sys.stderr)
+            print(f"qseal: {error}", file=sys.stderr)
             return 2
         if not only_paths:
-            print("snowprove: no changed dbt models; nothing to scan.")
+            print("qseal: no changed dbt models; nothing to scan.")
             return 0
 
     result = scan_dbt_project(
@@ -50,7 +50,7 @@ def main() -> int:
         try:
             _post_pr_comment(markdown)
         except urllib.error.HTTPError as error:  # noqa: BLE001 - never fail the job on comment errors
-            print(f"snowprove: could not post PR comment ({error.code}).", file=sys.stderr)
+            print(f"qseal: could not post PR comment ({error.code}).", file=sys.stderr)
 
     if fail_on == "findings" and findings > 0:
         return 1
@@ -62,12 +62,12 @@ def _post_pr_comment(body: str) -> None:
     repo = os.environ.get("GITHUB_REPOSITORY")
     pr_number = _pr_number()
     if not (token and repo and pr_number):
-        print("snowprove: not a PR context or missing token; skipping comment.", file=sys.stderr)
+        print("qseal: not a PR context or missing token; skipping comment.", file=sys.stderr)
         return
 
     base = f"{API}/repos/{repo}/issues/{pr_number}/comments"
     existing = _request("GET", base, token)
-    comment_id = find_comment_id(existing, COMMENT_MARKER)
+    comment_id = find_comment_id(existing, COMMENT_MARKERS)
     if comment_id is not None:
         _request("PATCH", f"{API}/repos/{repo}/issues/comments/{comment_id}", token,
                  {"body": body})
@@ -75,10 +75,11 @@ def _post_pr_comment(body: str) -> None:
         _request("POST", base, token, {"body": body})
 
 
-def find_comment_id(comments: list[dict], marker: str) -> int | None:
-    """ID of the first comment containing the marker, for idempotent updates."""
+def find_comment_id(comments: list[dict], markers: tuple[str, ...]) -> int | None:
+    """ID of the first comment containing a known marker, for idempotent updates."""
     for comment in comments:
-        if marker in (comment.get("body") or ""):
+        body = comment.get("body") or ""
+        if any(marker in body for marker in markers):
             return comment.get("id")
     return None
 

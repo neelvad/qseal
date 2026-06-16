@@ -7,14 +7,14 @@ constraints. A satisfiable result is a **sound refutation** with a concrete
 witness database. An unsatisfiable result is only evidence up to the bound
 and must never be reported as `PROVEN_EQUIVALENT`.
 
-Snowprove's intended role for VeriEQL is therefore a **refuter**, the mirror
+QuerySeal's intended role for VeriEQL is therefore a **refuter**, the mirror
 of the prover backends: cross-check proven findings (an automated "no known
 false PROVEN" gate), triage UNKNOWN results, and eventually give an LLM
 candidate generator concrete corrective feedback.
 
 ## License
 
-VeriEQL is licensed **CC BY-NC-SA 4.0 (NonCommercial)**. Snowprove must not
+VeriEQL is licensed **CC BY-NC-SA 4.0 (NonCommercial)**. QuerySeal must not
 bundle, vendor, or depend on it. Integration drives a separate user-supplied
 checkout, mirroring the SQLSolver arrangement. Revisit before any commercial
 use of the combined workflow.
@@ -55,7 +55,7 @@ The attribute reference syntax is `TABLE__COLUMN` inside `{"value": ...}`:
 
 - `{"primary": [{"value": "T__C"}]}` encodes **strict uniqueness plus NOT
   NULL** (pairwise distinct values and `Not(NULL)` per row). This matches
-  snowprove's post-fix premise vocabulary exactly: emit `primary` only for a
+  QuerySeal's post-fix premise vocabulary exactly: emit `primary` only for a
   trusted unique key whose columns are also trusted non-null.
 - `{"not_null": {"value": "T__C"}}` encodes NOT NULL. The operand must be a
   single attribute dict; a list of dicts crashes their encoder.
@@ -79,7 +79,7 @@ The attribute reference syntax is `TABLE__COLUMN` inside `{"value": ...}`:
 ## Integration Status
 
 Implemented: the `verieql` refuter backend
-(`snowprove/verifier/backends/verieql.py`) drives the checkout through
+(`qseal/verifier/backends/verieql.py`) drives the checkout through
 `scripts/verieql_driver.py` (JSON contract, subprocess into the checkout's
 venv). Verdict mapping: counterexample -> `NOT_EQUIVALENT` with the witness
 in the `counterexample` field; no counterexample up to the bound -> `UNKNOWN`
@@ -87,10 +87,10 @@ with a bounded-evidence reason, never `PROVEN_EQUIVALENT`; QUALIFY,
 inexpressible premises (NULL-exempt unique keys), ambiguous unqualified
 columns, and driver failures -> `UNSUPPORTED`. Schema attribute lists are
 derived from the query pair via sqlglot scope resolution, following star
-pass-through CTEs to base tables. The CLI entry point is `snowprove refute`,
+pass-through CTEs to base tables. The CLI entry point is `qseal refute`,
 with `--fail-on refuted` for CI gates.
 
-`snowprove dbt crosscheck PROJECT --verieql-dir DIR` runs the refuter over
+`qseal dbt crosscheck PROJECT --verieql-dir DIR` runs the refuter over
 every proven scan finding and exits nonzero on any refutation. Fragment
 findings are cross-checked at the fragment level: suggestions carry the
 fragment pair (`fragment_original_sql` / `fragment_rewritten_sql`) rendered

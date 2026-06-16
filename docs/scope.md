@@ -1,14 +1,14 @@
 # Scope
 
-Snowprove is intentionally conservative. A query pair is only proven equivalent
+QuerySeal is intentionally conservative. A query pair is only proven equivalent
 when the parser, rewrite rule, and verifier all support the relevant SQL shape.
 
 ## Result Statuses
 
-- `PROVEN_EQUIVALENT`: Snowprove certified the rewrite safe under the displayed
+- `PROVEN_EQUIVALENT`: QuerySeal certified the rewrite safe under the displayed
   assumptions. Check `safety_claim` and `verification_method` to distinguish
   builtin rule replay from external solver proof.
-- `NOT_EQUIVALENT`: Snowprove found a rule-specific reason the rewrite can
+- `NOT_EQUIVALENT`: QuerySeal found a rule-specific reason the rewrite can
   change results.
 - `UNKNOWN`: the SQL parsed, but no verifier rule could prove or disprove the
   pair.
@@ -36,19 +36,19 @@ The `verification` artifact also includes:
 - `rule_name`: verifier rule that proved or disproved the pair, when available
 - `inputs`: original, rewritten, schema path, and schema format metadata
 
-Use `snowprove check ... --fail-on unproven` to exit nonzero unless the query
+Use `qseal check ... --fail-on unproven` to exit nonzero unless the query
 pair is proven equivalent.
 
 `candidate_verifications` is the batch artifact emitted by
-`snowprove candidates check`. It contains one verification result per candidate
+`qseal candidates check`. It contains one verification result per candidate
 SQL file and a `proven_count` summary.
 
 For full artifact notes, see `docs/artifacts.md`.
 
 ## Verifier Backends
 
-`snowprove check` and `snowprove candidates check` route verification through a
-backend interface. `builtin` uses Snowprove's internal parser and rule-specific
+`qseal check` and `qseal candidates check` route verification through a
+backend interface. `builtin` uses QuerySeal's internal parser and rule-specific
 rewrite replay; approved pairs report `safety_claim: VERIFIED_BY_RULE`.
 `sqlsolver` writes one-line SQL pair files plus a schema file, executes a
 user-provided SQLSolver command, and maps `EQ` to `PROVEN_EQUIVALENT` with
@@ -73,16 +73,16 @@ tables:
       - [user_id]
 ```
 
-Snowprove treats this YAML as trusted. It does not currently inspect Snowflake
+QuerySeal treats this YAML as trusted. It does not currently inspect Snowflake
 or production data to validate that the constraint is true.
 
-Snowprove can also load dbt-style `schema.yml` files with `--schema-format dbt`.
+QuerySeal can also load dbt-style `schema.yml` files with `--schema-format dbt`.
 Currently supported dbt tests:
 
 - column `unique` -> trusted single-column unique key
 - column `not_null` -> trusted `nullable: false`
 
-These dbt tests are still treated as assumptions. Snowprove does not run dbt
+These dbt tests are still treated as assumptions. QuerySeal does not run dbt
 tests or verify that they passed.
 Reports include `required_tests` / "Required ongoing tests" for assumptions
 that map directly to dbt-style guard tests.
@@ -126,12 +126,12 @@ deduplication.
 
 ## Non-Goals
 
-Snowprove does not prove that a query is faster. Runtime depends on Snowflake
+QuerySeal does not prove that a query is faster. Runtime depends on Snowflake
 optimizer decisions, micro-partitions, clustering, data shape, warehouse size,
 caching, and concurrency. Performance validation should be a separate empirical
 step.
 
-Snowprove also does not attempt full Snowflake SQL equivalence. The current
+QuerySeal also does not attempt full Snowflake SQL equivalence. The current
 subset is meant to be small enough to audit.
 
 ## Supported SQL Shapes
@@ -158,7 +158,7 @@ leak into same-named CTEs.
 
 ## Fragment (Subtree) Rewrites
 
-When a whole `WITH` query is outside the supported subset, Snowprove still
+When a whole `WITH` query is outside the supported subset, QuerySeal still
 parses each CTE body and the outer `SELECT` as standalone fragments, with only
 the CTEs defined before each fragment in scope. Proven rewrites for one
 fragment are spliced back into the full query, which preserves whole-query
@@ -168,18 +168,18 @@ CTE they fired in.
 
 ## dbt Project Scans
 
-`snowprove dbt scan` discovers SQL files under `models/**/*.sql` and dbt schema
+`qseal dbt scan` discovers SQL files under `models/**/*.sql` and dbt schema
 files under `models/**/*.yml` and `models/**/*.yaml`.
 
 Compiled Snowflake SQL can use fully qualified relation names such as
-`database.schema.model_name`. Snowprove preserves those qualified names in
+`database.schema.model_name`. QuerySeal preserves those qualified names in
 generated rewrites while matching dbt constraints by the unqualified model name.
 
 Default scan output reports only proven rewrite findings. `--all` includes
 unknown and unsupported results.
 
 Raw dbt scans statically resolve simple `{{ ref('model') }}` and
-`{{ source('name', 'table') }}` relation references. Snowprove does not evaluate
+`{{ source('name', 'table') }}` relation references. QuerySeal does not evaluate
 arbitrary Jinja, macros, or dbt adapter helpers; those models are reported as
 unsupported with a macro-specific reason unless compiled SQL is supplied.
 
@@ -209,7 +209,7 @@ modify project files. Patch file paths preserve the model path and append the
 rewrite rule name.
 
 `--apply-patches` applies proven rewrites directly to model SQL files. It is
-explicitly opt-in. Snowprove refuses to apply a rewrite when the scan came from
+explicitly opt-in. QuerySeal refuses to apply a rewrite when the scan came from
 compiled SQL, when raw dbt SQL was statically preprocessed, or when the current
 source file no longer exactly matches the verified original SQL.
 
@@ -217,19 +217,19 @@ source file no longer exactly matches the verified original SQL.
 exists. Unsupported SQL, unknown equivalence, missing constraints, and uncompiled
 dbt/Jinja are not treated as failures under this policy.
 
-Snowprove does not currently compile dbt projects. A model containing unsupported
+QuerySeal does not currently compile dbt projects. A model containing unsupported
 dbt/Jinja syntax is reported as `UNSUPPORTED` when `--all` is used.
 
 Use `--compiled-dir` to scan already-compiled dbt SQL. Schema constraints are
 still loaded from the source dbt project's `models/` YAML files.
 
 Use `--use-compiled` to auto-discover a single compiled SQL directory under
-`target/compiled/`. If `dbt_project.yml` declares a project name, Snowprove
+`target/compiled/`. If `dbt_project.yml` declares a project name, QuerySeal
 prefers that local compiled project over compiled package directories. If the
-directory is missing, empty, or still ambiguous, Snowprove returns a discovery
+directory is missing, empty, or still ambiguous, QuerySeal returns a discovery
 error instead of guessing.
 
-For compiled scans, Snowprove maps each compiled SQL file back to the matching
+For compiled scans, QuerySeal maps each compiled SQL file back to the matching
 source path under `models/` when the relative path exists. Text reports show the
 source path first and the scanned compiled path as context; diff output uses the
 source path in the unified-diff headers.

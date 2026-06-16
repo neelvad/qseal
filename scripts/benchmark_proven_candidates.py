@@ -1,11 +1,11 @@
-# Thin shim for `snowprove llm benchmark`; kept for the Modal benchmark app.
-# All logic lives in snowprove.candidates.benchmarking.
+# Thin shim for `qseal llm benchmark`; kept for the Modal benchmark app.
+# All logic lives in qseal.candidates.benchmarking.
 import argparse
 import json
 import sys
 from pathlib import Path
 
-from snowprove.candidates.benchmarking import benchmark_proven
+from qseal.candidates.benchmarking import benchmark_proven
 
 
 def main() -> int:

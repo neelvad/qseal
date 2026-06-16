@@ -6,8 +6,8 @@
 # local and cloud runs share one code path.
 #
 #   uv run modal run scripts/modal_verify.py \
-#       --bundles-dir snowprove-runs/llm-candidates/gitlab-full \
-#       --report-file snowprove-runs/llm-candidates/modal-report.json --shards 20
+#       --bundles-dir qseal-runs/llm-candidates/gitlab-full \
+#       --report-file qseal-runs/llm-candidates/modal-report.json --shards 20
 import json
 import subprocess
 from collections import Counter
@@ -21,7 +21,7 @@ SQLSOLVER_COMMIT = "dcc2a91d8971a4c4d30b055f99d7d8428a1b754b"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-app = modal.App("snowprove-verify")
+app = modal.App("qseal-verify")
 
 image = (
     modal.Image.from_registry("ubuntu:22.04", add_python="3.12")
@@ -68,22 +68,22 @@ image = (
     )
     .env(
         {
-            "SNOWPROVE_QED_PARSER_JAR": (
+            "QSEAL_QED_PARSER_JAR": (
                 "/opt/qed-parser/target/qed-parser-1.0-SNAPSHOT-jar-with-dependencies.jar"
             ),
-            "SNOWPROVE_QED_PROVER": "/opt/qed-prover/target/release/qed-prover",
-            "SNOWPROVE_QED_JAVA": "/usr/lib/jvm/java-21-openjdk-amd64/bin/java",
+            "QSEAL_QED_PROVER": "/opt/qed-prover/target/release/qed-prover",
+            "QSEAL_QED_JAVA": "/usr/lib/jvm/java-21-openjdk-amd64/bin/java",
             "SQLSOLVER_DIR": "/opt/sqlsolver",
             "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64",
-            "UV_PROJECT_ENVIRONMENT": "/tmp/snowprove-venv",
-            "UV_CACHE_DIR": "/tmp/snowprove-uv-cache",
+            "UV_PROJECT_ENVIRONMENT": "/tmp/qseal-venv",
+            "UV_CACHE_DIR": "/tmp/qseal-uv-cache",
             "UV_LINK_MODE": "copy",
         }
     )
     .add_local_dir(
         str(REPO_ROOT),
-        "/snowprove",
-        ignore=[".git", ".venv", ".uv-cache", "snowprove-runs", "dist", "**/__pycache__"],
+        "/qseal",
+        ignore=[".git", ".venv", ".uv-cache", "qseal-runs", "dist", "**/__pycache__"],
     )
 )
 
@@ -114,12 +114,12 @@ def verify_shard(shard: dict[str, dict[str, str]], options: dict) -> list[dict]:
     if options.get("sqlsolver", True):
         command += [
             "--solver-command",
-            "/snowprove/scripts/sqlsolver_command.sh",
+            "/qseal/scripts/sqlsolver_command.sh",
             "--solver-timeout",
             str(options.get("solver_timeout", 60)),
         ]
     completed = subprocess.run(
-        command, cwd="/snowprove", capture_output=True, text=True, check=False
+        command, cwd="/qseal", capture_output=True, text=True, check=False
     )
     report_path = Path("/tmp/report.json")
     if not report_path.exists():

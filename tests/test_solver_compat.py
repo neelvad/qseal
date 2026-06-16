@@ -3,13 +3,13 @@ from pathlib import Path
 
 import yaml
 
-from snowprove.constraints.loader import load_constraint_catalog
-from snowprove.constraints.model import ConstraintCatalog, TableConstraints
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.verifier.backends.builtin import BuiltinVerifierBackend
-from snowprove.verifier.backends.external import ExternalVerifierBackend
-from snowprove.verifier.backends.external_contract import ExternalSolverRequest
-from snowprove.verifier.backends.sqlsolver import SqlSolverBackend, _schema_sql
+from qseal.constraints.loader import load_constraint_catalog
+from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.rewrites.base import VerificationStatus
+from qseal.verifier.backends.builtin import BuiltinVerifierBackend
+from qseal.verifier.backends.external import ExternalVerifierBackend
+from qseal.verifier.backends.external_contract import ExternalSolverRequest
+from qseal.verifier.backends.sqlsolver import SqlSolverBackend, _schema_sql
 
 FIXTURE = Path(__file__).parent / "fixtures" / "solver_compat"
 
@@ -214,7 +214,7 @@ def test_sqlsolver_command_wrapper_reports_missing_jar() -> None:
         check=False,
         capture_output=True,
         text=True,
-        env={"SQLSOLVER_DIR": "/tmp/snowprove-missing-sqlsolver"},
+        env={"SQLSOLVER_DIR": "/tmp/qseal-missing-sqlsolver"},
     )
 
     assert completed.returncode == 2

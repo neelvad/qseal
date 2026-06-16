@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from snowprove.constraints.dbt_loader import load_dbt_constraints
+from qseal.constraints.dbt_loader import load_dbt_constraints
 
 
 def test_load_dbt_column_unique_and_not_null_tests(tmp_path: Path) -> None:

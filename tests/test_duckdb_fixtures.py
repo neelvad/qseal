@@ -3,7 +3,7 @@ import json
 import duckdb
 import pytest
 
-from snowprove.fixtures import DuckDbFixtureSpec, create_duckdb_fixture
+from qseal.fixtures import DuckDbFixtureSpec, create_duckdb_fixture
 
 
 def test_generates_reproducible_seeded_fixture(tmp_path) -> None:

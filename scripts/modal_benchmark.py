@@ -1,9 +1,9 @@
 # Run the proven-candidate DuckDB benchmarks on Modal, sharded by model.
 #
 #   uv run modal run scripts/modal_benchmark.py \
-#       --report-path snowprove-runs/llm-candidates/gitlab-full-verification-final.json \
-#       --bundles-dir snowprove-runs/llm-candidates/gitlab-full \
-#       --report-file snowprove-runs/llm-candidates/bench-report.json --shards 40
+#       --report-path qseal-runs/llm-candidates/gitlab-full-verification-final.json \
+#       --bundles-dir qseal-runs/llm-candidates/gitlab-full \
+#       --report-file qseal-runs/llm-candidates/bench-report.json --shards 40
 import json
 import subprocess
 from collections import Counter
@@ -13,7 +13,7 @@ import modal
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-app = modal.App("snowprove-benchmark")
+app = modal.App("qseal-benchmark")
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -24,15 +24,15 @@ image = (
     )
     .env(
         {
-            "UV_PROJECT_ENVIRONMENT": "/tmp/snowprove-venv",
-            "UV_CACHE_DIR": "/tmp/snowprove-uv-cache",
+            "UV_PROJECT_ENVIRONMENT": "/tmp/qseal-venv",
+            "UV_CACHE_DIR": "/tmp/qseal-uv-cache",
             "UV_LINK_MODE": "copy",
         }
     )
     .add_local_dir(
         str(REPO_ROOT),
-        "/snowprove",
-        ignore=[".git", ".venv", ".uv-cache", "snowprove-runs", "dist", "**/__pycache__"],
+        "/qseal",
+        ignore=[".git", ".venv", ".uv-cache", "qseal-runs", "dist", "**/__pycache__"],
     )
 )
 
@@ -65,7 +65,7 @@ def benchmark_shard(shard: dict[str, dict[str, str]], options: dict) -> list[dic
         str(options["timeout"]),
     ]
     completed = subprocess.run(
-        command, cwd="/snowprove", capture_output=True, text=True, check=False
+        command, cwd="/qseal", capture_output=True, text=True, check=False
     )
     bench_path = Path("/tmp/bench.json")
     if not bench_path.exists():

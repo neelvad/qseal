@@ -10,9 +10,9 @@ import json
 import sys
 from pathlib import Path
 
-from snowprove.constraints.model import ConstraintCatalog
-from snowprove.verifier.backends.sqlsolver import _unqualify_relations
-from snowprove.verifier.backends.verieql import _build_request
+from qseal.constraints.model import ConstraintCatalog
+from qseal.verifier.backends.sqlsolver import _unqualify_relations
+from qseal.verifier.backends.verieql import _build_request
 
 
 def main() -> int:

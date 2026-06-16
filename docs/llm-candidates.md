@@ -7,9 +7,9 @@ The generator proposes; only `PROVEN_EQUIVALENT` survives.
 
 ```bash
 export ANTHROPIC_API_KEY=...
-uv run snowprove llm generate PROJECT --out BUNDLES_DIR --limit 5
-uv run snowprove llm generate PROJECT --out BUNDLES_DIR --use-batches
-uv run snowprove llm generate PROJECT --out BUNDLES_DIR --dry-run
+uv run qseal llm generate PROJECT --out BUNDLES_DIR --limit 5
+uv run qseal llm generate PROJECT --out BUNDLES_DIR --use-batches
+uv run qseal llm generate PROJECT --out BUNDLES_DIR --dry-run
 ```
 
 Targets are models that survive Jinja preprocessing, parse (whole-query or at
@@ -31,14 +31,14 @@ while VeriEQL runs natively on macOS:
 
 ```bash
 # Phase A (macOS): parse -> identity -> builtin -> VeriEQL refute/cross-check
-uv run snowprove llm verify BUNDLES_DIR \
-  --verieql-dir ~/workspace/snowprove-eval/VeriEQL --report-file report-a.json
+uv run qseal llm verify BUNDLES_DIR \
+  --verieql-dir ~/workspace/qseal-eval/VeriEQL --report-file report-a.json
 
 # Phase B (container): parse -> identity -> builtin -> SQLSolver
 scripts/run_llm_verification_sqlsolver.sh BUNDLES_DIR PROJECT report-b.json
 
 # Merge: best verdict per candidate; proven-vs-refuted conflicts alarm
-uv run snowprove llm merge report-a.json report-b.json --report-file final.json
+uv run qseal llm merge report-a.json report-b.json --report-file final.json
 ```
 
 ## Buckets
@@ -143,8 +143,8 @@ iteration speed and larger corpora.
 
 ```bash
 uv run modal run scripts/modal_verify.py \
-  --bundles-dir snowprove-runs/llm-candidates/gitlab-full \
-  --report-file snowprove-runs/llm-candidates/modal-full-report.json --shards 40
+  --bundles-dir qseal-runs/llm-candidates/gitlab-full \
+  --report-file qseal-runs/llm-candidates/modal-full-report.json --shards 40
 ```
 
 First full-corpus benchmark: **400 candidates, full cascade, 69 seconds
@@ -195,7 +195,7 @@ ingestion and join/aggregate parser coverage over corpus hunting.
 
 ## CLI vs scripts
 
-The pipeline is exposed as first-class CLI commands: `snowprove llm
+The pipeline is exposed as first-class CLI commands: `qseal llm
 generate | verify | merge | benchmark | explain`. The `scripts/*.py` files
-are thin shims over the same `snowprove.candidates` package functions, kept
+are thin shims over the same `qseal.candidates` package functions, kept
 because the Modal apps and the SQLSolver container wrapper invoke them.

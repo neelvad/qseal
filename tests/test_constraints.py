@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from snowprove.constraints.yaml_loader import load_constraints
+from qseal.constraints.yaml_loader import load_constraints
 
 
 def test_load_constraints(tmp_path: Path) -> None:

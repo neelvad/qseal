@@ -5,15 +5,15 @@ from shutil import copytree
 import pytest
 import yaml
 
-from snowprove.benchmark.model import (
+from qseal.benchmark.model import (
     BenchmarkEnvironment,
     BenchmarkResult,
     BenchmarkStatus,
     QueryBenchmark,
     QueryBenchmarkResult,
 )
-from snowprove.corpora import bundled_corpus_path
-from snowprove.corpus import CorpusRunConfig, load_task_corpus, run_task_corpus
+from qseal.corpora import bundled_corpus_path
+from qseal.corpus import CorpusRunConfig, load_task_corpus, run_task_corpus
 
 
 def test_runs_selected_tasks_and_strategies_with_comparison_summary(

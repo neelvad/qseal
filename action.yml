@@ -1,4 +1,4 @@
-name: "Snowprove dbt scan"
+name: "QuerySeal dbt scan"
 description: "Comment proven-safe SQL rewrites on changed dbt models."
 branding:
   icon: "check-circle"

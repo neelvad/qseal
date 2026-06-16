@@ -1,6 +1,6 @@
 # Performance Evidence
 
-Snowprove proves semantic safety; it does not claim performance. This track
+QuerySeal proves semantic safety; it does not claim performance. This track
 builds the evidence layer that ranks proven rewrites by measured benefit.
 
 ## Tier 1: DuckDB micro-benchmarks on synthetic data
@@ -21,9 +21,9 @@ measurement where the two sides return different row counts is marked
 mean the synthetic data violated the premises.
 
 ```bash
-uv run snowprove llm benchmark \
-  snowprove-runs/llm-candidates/gitlab-full-verification-final.json \
-  snowprove-runs/llm-candidates/gitlab-full \
+uv run qseal llm benchmark \
+  qseal-runs/llm-candidates/gitlab-full-verification-final.json \
+  qseal-runs/llm-candidates/gitlab-full \
   --report-file bench.json --rows 100000,1000000
 
 uv run modal run scripts/modal_benchmark.py \
@@ -67,7 +67,7 @@ may matter on a billed, distributed warehouse and vice versa.
 ## Tier 2: Snowflake EXPLAIN plan diffing (first sweep, 2026-06-12)
 
 `scripts/explain_proven_candidates.py` replays extracted schemas as empty
-tables in a trial-account scratch database (`SNOWPROVE_TIER2`) and diffs
+tables in a trial-account scratch database (`QSEAL_TIER2`) and diffs
 `EXPLAIN USING JSON` operator profiles for each proven pair. EXPLAIN is
 compile-only: no warehouse runtime, effectively free. Empty tables do not
 collapse plans (verified: DISTINCT still produces an Aggregate node).

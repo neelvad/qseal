@@ -2,9 +2,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SNOWPROVE_DIR="${SNOWPROVE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-CLONE_DIR="${CLONE_DIR:-/tmp/snowprove-real-projects}"
-REPORT_ROOT="${REPORT_ROOT:-$SNOWPROVE_DIR/snowprove-runs/real-projects/$(date -u +%Y%m%dT%H%M%SZ)}"
+QSEAL_DIR="${QSEAL_DIR:-${SNOWPROVE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}}"
+CLONE_DIR="${CLONE_DIR:-/tmp/qseal-real-projects}"
+REPORT_ROOT="${REPORT_ROOT:-$QSEAL_DIR/qseal-runs/real-projects/$(date -u +%Y%m%dT%H%M%SZ)}"
 RUN_COMPILED="${RUN_COMPILED:-0}"
 DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-$HOME/.dbt}"
 DUCKDB_DBT_COMMAND="${DUCKDB_DBT_COMMAND:-uvx --from dbt-duckdb dbt}"
@@ -27,8 +27,8 @@ Usage:
   scripts/evaluate_real_projects.sh
 
 Environment overrides:
-  CLONE_DIR=/tmp/snowprove-real-projects
-  REPORT_ROOT=$PWD/snowprove-runs/real-projects/manual
+  CLONE_DIR=/tmp/qseal-real-projects
+  REPORT_ROOT=$PWD/qseal-runs/real-projects/manual
   REFRESH=1                 Re-clone each project under CLONE_DIR.
   RUN_COMPILED=1            Try dbt deps/compile and scan compiled SQL.
   DBT_PROFILES_DIR=$HOME/.dbt
@@ -57,9 +57,9 @@ fi
 
 mkdir -p "$CLONE_DIR" "$REPORT_ROOT"
 
-snowprove() {
-  UV_CACHE_DIR="${UV_CACHE_DIR:-$SNOWPROVE_DIR/.uv-cache}" \
-    uv run --project "$SNOWPROVE_DIR" snowprove "$@"
+qseal() {
+  UV_CACHE_DIR="${UV_CACHE_DIR:-$QSEAL_DIR/.uv-cache}" \
+    uv run --project "$QSEAL_DIR" qseal "$@"
 }
 
 clone_project() {
@@ -86,12 +86,12 @@ run_raw_scan() {
 
   mkdir -p "$report_dir"
   echo "Raw scan: $scan_dir"
-  snowprove dbt scan "$scan_dir" \
+  qseal dbt scan "$scan_dir" \
     --all \
     --report-file "$report_dir/raw-report.json" \
     --write-patches "$report_dir/raw-patches" \
     > "$report_dir/raw-output.txt" 2>&1 || {
-      echo "Skipping remaining raw scan work for $name: snowprove raw scan failed." \
+      echo "Skipping remaining raw scan work for $name: qseal raw scan failed." \
         | tee "$report_dir/raw-skipped.txt"
       return
     }
@@ -137,13 +137,13 @@ run_compiled_scan() {
     return
   }
 
-  snowprove dbt scan "$scan_dir" \
+  qseal dbt scan "$scan_dir" \
     --use-compiled \
     --all \
     --report-file "$report_dir/compiled-report.json" \
     --write-patches "$report_dir/compiled-patches" \
     > "$report_dir/compiled-output.txt" 2>&1 || {
-      echo "Skipping compiled scan for $name: snowprove compiled scan failed." \
+      echo "Skipping compiled scan for $name: qseal compiled scan failed." \
         | tee "$report_dir/compiled-skipped.txt"
       return
     }
@@ -185,7 +185,7 @@ project_profile_name() {
     return
   fi
 
-  echo "snowprove_duckdb"
+  echo "qseal_duckdb"
 }
 
 for spec in "${PROJECT_SPECS[@]}"; do

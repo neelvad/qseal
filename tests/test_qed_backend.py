@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from snowprove.constraints.model import ConstraintCatalog, TableConstraints
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.verifier.backends.qed import QedBackend, _qed_case
+from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.rewrites.base import VerificationStatus
+from qseal.verifier.backends.qed import QedBackend, _qed_case
 
 UNIQUE_NON_NULL_USERS = ConstraintCatalog(
     tables={
@@ -31,6 +31,8 @@ def _fake_backend(tmp_path: Path, prover_output: str) -> QedBackend:
 
 
 def test_verify_requires_configuration(monkeypatch) -> None:
+    monkeypatch.delenv("QSEAL_QED_PARSER_JAR", raising=False)
+    monkeypatch.delenv("QSEAL_QED_PROVER", raising=False)
     monkeypatch.delenv("SNOWPROVE_QED_PARSER_JAR", raising=False)
     monkeypatch.delenv("SNOWPROVE_QED_PROVER", raising=False)
 
@@ -41,6 +43,18 @@ def test_verify_requires_configuration(monkeypatch) -> None:
     )
 
     assert result.status == VerificationStatus.UNSUPPORTED
+
+
+def test_verify_accepts_legacy_environment_names(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("QSEAL_QED_PARSER_JAR", raising=False)
+    monkeypatch.delenv("QSEAL_QED_PROVER", raising=False)
+    monkeypatch.setenv("SNOWPROVE_QED_PARSER_JAR", str(tmp_path / "parser.jar"))
+    monkeypatch.setenv("SNOWPROVE_QED_PROVER", str(tmp_path / "missing-prover"))
+
+    backend = QedBackend()
+
+    assert backend.parser_jar == tmp_path / "parser.jar"
+    assert backend.prover_path == tmp_path / "missing-prover"
 
 
 def test_verify_maps_provable(tmp_path: Path) -> None:

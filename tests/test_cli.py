@@ -5,8 +5,8 @@ from shutil import copytree
 import yaml
 from click.testing import CliRunner
 
-from snowprove.cli import main
-from snowprove.corpora import bundled_corpus_path
+from qseal.cli import main
+from qseal.corpora import bundled_corpus_path
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -1768,7 +1768,7 @@ models:
 
 def test_dbt_scan_cli_writes_report_file(tmp_path) -> None:
     models = tmp_path / "models"
-    report = tmp_path / "artifacts" / "snowprove.json"
+    report = tmp_path / "artifacts" / "qseal.json"
     models.mkdir()
     (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
     (models / "schema.yml").write_text(
@@ -1798,7 +1798,7 @@ models:
 
 def test_dbt_scan_cli_can_write_report_file_with_json_stdout(tmp_path) -> None:
     models = tmp_path / "models"
-    report = tmp_path / "snowprove.json"
+    report = tmp_path / "qseal.json"
     models.mkdir()
     (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
     (models / "schema.yml").write_text(
@@ -2017,7 +2017,7 @@ models:
 def test_dbt_scan_cli_report_file_includes_patch_paths(tmp_path) -> None:
     models = tmp_path / "models"
     patches = tmp_path / "patches"
-    report = tmp_path / "snowprove-report.json"
+    report = tmp_path / "qseal-report.json"
     models.mkdir()
     (models / "dim_users.sql").write_text("SELECT DISTINCT user_id FROM dim_users")
     (models / "schema.yml").write_text(

@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from snowprove.dbt.scan import DbtModelScanResult, DbtScanResult
-from snowprove.report.patch import (
+from qseal.dbt.scan import DbtModelScanResult, DbtScanResult
+from qseal.report.patch import (
     apply_dbt_scan_patches,
     write_dbt_scan_patch_results,
     write_dbt_scan_patches,
 )
-from snowprove.rewrites.base import RewriteSuggestion, VerificationStatus
+from qseal.rewrites.base import RewriteSuggestion, VerificationStatus
 
 
 def test_write_dbt_scan_patches(tmp_path: Path) -> None:

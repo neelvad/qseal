@@ -1,7 +1,7 @@
-from snowprove.constraints.model import ConstraintCatalog, TableConstraints
-from snowprove.parser.sqlglot_parser import parse_select
-from snowprove.rewrites.base import VerificationStatus
-from snowprove.rewrites.distinct import RemoveRedundantDistinct
+from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.parser.sqlglot_parser import parse_select
+from qseal.rewrites.base import VerificationStatus
+from qseal.rewrites.distinct import RemoveRedundantDistinct
 
 
 def test_removes_distinct_when_projection_contains_unique_key() -> None:

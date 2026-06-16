@@ -1,11 +1,11 @@
-# Thin shim for `snowprove llm explain`; kept for existing docs/automation.
-# All logic lives in snowprove.candidates.explain. Requires SNOWFLAKE_* env.
+# Thin shim for `qseal llm explain`; kept for existing docs/automation.
+# All logic lives in qseal.candidates.explain. Requires SNOWFLAKE_* env.
 import argparse
 import json
 import sys
 from pathlib import Path
 
-from snowprove.candidates.explain import explain_proven
+from qseal.candidates.explain import explain_proven
 
 
 def main() -> int:

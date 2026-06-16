@@ -1,6 +1,6 @@
 # Architecture
 
-Snowprove is organized around a small internal query representation rather than
+QuerySeal is organized around a small internal query representation rather than
 directly rewriting sqlglot AST nodes.
 
 ## Flow
@@ -37,7 +37,7 @@ SQL text
 
 ## Rewrite Registry
 
-`rewrites/registry.py` owns the default rule order used by `snowprove suggest`.
+`rewrites/registry.py` owns the default rule order used by `qseal suggest`.
 Rules can be added without changing CLI control flow.
 
 Every rule exposes two structured-action methods:
