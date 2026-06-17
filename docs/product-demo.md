@@ -88,6 +88,10 @@ qseal candidates evidence original.sql \
   --format json
 ```
 
+See [candidate-evidence-ci.md](candidate-evidence-ci.md) for a GitHub Actions
+workflow that uploads the evidence artifact and optionally fails on unproven
+candidates.
+
 The higher LLM/prover workflow expands this same contract:
 
 ```bash
