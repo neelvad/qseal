@@ -1,4 +1,9 @@
-from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.constraints.model import (
+    ColumnConstraint,
+    ConstraintCatalog,
+    ForeignKeyConstraint,
+    TableConstraints,
+)
 from qseal.parser.sqlglot_parser import parse_select
 from qseal.rewrites.base import VerificationStatus
 from qseal.verifier.check import check_equivalence
@@ -92,6 +97,37 @@ def test_check_proves_unused_left_join_elimination() -> None:
 
     assert result.status == VerificationStatus.PROVEN_EQUIVALENT
     assert result.rule_name == "remove_unused_left_join"
+
+
+def test_check_proves_fk_backed_inner_join_elimination() -> None:
+    original = parse_select(
+        """
+        SELECT f.order_id, f.user_id
+        FROM fact_orders f
+        INNER JOIN dim_users u ON f.user_id = u.user_id
+        """
+    )
+    rewritten = parse_select("SELECT f.order_id, f.user_id FROM fact_orders f")
+    constraints = ConstraintCatalog(
+        tables={
+            "fact_orders": TableConstraints(
+                columns={"user_id": ColumnConstraint(nullable=False)},
+                foreign_keys=[
+                    ForeignKeyConstraint(
+                        columns=("user_id",),
+                        ref_table="dim_users",
+                        ref_columns=("user_id",),
+                    )
+                ],
+            ),
+            "dim_users": TableConstraints(unique=[("user_id",)]),
+        }
+    )
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "remove_foreign_key_inner_join"
 
 
 def test_check_proves_join_distinct_to_exists() -> None:

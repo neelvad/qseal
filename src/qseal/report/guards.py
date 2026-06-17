@@ -41,6 +41,19 @@ def _tests_for_assumption(assumption: str) -> tuple[str, ...]:
             f"{trusted_unique.group('table')}.{trusted_unique.group('column')}",
         )
 
+    trusted_relationship = re.match(
+        r"^(?P<table>.+)\.(?P<column>.+) has a trusted relationship to "
+        r"(?P<ref_table>.+)\.(?P<ref_column>.+)\.$",
+        assumption,
+    )
+    if trusted_relationship is not None:
+        return (
+            "dbt test: relationships from "
+            f"{trusted_relationship.group('table')}.{trusted_relationship.group('column')} "
+            "to "
+            f"{trusted_relationship.group('ref_table')}.{trusted_relationship.group('ref_column')}",
+        )
+
     trusted_not_null = re.match(
         r"^(?P<table>.+)\.\((?P<column>.+)\) is trusted non-null\.$",
         assumption,

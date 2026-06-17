@@ -23,6 +23,7 @@ def test_registry_returns_rules_in_default_order() -> None:
 
     assert [suggestion.rule_name for suggestion in suggestions] == [
         "remove_unused_left_join",
+        "remove_foreign_key_inner_join",
         "rewrite_join_distinct_to_exists",
         "remove_redundant_not_null_filter",
         "remove_redundant_distinct",
@@ -52,6 +53,7 @@ def test_select_rules_filters_default_rules_by_name() -> None:
 def test_rule_names_returns_cli_choices() -> None:
     assert rule_names() == (
         "remove_unused_left_join",
+        "remove_foreign_key_inner_join",
         "rewrite_join_distinct_to_exists",
         "remove_redundant_not_null_filter",
         "remove_redundant_distinct",

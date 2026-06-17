@@ -5,11 +5,18 @@ class ColumnConstraint(BaseModel):
     nullable: bool | None = None
 
 
+class ForeignKeyConstraint(BaseModel):
+    columns: tuple[str, ...]
+    ref_table: str
+    ref_columns: tuple[str, ...]
+
+
 class TableConstraints(BaseModel):
     columns: dict[str, ColumnConstraint] = Field(default_factory=dict)
     # Unique keys use SQL/dbt-test semantics: rows where a key column is NULL are
     # exempt, so duplicate NULL rows may exist unless the columns are also non-null.
     unique: list[tuple[str, ...]] = Field(default_factory=list)
+    foreign_keys: list[ForeignKeyConstraint] = Field(default_factory=list)
 
     def has_unique_key(self, columns: tuple[str, ...]) -> bool:
         requested = set(columns)
@@ -25,6 +32,20 @@ class TableConstraints(BaseModel):
     def is_non_null(self, column: str) -> bool:
         constraint = self.columns.get(column)
         return constraint is not None and constraint.nullable is False
+
+    def has_foreign_key(
+        self,
+        columns: tuple[str, ...],
+        *,
+        ref_table: str,
+        ref_columns: tuple[str, ...],
+    ) -> bool:
+        return any(
+            foreign_key.columns == columns
+            and foreign_key.ref_table == ref_table
+            and foreign_key.ref_columns == ref_columns
+            for foreign_key in self.foreign_keys
+        )
 
 
 class ConstraintCatalog(BaseModel):

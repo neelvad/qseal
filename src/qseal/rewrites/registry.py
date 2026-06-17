@@ -6,7 +6,7 @@ from qseal.ir.model import SelectQuery
 from qseal.rewrites.base import RewriteMatch, RewriteSuggestion, VerificationStatus
 from qseal.rewrites.distinct import RemoveRedundantDistinct
 from qseal.rewrites.join_distinct_exists import RewriteJoinDistinctToExists
-from qseal.rewrites.join_elimination import RemoveUnusedLeftJoin
+from qseal.rewrites.join_elimination import RemoveForeignKeyInnerJoin, RemoveUnusedLeftJoin
 from qseal.rewrites.not_null_filter import RemoveRedundantNotNullFilter
 from qseal.rewrites.predicate_pushdown import PredicatePushdown
 
@@ -35,6 +35,7 @@ class RewriteRule(Protocol):
 
 DEFAULT_RULES: tuple[RewriteRule, ...] = (
     RemoveUnusedLeftJoin(),
+    RemoveForeignKeyInnerJoin(),
     RewriteJoinDistinctToExists(),
     RemoveRedundantNotNullFilter(),
     RemoveRedundantDistinct(),

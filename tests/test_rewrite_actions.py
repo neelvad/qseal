@@ -5,7 +5,7 @@ from qseal.parser.sqlglot_parser import parse_select
 from qseal.rewrites.base import RewriteMatch, VerificationStatus
 from qseal.rewrites.distinct import RemoveRedundantDistinct
 from qseal.rewrites.join_distinct_exists import RewriteJoinDistinctToExists
-from qseal.rewrites.join_elimination import RemoveUnusedLeftJoin
+from qseal.rewrites.join_elimination import RemoveForeignKeyInnerJoin, RemoveUnusedLeftJoin
 from qseal.rewrites.not_null_filter import RemoveRedundantNotNullFilter
 from qseal.rewrites.predicate_pushdown import PredicatePushdown
 from qseal.rewrites.registry import apply_rewrite_match, available_rewrite_matches
@@ -31,6 +31,29 @@ from qseal.rewrites.registry import apply_rewrite_match, available_rewrite_match
             ),
             ConstraintCatalog(
                 tables={"dim_users": TableConstraints(unique=[("user_id",)])}
+            ),
+            "join:0",
+        ),
+        (
+            RemoveForeignKeyInnerJoin(),
+            (
+                "SELECT f.user_id FROM fact_orders f "
+                "INNER JOIN dim_users u ON f.user_id = u.user_id"
+            ),
+            ConstraintCatalog(
+                tables={
+                    "fact_orders": TableConstraints(
+                        columns={"user_id": ColumnConstraint(nullable=False)},
+                        foreign_keys=[
+                            {
+                                "columns": ("user_id",),
+                                "ref_table": "dim_users",
+                                "ref_columns": ("user_id",),
+                            }
+                        ],
+                    ),
+                    "dim_users": TableConstraints(unique=[("user_id",)]),
+                }
             ),
             "join:0",
         ),

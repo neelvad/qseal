@@ -2,6 +2,7 @@ from pathlib import Path
 
 from qseal.dbt.project import discover_compiled_sql_path
 from qseal.dbt.scan import scan_dbt_project
+from qseal.report.guards import required_guarding_tests
 from qseal.rewrites.base import VerificationStatus
 from qseal.rewrites.registry import DEFAULT_RULES
 
@@ -37,6 +38,111 @@ models:
     assert result.results[0].scanned_path == models / "dim_users.sql"
     assert result.results[0].source_path == models / "dim_users.sql"
     assert result.results[0].suggestions[0].status == VerificationStatus.PROVEN_EQUIVALENT
+
+
+def test_scan_dbt_project_uses_relationships_for_inner_join_elimination(
+    tmp_path: Path,
+) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "fct_orders.sql").write_text(
+        """
+SELECT orders.order_id, orders.user_id
+FROM fact_orders AS orders
+INNER JOIN dim_users AS users ON orders.user_id = users.user_id
+"""
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: fact_orders
+    columns:
+      - name: user_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_users')
+              field: user_id
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.proven_finding_count() == 1
+    suggestion = result.results[0].suggestions[0]
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rule_name == "remove_foreign_key_inner_join"
+    assert required_guarding_tests(suggestion) == (
+        "dbt test: relationships from fact_orders.user_id to dim_users.user_id",
+        "dbt test: not_null on fact_orders.user_id",
+        "dbt test: unique on dim_users.user_id",
+    )
+    assert "INNER JOIN" not in suggestion.rewritten_sql
+
+
+def test_scan_dbt_project_merges_source_relationship_premises(
+    tmp_path: Path,
+) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "fct_orders.sql").write_text(
+        """
+SELECT orders.order_id, orders.customer_id
+FROM fact_orders AS orders
+INNER JOIN {{ source('crm', 'customers') }} AS customers
+  ON orders.customer_id = customers.id
+"""
+    )
+    (models / "fact_orders.yml").write_text(
+        """
+version: 2
+models:
+  - name: fact_orders
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+"""
+    )
+    (models / "relationships.yml").write_text(
+        """
+version: 2
+models:
+  - name: fact_orders
+    columns:
+      - name: customer_id
+        tests:
+          - relationships:
+              to: "{{ source('crm', 'customers') }}"
+              field: id
+sources:
+  - name: crm
+    tables:
+      - name: customers
+        columns:
+          - name: id
+            tests:
+              - unique
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.proven_finding_count() == 1
+    suggestion = result.results[0].suggestions[0]
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rule_name == "remove_foreign_key_inner_join"
+    assert required_guarding_tests(suggestion) == (
+        "dbt test: relationships from fact_orders.customer_id to customers.id",
+        "dbt test: not_null on fact_orders.customer_id",
+        "dbt test: unique on customers.id",
+    )
 
 
 def test_scan_dbt_project_finds_subtree_rewrites_in_unsupported_models(tmp_path: Path) -> None:

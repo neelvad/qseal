@@ -1,73 +1,80 @@
 # Roadmap
 
-This roadmap is intentionally modest. QuerySeal should become useful by staying
-conservative, not by pretending to verify all Snowflake SQL.
+QuerySeal is not trying to become a general SQL optimizer. The useful wedge is
+smaller and sharper:
 
-## v0.1: Local CLI Core
+1. dbt tests declare trusted premises.
+2. QuerySeal proves a conservative rewrite under those premises.
+3. CI shows the required tests, patch/diff, and evidence artifacts.
+4. Tier 3 benchmarks measure whether the safe rewrite matters on the target
+   warehouse.
 
-- CLI commands: `suggest` and `check`
-- YAML constraint loading
-- structured text and JSON output
-- hand-written rewrite registry
-- redundant `DISTINCT` removal
-- predicate pushdown through simple projection subqueries
-- unused `LEFT JOIN` elimination
-- redundant `IS NOT NULL` filter removal
+The roadmap is therefore organized around **premise vocabulary**, not around an
+unbounded list of optimizer rewrites.
 
-## v0.2: dbt Constraint Ingestion
+## Completed Foundation
 
-- read dbt-style `schema.yml` column tests
-- map `unique` tests to trusted unique constraints
-- map `not_null` tests to trusted nullability constraints
-- document which dbt tests are treated as proof assumptions
-- scan dbt model SQL files directly
-- scan already-compiled dbt SQL via `--compiled-dir`
-- auto-discover compiled SQL with `--use-compiled`
-- map compiled SQL findings back to source model paths
-- future: invoke `dbt compile` directly
+- CLI commands for `suggest`, `check`, `dbt scan`, candidate verification, local
+  benchmarking, and Snowflake benchmark suites.
+- Snowflake and DuckDB dialect propagation through parsing, verification,
+  scanning, and artifacts.
+- dbt model/source `unique`, `not_null`, and `relationships` ingestion.
+- Conservative deterministic rewrite rules for:
+  - redundant `DISTINCT`
+  - redundant `IS NOT NULL`
+  - unused `LEFT JOIN`
+  - FK-backed `INNER JOIN` elimination
+  - `JOIN DISTINCT` to `EXISTS`
+  - predicate pushdown through simple projection subqueries
+- FK semantics keep premises explicit: relationships prove parent existence for
+  non-null child values; child `not_null` and parent `unique` remain separate
+  required premises.
+- JSON, text, markdown, diff, patch-file, and optional patch-apply review
+  surfaces.
+- Product demo fixture connecting deterministic dbt scan output to Snowflake
+  Tier 3 evidence.
+- Snowflake Tier 3 family suite and dbt-like unused-join demo suite.
+- DuckDB rewrite-policy research harness with structured actions, search
+  baselines, policy models, corpus runs, and stability reports.
+- External verifier adapters/spikes for SQLSolver, QED, and VeriEQL.
 
-## v0.3: Snowflake Evidence Integration
+## Near-Term Product Roadmap
 
-- connect with read-only Snowflake credentials
-- run `EXPLAIN`/plan collection for original and rewritten SQL
-- report structural plan differences
-- run verified pairs through the Snowflake benchmark backend
-- maintain a repeatable Snowflake rewrite-family benchmark suite
-- keep semantic proof separate from performance observations
+1. **Composite Keys**
+   - Ingest dbt-utils `unique_combination_of_columns`.
+   - Extend uniqueness-dependent rewrites to multi-column keys.
+   - Extend FK premises and join elimination to composite relationships.
 
-## v0.4: CI and PR Workflows
+2. **Accepted Values / Enum Domains**
+   - Ingest dbt `accepted_values` as bounded-domain premises.
+   - Start with redundant `IN (...)` predicate elimination.
+   - Treat NULL behavior explicitly before using these premises for CASE-branch
+     or broader predicate rewrites.
 
-- JSON reports suitable for CI consumption
-- unified diff output for reviewable rewrite suggestions
-- patch file output for reviewable rewrite suggestions
-- opt-in patch application for verified dbt rewrites
-- nonzero exit mode for proven rewrite findings
-- GitHub Actions report artifact examples
-- dbt model scanning experiments
+3. **Aggregates Over Unique Keys**
+   - Start with `COUNT(DISTINCT col) -> COUNT(col)` when `col` is trusted
+     unique and non-null.
+   - Defer full `GROUP BY pk` collapse until aggregate expression semantics and
+     NULL behavior are covered carefully.
 
-## Later Research Tracks
+## Warehouse Growth Axis
 
-- bounded counterexample generation
-- SMT-backed verification experiments
-- adapters for SQLSolver, QED, or related SQL-equivalence tools
-- Lean/Coq proofs for the internal rewrite rules
+QuerySeal's positioning should stay close to "CI-verified RELY-style
+optimization":
 
-## DuckDB Rewrite-Policy Research
+- Databricks, BigQuery, Oracle, and other warehouses expose trusted or
+  informational constraints that optimizers may use.
+- QuerySeal should treat dbt tests as the continuously rechecked source of those
+  premises at PR/CI time.
+- Cross-warehouse work should focus on premises that warehouses cannot safely
+  infer from raw SQL alone.
 
-This track uses DuckDB as a reproducible local execution engine while keeping
-semantic equivalence and performance measurement separate.
+## Research Backlog
 
-1. Explicit DuckDB dialect propagation through parsing, verification, and
-   artifacts.
-2. Repeated DuckDB benchmarks with warmups, plans, timeouts, and version data.
-3. Seeded query and database fixtures with varied sizes and distributions.
-4. Structured rewrite matches that define a finite action space.
-5. A framework-neutral environment returning solver status, benchmark results,
-   reward, and termination state.
-6. Content-addressed caches and JSONL or Parquet trajectory artifacts.
-7. Fixed-order, random, greedy, beam-search, exhaustive-search, forced baseline
-   policy, and abstaining baseline policy search strategies.
-8. A small learned ranking or rule-selection policy beyond the feature-mean
-   baseline.
-9. SFT and verifier-guided RL for SQL generation only after structured-policy
-   experiments demonstrate useful generalization.
+- Mine semantic-query-optimization literature and systems such as WeTune for
+  premise-conditioned rewrite candidates.
+- Keep LLM-generated candidates outside the trusted path; prove or reject every
+  candidate.
+- Use empirical data-diffing only as defense-in-depth, never as proof.
+- Continue bounded solver experiments for richer SQL fragments and integrity
+  constraints.

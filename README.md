@@ -3,14 +3,13 @@
 **Your dbt tests know things your warehouse optimizer can't use. QuerySeal turns
 them into verified-safe SQL rewrites.**
 
-A warehouse like Snowflake does not enforce `UNIQUE` or `NOT NULL`, so its
-optimizer cannot assume them — it must keep a defensive `SELECT DISTINCT` or an
-`IS NOT NULL` filter even when the data is, in fact, unique or non-null. But a
-dbt `unique` / `not_null` test *is* that guarantee, written down, version
-controlled, and re-checked on every run. QuerySeal reads those tests as trusted
-premises and uses them to prove rewrites the engine structurally cannot perform
-— then emits the guarding tests that must keep passing for the rewrite to stay
-valid.
+A warehouse like Snowflake does not enforce dbt tests, so its optimizer cannot
+assume a column is unique, non-null, or related to a parent table — it must keep
+defensive `DISTINCT`, filters, and joins even when the data contract says they
+are redundant. QuerySeal reads dbt `unique`, `not_null`, and `relationships`
+tests as trusted premises and uses them to prove rewrites the engine
+structurally cannot perform — then emits the guarding tests that must keep
+passing for the rewrite to stay valid.
 
 It does **not** claim a rewrite is faster. It claims a supported rewrite returns
 **the same rows under the declared assumptions** — and separately measures
@@ -129,9 +128,24 @@ LEFT JOIN dim_users u ON f.user_id = u.user_id;
 ```
 
 With `dim_users.user_id` unique, the join cannot duplicate or filter rows and
-nothing references `u` — so it is removed (`remove_unused_left_join`). Other
-built-in rules: redundant `IS NOT NULL` removal, predicate pushdown, and
-`JOIN`+`DISTINCT` → `EXISTS`.
+nothing references `u` — so it is removed (`remove_unused_left_join`).
+
+### FK-backed INNER JOIN elimination
+
+```sql
+SELECT f.order_id, f.user_id
+FROM fact_orders f
+INNER JOIN dim_users u ON f.user_id = u.user_id;
+```
+
+With a dbt `relationships` test from `fact_orders.user_id` to
+`dim_users.user_id`, `not_null` on `fact_orders.user_id`, and `unique` on
+`dim_users.user_id`, the parent join cannot filter or duplicate child rows and
+can be removed when no parent columns are referenced
+(`remove_foreign_key_inner_join`).
+
+Other built-in rules: redundant `IS NOT NULL` removal, predicate pushdown, and
+`JOIN`+`DISTINCT` -> `EXISTS`.
 
 ## Verifying a specific pair, or refuting one
 

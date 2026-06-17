@@ -77,10 +77,11 @@ QuerySeal treats this YAML as trusted. It does not currently inspect Snowflake
 or production data to validate that the constraint is true.
 
 QuerySeal can also load dbt-style `schema.yml` files with `--schema-format dbt`.
-Currently supported dbt tests:
+Currently supported dbt model/source column tests:
 
 - column `unique` -> trusted single-column unique key
 - column `not_null` -> trusted `nullable: false`
+- column `relationships` -> trusted single-column foreign key
 
 These dbt tests are still treated as assumptions. QuerySeal does not run dbt
 tests or verify that they passed.
@@ -111,6 +112,21 @@ Removes an unused `LEFT JOIN` when:
 
 This avoids the common failure mode where a supposedly unused join duplicates
 rows because the right side is not actually unique.
+
+### `remove_foreign_key_inner_join`
+
+Removes an unused `INNER JOIN` from a child table to a parent table when:
+
+- the parent relation is not projected, filtered, grouped, or qualified outside
+  the join condition
+- the child join key has a trusted `relationships` test to the parent key
+- the child join key is trusted non-null
+- the parent join key is trusted unique
+
+This is the dbt-test-backed version of RELY-style join elimination. The
+relationships test proves matching parent existence for non-null child values;
+the child `not_null` test prevents the join from filtering NULL child rows; and
+the parent `unique` test prevents fanout.
 
 ### `remove_redundant_not_null_filter`
 

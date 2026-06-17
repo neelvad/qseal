@@ -3,7 +3,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from qseal.constraints.dbt_loader import load_dbt_constraints
-from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.constraints.model import ColumnConstraint, ConstraintCatalog, TableConstraints
 from qseal.dbt.jinja import preprocess_dbt_sql
 from qseal.dbt.project import discover_dbt_project
 from qseal.dialects import DEFAULT_DIALECT, SqlDialect
@@ -304,6 +304,25 @@ def _merge_table_constraints(
     if left is None:
         return right
     return TableConstraints(
-        columns={**left.columns, **right.columns},
+        columns=_merge_columns(left.columns, right.columns),
         unique=[*left.unique, *right.unique],
+        foreign_keys=[*left.foreign_keys, *right.foreign_keys],
     )
+
+
+def _merge_columns(
+    left: dict[str, ColumnConstraint],
+    right: dict[str, ColumnConstraint],
+) -> dict[str, ColumnConstraint]:
+    columns = {}
+    for column_name in left.keys() | right.keys():
+        left_constraint = left.get(column_name)
+        right_constraint = right.get(column_name)
+        if (
+            (left_constraint is not None and left_constraint.nullable is False)
+            or (right_constraint is not None and right_constraint.nullable is False)
+        ):
+            columns[column_name] = ColumnConstraint(nullable=False)
+            continue
+        columns[column_name] = right_constraint or left_constraint or ColumnConstraint()
+    return columns
