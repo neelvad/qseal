@@ -6,8 +6,14 @@ from qseal.rewrites.base import RewriteSuggestion
 
 
 def required_guarding_tests(suggestion: RewriteSuggestion) -> tuple[str, ...]:
+    return required_guarding_tests_for_assumptions(suggestion.assumptions)
+
+
+def required_guarding_tests_for_assumptions(
+    assumptions: tuple[str, ...],
+) -> tuple[str, ...]:
     tests = []
-    for assumption in suggestion.assumptions:
+    for assumption in assumptions:
         tests.extend(_tests_for_assumption(assumption))
     return tuple(dict.fromkeys(tests))
 

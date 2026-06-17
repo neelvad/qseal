@@ -36,6 +36,9 @@ The candidates are intentionally mixed:
 
 This is the core product boundary: the candidate producer is untrusted, and
 performance evidence is attached only after verification.
+The text report groups candidates into review sections such as "Safe and worth
+considering" and "Rejected or unproven", and includes the required tests plus a
+unified diff for proven candidates.
 
 ## 3. Benchmark A Proven Pair Directly
 

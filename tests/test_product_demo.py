@@ -54,9 +54,49 @@ def test_product_demo_candidate_evidence_benchmarks_only_proven_candidate() -> N
     by_name = {Path(row["candidate_path"]).name: row for row in payload["results"]}
     assert by_name["001_remove_distinct.sql"]["proven"] is True
     assert by_name["001_remove_distinct.sql"]["benchmark"] is not None
+    assert by_name["001_remove_distinct.sql"]["review_section"] in {
+        "safe_worth_considering",
+        "safe_no_clear_speedup",
+    }
+    assert by_name["001_remove_distinct.sql"]["required_tests"] == [
+        "dbt test: unique on dim_users.user_id",
+        "dbt test: not_null on dim_users.user_id",
+    ]
+    assert "-SELECT DISTINCT user_id" in by_name["001_remove_distinct.sql"]["review_diff"]
     assert by_name["002_filter_rows.sql"]["proven"] is False
     assert by_name["002_filter_rows.sql"]["benchmark"] is None
+    assert by_name["002_filter_rows.sql"]["review_section"] == "rejected_unproven"
     assert by_name["002_filter_rows.sql"]["recommendation"] == "do_not_apply_unproven"
+
+
+def test_product_demo_candidate_evidence_text_is_review_grouped() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "candidates",
+            "evidence",
+            str(DEMO / "original.sql"),
+            "--candidates-dir",
+            str(DEMO / "candidates"),
+            "--schema",
+            str(DEMO / "dbt_project" / "models" / "schema.yml"),
+            "--rows",
+            "1000",
+            "--warmups",
+            "0",
+            "--repetitions",
+            "1",
+            "--format",
+            "text",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Safe and worth considering (1)" in result.output
+    assert "Rejected or unproven (1)" in result.output
+    assert "Required tests:" in result.output
+    assert "Diff:" in result.output
+    assert "Recommendation: do not apply; not proven" in result.output
 
 
 def test_product_demo_direct_benchmark_pair_completes() -> None:

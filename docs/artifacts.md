@@ -236,6 +236,11 @@ Important fields:
 - `results`: one row per candidate with the embedded verification result,
   candidate metadata, benchmark skip reason for unproven candidates, optional
   benchmark evidence, and a recommendation
+- `results[].review_section`: PR-style grouping such as
+  `safe_worth_considering`, `safe_no_clear_speedup`, `needs_review`, or
+  `rejected_unproven`
+- `results[].required_tests`: derived guarding tests for proven candidates
+- `results[].review_diff`: unified diff for proven candidates
 
 Only candidates with `PROVEN_EQUIVALENT` verification are benchmarked. The
 current benchmark evidence uses deterministic synthetic DuckDB data derived from

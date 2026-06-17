@@ -121,8 +121,19 @@ tables:
         "neutral",
         "slower",
     }
+    assert by_name[proven.name]["review_section"] in {
+        "safe_worth_considering",
+        "safe_no_clear_speedup",
+    }
+    assert by_name[proven.name]["required_tests"] == [
+        "dbt test: unique on users.user_id",
+        "dbt test: not_null on users.user_id",
+    ]
+    assert "-SELECT DISTINCT user_id" in by_name[proven.name]["review_diff"]
     assert by_name[unproven.name]["proven"] is False
     assert by_name[unproven.name]["benchmark"] is None
+    assert by_name[unproven.name]["review_section"] == "rejected_unproven"
+    assert by_name[unproven.name]["review_diff"] is None
     assert by_name[unproven.name]["recommendation"] == "do_not_apply_unproven"
 
 

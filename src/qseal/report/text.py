@@ -115,31 +115,62 @@ def render_candidate_evidence_report(report: CandidateEvidenceReport) -> Text:
         output.append(f"Benchmark outcomes: {_format_counts(report.benchmark_outcomes)}\n")
     output.append("\n")
 
-    for row in report.results:
-        output.append(f"{row.candidate_path}\n", style="bold")
-        output.append(f"  Safety: {row.verification.status.value}\n")
-        if row.verification.verification_method or row.verification.rule_name:
-            output.append(
-                "  Proof: "
-                f"{row.verification.verification_method or 'unknown'}"
-                f"{_format_rule(row.verification.rule_name)}\n"
-            )
-        if row.verification.assumptions:
-            output.append("  Assumptions:\n")
-            for assumption in row.verification.assumptions:
-                output.append(f"    - {assumption}\n")
-        if row.benchmark is None:
-            output.append(f"  Benchmark: skipped ({row.benchmark_skip_reason})\n")
-        else:
-            output.append(
-                "  Benchmark: "
-                f"{row.benchmark.get('outcome', 'unknown')}"
-                f"{_format_speedup(row.benchmark.get('speedup'))}\n"
-            )
-            if row.benchmark.get("reason"):
-                output.append(f"    reason: {row.benchmark['reason']}\n")
-        output.append(f"  Recommendation: {row.recommendation}\n")
+    for section, title in _candidate_evidence_sections():
+        rows = [row for row in report.results if row.review_section == section]
+        output.append(f"{title} ({len(rows)})\n", style="bold")
+        if not rows:
+            output.append("  None\n")
+            continue
+        for row in rows:
+            _append_candidate_evidence_row(output, row)
     return output
+
+
+def _candidate_evidence_sections() -> tuple[tuple[str, str], ...]:
+    return (
+        ("safe_worth_considering", "Safe and worth considering"),
+        ("safe_no_clear_speedup", "Safe, but no clear speedup"),
+        ("needs_review", "Safe, but evidence needs review"),
+        ("rejected_unproven", "Rejected or unproven"),
+    )
+
+
+def _append_candidate_evidence_row(output: Text, row) -> None:
+    output.append(f"  {row.candidate_path}\n", style="bold")
+    if row.candidate_metadata.get("description"):
+        output.append(f"    {row.candidate_metadata['description']}\n")
+    output.append(f"    Safety: {row.verification.status.value}\n")
+    if row.verification.verification_method or row.verification.rule_name:
+        output.append(
+            "    Verification: "
+            f"{row.verification.verification_method or 'unknown'}"
+            f"{_format_rule(row.verification.rule_name)}\n"
+        )
+    if row.required_tests:
+        output.append("    Required tests:\n")
+        for required_test in row.required_tests:
+            output.append(f"      - {required_test}\n")
+    elif row.verification.assumptions:
+        output.append("    Assumptions:\n")
+        for assumption in row.verification.assumptions:
+            output.append(f"      - {assumption}\n")
+    if row.benchmark is None:
+        output.append(f"    Benchmark: skipped ({row.benchmark_skip_reason})\n")
+    else:
+        output.append(
+            "    Benchmark: "
+            f"{row.benchmark.get('outcome', 'unknown')}"
+            f"{_format_speedup(row.benchmark.get('speedup'))}"
+            f"{_format_benchmark_medians(row.benchmark)}\n"
+        )
+        if row.benchmark.get("reason"):
+            output.append(f"      reason: {row.benchmark['reason']}\n")
+    if row.verification.reason:
+        output.append(f"    Verification reason: {row.verification.reason}\n")
+    output.append(f"    Recommendation: {_format_recommendation(row.recommendation)}\n")
+    if row.review_diff:
+        output.append("    Diff:\n")
+        _append_indented_diff(output, row.review_diff, max_lines=40)
 
 
 def _sum_optional_ints(values: tuple[int, ...]) -> int:
@@ -154,6 +185,36 @@ def _format_speedup(speedup: object) -> str:
     if speedup is None:
         return ""
     return f", speedup={speedup}x"
+
+
+def _format_benchmark_medians(benchmark: dict) -> str:
+    original_ms = benchmark.get("original_ms")
+    rewritten_ms = benchmark.get("rewritten_ms")
+    if original_ms is None or rewritten_ms is None:
+        return ""
+    return f", median {original_ms:.3f} -> {rewritten_ms:.3f} ms"
+
+
+def _format_recommendation(value: str) -> str:
+    labels = {
+        "consider_applying": "consider applying",
+        "safe_but_no_clear_speedup": "safe, but no clear speedup",
+        "safe_but_slower": "safe, but benchmarked slower",
+        "safe_but_not_benchmarked": "safe, but not benchmarked",
+        "recheck_benchmark_premises": "recheck benchmark premises",
+        "safe_but_benchmark_failed": "safe, but benchmark failed",
+        "do_not_apply_unproven": "do not apply; not proven",
+    }
+    return labels.get(value, value)
+
+
+def _append_indented_diff(output: Text, diff: str, *, max_lines: int) -> None:
+    lines = diff.splitlines()
+    visible = lines[:max_lines]
+    for line in visible:
+        output.append(f"      {line}\n")
+    if len(lines) > max_lines:
+        output.append(f"      ... {len(lines) - max_lines} more diff lines\n")
 
 
 def _format_counts(counts: dict[str, int]) -> str:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from difflib import unified_diff
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from qseal.candidates.benchmarking import benchmark_pair
 from qseal.constraints.model import ConstraintCatalog
+from qseal.report.guards import required_guarding_tests_for_assumptions
 from qseal.rewrites.base import VerificationStatus
 from qseal.verifier.model import VerificationResult
 
@@ -24,6 +26,9 @@ class CandidateEvidenceRow(BaseModel):
     benchmark_skip_reason: str | None = None
     benchmark: dict[str, Any] | None = None
     recommendation: str
+    review_section: str
+    required_tests: tuple[str, ...] = Field(default_factory=tuple)
+    review_diff: str | None = None
 
 
 class CandidateEvidenceReport(BaseModel):
@@ -106,6 +111,17 @@ def build_candidate_evidence(
                 benchmark_skip_reason=skip_reason,
                 benchmark=benchmark,
                 recommendation=_recommendation(verification, benchmark),
+                review_section=_review_section(verification, benchmark),
+                required_tests=required_guarding_tests_for_assumptions(
+                    verification.assumptions
+                ),
+                review_diff=_review_diff(
+                    original_path,
+                    original_sql,
+                    candidate_sql,
+                )
+                if proven
+                else None,
             )
         )
 
@@ -151,3 +167,32 @@ def _recommendation(
     if outcome == "suspect":
         return "recheck_benchmark_premises"
     return "safe_but_benchmark_failed"
+
+
+def _review_section(
+    verification: VerificationResult,
+    benchmark: dict[str, Any] | None,
+) -> str:
+    recommendation = _recommendation(verification, benchmark)
+    if recommendation == "consider_applying":
+        return "safe_worth_considering"
+    if recommendation in {"safe_but_no_clear_speedup", "safe_but_slower"}:
+        return "safe_no_clear_speedup"
+    if recommendation == "do_not_apply_unproven":
+        return "rejected_unproven"
+    return "needs_review"
+
+
+def _review_diff(path: Path, original_sql: str, candidate_sql: str) -> str:
+    return "".join(
+        unified_diff(
+            _lines(original_sql),
+            _lines(candidate_sql),
+            fromfile=str(path),
+            tofile=str(path),
+        )
+    )
+
+
+def _lines(sql: str) -> list[str]:
+    return [f"{line}\n" for line in sql.strip().splitlines()]
