@@ -23,6 +23,22 @@ def test_product_demo_dbt_scan_finds_guarded_distinct_rewrite() -> None:
     assert "dbt test: not_null on dim_users.user_id" in suggestion["required_tests"]
 
 
+def test_product_demo_dbt_scan_text_is_review_grouped() -> None:
+    result = CliRunner().invoke(
+        main,
+        ["dbt", "scan", str(DEMO / "dbt_project"), "--format", "text"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Safe and apply-ready (1)" in result.output
+    assert "Safe, manual review needed (0)" in result.output
+    assert "Rejected, unsupported, or informational (0)" in result.output
+    assert "Required tests:" in result.output
+    assert "Recommendation: review generated diff" in result.output
+    assert "Diff:" in result.output
+    assert "-SELECT DISTINCT user_id" in result.output
+
+
 def test_product_demo_candidate_evidence_benchmarks_only_proven_candidate() -> None:
     result = CliRunner().invoke(
         main,

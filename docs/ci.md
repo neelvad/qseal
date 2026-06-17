@@ -37,9 +37,10 @@ jobs:
 ```
 
 The action posts (and idempotently updates) a single PR comment marked with
-`<!-- qseal-scan -->`, listing each proven rewrite, the dbt tests that keep
-it valid, apply-readiness, and a diff. Each rewrite returns the same rows under
-the listed dbt-test assumptions; no performance claim is made.
+`<!-- qseal-scan -->`, grouping proven rewrites by review readiness and listing
+the dbt tests that keep each proof valid, apply-readiness, a recommendation, and
+a diff. Each rewrite returns the same rows under the listed dbt-test assumptions;
+no performance claim is made.
 
 ### Inputs
 

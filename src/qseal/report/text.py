@@ -378,35 +378,89 @@ def render_dbt_scan_report(scan_result) -> Text:
         output.append("No rewrite findings.\n")
         return output
 
-    for result in scan_result.results:
-        output.append("\n")
-        output.append(f"{result.display_path()}\n", style="bold")
-        if result.scanned_from_source():
-            output.append(f"  Scanned SQL: {result.scanned_path}\n")
-        if result.has_proven_findings():
-            output.append(f"  Apply ready: {'yes' if result.apply_ready() else 'no'}\n")
-            if result.apply_blocker():
-                output.append(f"  Apply blocker: {result.apply_blocker()}\n")
-        for suggestion in result.suggestions:
-            output.append(f"  Result: {suggestion.status.value}\n")
-            output.append(f"  Rewrite: {suggestion.rule_name}\n")
-            if suggestion.reason:
-                output.append(f"  Reason: {suggestion.reason}\n")
-            if suggestion.assumptions:
-                output.append("  Guarding assumptions:\n")
-                for assumption in suggestion.assumptions:
-                    output.append(f"    - {assumption}\n")
-                tests = required_guarding_tests(suggestion)
-                if tests:
-                    output.append("  Required ongoing tests:\n")
-                    for test in tests:
-                        output.append(f"    - {test}\n")
-            if suggestion.rewritten_sql:
-                output.append("  Rewritten SQL:\n")
-                for line in suggestion.rewritten_sql.splitlines():
-                    output.append(f"    {line}\n")
+    output.append("\nReview sections:\n", style="bold")
+    for section, title in _dbt_scan_sections():
+        rows = [
+            (result, suggestion)
+            for result in scan_result.results
+            for suggestion in result.suggestions
+            if _dbt_scan_section(result, suggestion) == section
+        ]
+        output.append(f"{title} ({len(rows)})\n", style="bold")
+        if not rows:
+            output.append("  None\n")
+            continue
+        for result, suggestion in rows:
+            _append_dbt_scan_row(output, result, suggestion)
 
     return output
+
+
+def _dbt_scan_sections() -> tuple[tuple[str, str], ...]:
+    return (
+        ("apply_ready", "Safe and apply-ready"),
+        ("manual_review", "Safe, manual review needed"),
+        ("not_proven", "Rejected, unsupported, or informational"),
+    )
+
+
+def _dbt_scan_section(result, suggestion: RewriteSuggestion) -> str:
+    if suggestion.status == VerificationStatus.PROVEN_EQUIVALENT:
+        return "apply_ready" if result.apply_ready() else "manual_review"
+    return "not_proven"
+
+
+def _append_dbt_scan_row(output: Text, result, suggestion: RewriteSuggestion) -> None:
+    output.append(f"  {result.display_path()}\n", style="bold")
+    if result.scanned_from_source():
+        output.append(f"    Scanned SQL: {result.scanned_path}\n")
+    output.append(f"    Safety: {suggestion.status.value}\n")
+    output.append(f"    Rewrite: {suggestion.rule_name}\n")
+    apply_ready = (
+        suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+        and result.apply_ready()
+    )
+    output.append(f"    Apply ready: {'yes' if apply_ready else 'no'}\n")
+    apply_blocker = _dbt_scan_apply_blocker(result, suggestion)
+    if apply_blocker:
+        output.append(f"    Apply blocker: {apply_blocker}\n")
+    tests = required_guarding_tests(suggestion)
+    if tests:
+        output.append("    Required tests:\n")
+        for test in tests:
+            output.append(f"      - {test}\n")
+    elif suggestion.assumptions:
+        output.append("    Guarding assumptions:\n")
+        for assumption in suggestion.assumptions:
+            output.append(f"      - {assumption}\n")
+    if suggestion.reason:
+        output.append(f"    Reason: {suggestion.reason}\n")
+    output.append(
+        f"    Recommendation: {_dbt_scan_recommendation(result, suggestion)}\n"
+    )
+    diff = (
+        render_rewrite_diff(result.display_path(), suggestion)
+        if suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+        else None
+    )
+    if diff:
+        output.append("    Diff:\n")
+        _append_indented_diff(output, diff, max_lines=60)
+
+
+def _dbt_scan_apply_blocker(result, suggestion: RewriteSuggestion) -> str | None:
+    if suggestion.status != VerificationStatus.PROVEN_EQUIVALENT:
+        return "Rewrite is not proven equivalent."
+    return result.apply_blocker()
+
+
+def _dbt_scan_recommendation(result, suggestion: RewriteSuggestion) -> str:
+    section = _dbt_scan_section(result, suggestion)
+    if section == "apply_ready":
+        return "review generated diff; safe to apply while required tests pass"
+    if section == "manual_review":
+        return "review manually; source file is not directly apply-ready"
+    return "do not apply automatically"
 
 
 def render_dbt_scan_diff_report(scan_result) -> str:

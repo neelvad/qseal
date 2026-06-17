@@ -43,8 +43,8 @@ This finds one proven rewrite in the bundled product-demo project:
   `not_null` tests on `dim_users.user_id`
 
 The important product behavior is not just that rewrites are found. The output
-also says whether each rewrite is apply-ready and names the ongoing tests that
-make the proof valid.
+groups rewrites into review sections such as "Safe and apply-ready" and "Safe,
+manual review needed", then names the ongoing tests that make each proof valid.
 
 CI shape:
 
@@ -55,8 +55,9 @@ qseal dbt scan transform/snowflake-dbt \
 ```
 
 That is the pull-request comment surface: reviewable diffs plus explicit
-guarding tests. Use `--fail-on findings` only when the team wants to turn
-proven findings into an enforcement gate.
+guarding tests, apply-readiness, and a recommendation for each finding. Use
+`--fail-on findings` only when the team wants to turn proven findings into an
+enforcement gate.
 
 ## Flow 2: Candidate Gate and Evidence
 

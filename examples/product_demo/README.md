@@ -15,7 +15,8 @@ uv run qseal dbt scan examples/product_demo/dbt_project --format text
 
 Expected result: one proven `remove_redundant_distinct` finding on
 `models/dim_users.sql`, guarded by `unique` and `not_null` tests on
-`dim_users.user_id`.
+`dim_users.user_id`. The text report places it in "Safe and apply-ready",
+includes a recommendation, and shows the review diff.
 
 ## 2. Gate Candidate SQL And Attach Evidence
 
