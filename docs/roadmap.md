@@ -26,11 +26,13 @@ conservative, not by pretending to verify all Snowflake SQL.
 - map compiled SQL findings back to source model paths
 - future: invoke `dbt compile` directly
 
-## v0.3: Snowflake Explain Integration
+## v0.3: Snowflake Evidence Integration
 
 - connect with read-only Snowflake credentials
 - run `EXPLAIN`/plan collection for original and rewritten SQL
 - report structural plan differences
+- run verified pairs through the Snowflake benchmark backend
+- maintain a repeatable Snowflake rewrite-family benchmark suite
 - keep semantic proof separate from performance observations
 
 ## v0.4: CI and PR Workflows

@@ -55,15 +55,17 @@ distributions, queries at these scales run in milliseconds where overheads
 dominate, and DuckDB's optimizer is not Snowflake's — a rewrite neutral here
 may matter on a billed, distributed warehouse and vice versa.
 
-## Next tiers
+## Evidence tiers
 
-- **Tier 2 (Snowflake EXPLAIN diffing, roadmap v0.3):** replay project DDL
-  into a Snowflake trial account and diff plan trees for proven pairs —
-  work-eliminated evidence on the actual target engine without production
-  data.
-- **Tier 3 (Snowflake benchmark backend):** run verified pairs on a real
-  Snowflake warehouse, first with scratch synthetic/setup SQL and later with
-  design-partner data distributions.
+- **Tier 1: DuckDB micro-benchmarks.** Cheap, reproducible local evidence on
+  synthetic data. Useful for ranking and regression tests, not Snowflake dollar
+  claims.
+- **Tier 2: Snowflake EXPLAIN diffing.** Compile-time plan evidence on the
+  target engine without loading production data.
+- **Tier 3: Snowflake execution benchmarks.** Real warehouse execution evidence,
+  currently using scratch synthetic/setup SQL and repeatable family suites.
+  Design-partner data distributions are still needed before making
+  dollar-savings claims.
 
 ## Tier 2: Snowflake EXPLAIN plan diffing (first sweep, 2026-06-12)
 
@@ -129,3 +131,35 @@ This is the first step toward real warehouse evidence. Synthetic setup SQL is
 enough to learn which rewrite classes survive Snowflake compiler
 normalization; copied or sampled project data is still needed before making
 dollar-savings claims.
+
+For repeatable family-level evidence, use the Snowflake suite runner:
+
+```bash
+uv run qseal benchmark-suite snowflake-family snowflake-family-run \
+  --scale 1000000 \
+  --mode aggregate \
+  --runs 1 \
+  --warmups 1 \
+  --repetitions 3
+```
+
+The suite writes generated `setup.sql`, `original.sql`, `rewritten.sql`, one
+per-case `benchmark.json`, and a top-level
+`snowflake-family-suite.json`. It covers redundant `DISTINCT`, redundant
+`IS NOT NULL`, unused `LEFT JOIN`, `JOIN DISTINCT` to `EXISTS`, and predicate
+pushdown.
+
+One small aggregate run on 2026-06-17 (1M users, 2M orders where applicable):
+
+| Family | Classification | Wall speedup | Snowflake execution speedup | Notes |
+|---|---:|---:|---:|---|
+| redundant `DISTINCT` | positive | 3.504x | 114.000x | Rewritten aggregate was metadata-answerable; aggregate-query evidence only. |
+| redundant `IS NOT NULL` | neutral/noisy | 0.738x | 0.500x | Both sides looked metadata-only; no durable direction. |
+| unused `LEFT JOIN` | positive | 4.385x | 153.000x | Rewritten aggregate was metadata-answerable; aggregate-query evidence only. |
+| `JOIN DISTINCT` to `EXISTS` | positive | 1.449x | 1.468x | Both sides scanned the same bytes; rewritten shape executed faster. |
+| predicate pushdown | neutral | 0.952x | 1.000x | Snowflake normalized the shape. |
+
+This is enough to support the narrower product thesis: generic rewrites are
+often already handled by Snowflake, while premise-enabled rewrites can still
+remove work because the optimizer cannot safely infer dbt tests as trusted
+execution facts.

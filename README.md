@@ -146,6 +146,29 @@ qseal refute original.sql rewritten.sql --schema schema.yml --verieql-dir /path/
 `check --fail-on unproven` exits nonzero unless the pair is certified — the
 contract for gating untrusted (e.g. LLM-generated) candidates.
 
+## Product demo flow
+
+The compact demo path is:
+
+```bash
+uv run qseal dbt scan examples/dbt_project --format text
+uv run qseal candidates check examples/candidates/original.sql \
+  --candidates-dir examples/candidates/manual \
+  --schema examples/candidates/schema.yml
+uv run qseal benchmark examples/benchmark/original.sql examples/benchmark/rewritten.sql \
+  --setup examples/benchmark/setup.sql
+```
+
+With Snowflake credentials configured, the repeatable Tier-3 family suite tests
+which rewrite classes survive Snowflake's optimizer and execution model:
+
+```bash
+uv run qseal benchmark-suite snowflake-family snowflake-family-run
+```
+
+See [docs/product-demo.md](docs/product-demo.md) for the full narrative and
+what claims the demo should and should not make.
+
 ## The LLM + prover pipeline
 
 ```bash
@@ -184,7 +207,9 @@ dbt manifest ingestion (backlog). Full detail in [docs/scope.md](docs/scope.md).
 
 - [CI integration](docs/ci.md) — the GitHub Action and `--changed-since`
 - [LLM candidates](docs/llm-candidates.md) — generate → verify → measure
-- [Performance evidence](docs/performance-evidence.md) — DuckDB + Snowflake EXPLAIN
+- [Product demo flow](docs/product-demo.md) — thesis, commands, and claims
+- [Performance evidence](docs/performance-evidence.md) — DuckDB, Snowflake
+  EXPLAIN, and Snowflake execution suites
 - [QED](docs/qed-spike.md) · [SQLSolver](docs/sqlsolver-spike.md) ·
   [VeriEQL](docs/verieql-spike.md) — the prover/refuter backends
 - [Scope](docs/scope.md) · [Architecture](docs/architecture.md) ·

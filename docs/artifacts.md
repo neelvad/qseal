@@ -98,6 +98,35 @@ Corpus search steps copy the benchmark medians, speedup, batch sizes, and
 confidence into the run report so aggregate inspection does not depend on
 external cache files for newly generated reports.
 
+## `snowflake_family_benchmark_suite`
+
+Emitted by:
+
+```bash
+qseal benchmark-suite snowflake-family snowflake-family-run \
+  --report-file suite.json \
+  --format json
+```
+
+Important fields:
+
+- `suite_id`: currently `snowflake-family-v1`
+- `runs`, `modes`, `scales`, `warmups`, `repetitions`, and timeout settings:
+  the measurement configuration
+- `classification_counts`: counts such as `positive`, `neutral`,
+  `neutral_noisy`, `mixed`, or `error`
+- `summaries`: one compact row per case/run with wall-clock speedup,
+  Snowflake query-history execution speedup, bytes scanned, row-count match,
+  timing confidence, classification, notes, and artifact paths
+- `results`: the full case spec and embedded `snowflake_benchmark` result for
+  each case/run
+
+The suite also writes each generated `setup.sql`, `original.sql`,
+`rewritten.sql`, and per-case `benchmark.json` under the output directory.
+Use the top-level suite artifact for product evidence summaries and the
+per-case benchmark artifacts for detailed query IDs, plans, and query-history
+metadata.
+
 Each search result records `tie_policy`. Corpus runs use `shorter` for
 transition rewards and `endpoint` for state rewards.
 
