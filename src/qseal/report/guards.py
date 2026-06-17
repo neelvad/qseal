@@ -54,6 +54,17 @@ def _tests_for_assumption(assumption: str) -> tuple[str, ...]:
             f"{trusted_relationship.group('ref_table')}.{trusted_relationship.group('ref_column')}",
         )
 
+    accepted_values = re.match(
+        r"^(?P<table>.+)\.(?P<column>.+) has accepted values \((?P<values>.+)\)\.$",
+        assumption,
+    )
+    if accepted_values is not None:
+        return (
+            "dbt test: accepted_values on "
+            f"{accepted_values.group('table')}.{accepted_values.group('column')} "
+            f"in ({accepted_values.group('values')})",
+        )
+
     trusted_not_null = re.match(
         r"^(?P<table>.+)\.\((?P<column>.+)\) is trusted non-null\.$",
         assumption,

@@ -3,6 +3,7 @@ from typing import Protocol
 
 from qseal.constraints.model import ConstraintCatalog
 from qseal.ir.model import SelectQuery
+from qseal.rewrites.accepted_values_filter import RemoveRedundantAcceptedValuesFilter
 from qseal.rewrites.base import RewriteMatch, RewriteSuggestion, VerificationStatus
 from qseal.rewrites.count_distinct import RemoveRedundantCountDistinct
 from qseal.rewrites.distinct import RemoveRedundantDistinct
@@ -39,6 +40,7 @@ DEFAULT_RULES: tuple[RewriteRule, ...] = (
     RemoveForeignKeyInnerJoin(),
     RewriteJoinDistinctToExists(),
     RemoveRedundantNotNullFilter(),
+    RemoveRedundantAcceptedValuesFilter(),
     RemoveRedundantDistinct(),
     RemoveRedundantCountDistinct(),
     PredicatePushdown(),

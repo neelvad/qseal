@@ -116,6 +116,43 @@ models:
     assert suggestion.rewritten_sql == "SELECT COUNT(user_id) AS unique_users\nFROM users;"
 
 
+def test_scan_dbt_project_removes_redundant_accepted_values_filter(
+    tmp_path: Path,
+) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "orders.sql").write_text(
+        "SELECT order_id FROM orders WHERE status IN ('placed', 'shipped')"
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: orders
+    columns:
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - placed
+                - shipped
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.proven_finding_count() == 1
+    suggestion = result.results[0].suggestions[0]
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rule_name == "remove_redundant_accepted_values_filter"
+    assert required_guarding_tests(suggestion) == (
+        "dbt test: accepted_values on orders.status in ('placed', 'shipped')",
+        "dbt test: not_null on orders.status",
+    )
+    assert suggestion.rewritten_sql == "SELECT order_id\nFROM orders;"
+
+
 def test_scan_dbt_project_uses_relationships_for_inner_join_elimination(
     tmp_path: Path,
 ) -> None:

@@ -66,6 +66,30 @@ def test_check_proves_count_distinct_removal_with_unique_key() -> None:
     assert result.rule_name == "remove_redundant_count_distinct"
 
 
+def test_check_proves_accepted_values_filter_removal() -> None:
+    original = parse_select(
+        "SELECT order_id FROM orders WHERE status IN ('placed', 'shipped')"
+    )
+    rewritten = parse_select("SELECT order_id FROM orders")
+    constraints = ConstraintCatalog(
+        tables={
+            "orders": TableConstraints(
+                columns={
+                    "status": ColumnConstraint(
+                        nullable=False,
+                        accepted_values=["placed", "shipped"],
+                    )
+                }
+            )
+        }
+    )
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "remove_redundant_accepted_values_filter"
+
+
 def test_check_proves_distinct_removal_with_matching_where_predicates() -> None:
     original = parse_select("SELECT DISTINCT user_id FROM users WHERE status = 'active'")
     rewritten = parse_select("SELECT user_id FROM users WHERE status = 'active'")

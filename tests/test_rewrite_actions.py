@@ -2,6 +2,7 @@ import pytest
 
 from qseal.constraints.model import ColumnConstraint, ConstraintCatalog, TableConstraints
 from qseal.parser.sqlglot_parser import parse_select
+from qseal.rewrites.accepted_values_filter import RemoveRedundantAcceptedValuesFilter
 from qseal.rewrites.base import RewriteMatch, VerificationStatus
 from qseal.rewrites.count_distinct import RemoveRedundantCountDistinct
 from qseal.rewrites.distinct import RemoveRedundantDistinct
@@ -32,6 +33,19 @@ from qseal.rewrites.registry import apply_rewrite_match, available_rewrite_match
                 unique=[("user_id",)],
             )}),
             "projection:0",
+        ),
+        (
+            RemoveRedundantAcceptedValuesFilter(),
+            "SELECT order_id FROM orders WHERE status IN ('placed', 'shipped')",
+            ConstraintCatalog(tables={"orders": TableConstraints(
+                columns={
+                    "status": {
+                        "nullable": False,
+                        "accepted_values": ["placed", "shipped"],
+                    }
+                },
+            )}),
+            "predicate:0",
         ),
         (
             RemoveUnusedLeftJoin(),

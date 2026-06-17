@@ -1,8 +1,33 @@
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class AcceptedValue(BaseModel):
+    value: str
+    is_string: bool = True
 
 
 class ColumnConstraint(BaseModel):
     nullable: bool | None = None
+    accepted_values: tuple[AcceptedValue, ...] = Field(default_factory=tuple)
+
+    @field_validator("accepted_values", mode="before")
+    @classmethod
+    def _coerce_accepted_values(cls, value: Any) -> Any:
+        if value in (None, ""):
+            return ()
+        if not isinstance(value, list | tuple):
+            return value
+        return tuple(_accepted_value_payload(item) for item in value)
+
+
+def _accepted_value_payload(value: Any) -> Any:
+    if isinstance(value, AcceptedValue | dict):
+        return value
+    if isinstance(value, str):
+        return {"value": value, "is_string": True}
+    return {"value": str(value), "is_string": False}
 
 
 class ForeignKeyConstraint(BaseModel):

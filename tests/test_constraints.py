@@ -58,3 +58,27 @@ def test_rejects_nullable_composite_unique_key_for_non_null_lookup() -> None:
 
     assert table.has_unique_key(("tenant_id", "order_id"))
     assert table.non_null_unique_key_contained_in(("tenant_id", "order_id")) is None
+
+
+def test_coerces_accepted_values_payloads() -> None:
+    table = TableConstraints(
+        columns={
+            "status": {
+                "accepted_values": ["placed", "shipped"],
+            },
+            "priority": {
+                "accepted_values": [1, 2],
+            },
+        }
+    )
+
+    assert [(item.value, item.is_string) for item in table.columns["status"].accepted_values] == [
+        ("placed", True),
+        ("shipped", True),
+    ]
+    assert [
+        (item.value, item.is_string) for item in table.columns["priority"].accepted_values
+    ] == [
+        ("1", False),
+        ("2", False),
+    ]

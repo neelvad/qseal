@@ -203,3 +203,65 @@ sources:
     assert events is not None
     assert events.has_unique_key(("tenant_id", "natural_key"))
     assert events.has_non_null_unique_key(("tenant_id", "natural_key"))
+
+
+def test_load_dbt_accepted_values_tests(tmp_path: Path) -> None:
+    schema = tmp_path / "schema.yml"
+    schema.write_text(
+        """
+version: 2
+models:
+  - name: orders
+    columns:
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - placed
+                - shipped
+"""
+    )
+
+    constraints = load_dbt_constraints(schema)
+
+    orders = constraints.table("orders")
+    assert orders is not None
+    status = orders.columns["status"]
+    assert status.nullable is False
+    assert [(item.value, item.is_string) for item in status.accepted_values] == [
+        ("placed", True),
+        ("shipped", True),
+    ]
+
+
+def test_load_dbt_accepted_values_arguments_and_unquoted_values(
+    tmp_path: Path,
+) -> None:
+    schema = tmp_path / "schema.yml"
+    schema.write_text(
+        """
+version: 2
+models:
+  - name: orders
+    columns:
+      - name: priority
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - 1
+                  - 2
+                quote: false
+"""
+    )
+
+    constraints = load_dbt_constraints(schema)
+
+    orders = constraints.table("orders")
+    assert orders is not None
+    accepted_values = orders.columns["priority"].accepted_values
+    assert [(item.value, item.is_string) for item in accepted_values] == [
+        ("1", False),
+        ("2", False),
+    ]

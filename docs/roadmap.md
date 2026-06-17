@@ -18,8 +18,8 @@ unbounded list of optimizer rewrites.
   benchmarking, and Snowflake benchmark suites.
 - Snowflake and DuckDB dialect propagation through parsing, verification,
   scanning, and artifacts.
-- dbt model/source `unique`, `not_null`, `relationships`, and dbt-utils
-  `unique_combination_of_columns` ingestion.
+- dbt model/source `unique`, `not_null`, `relationships`, `accepted_values`,
+  and dbt-utils `unique_combination_of_columns` ingestion.
 - Conservative deterministic rewrite rules for:
   - redundant `DISTINCT`
   - redundant `IS NOT NULL`
@@ -27,6 +27,7 @@ unbounded list of optimizer rewrites.
   - FK-backed `INNER JOIN` elimination
   - `JOIN DISTINCT` to `EXISTS`
   - `COUNT(DISTINCT col)` to `COUNT(col)`
+  - redundant accepted-values `IN (...)` filters
   - predicate pushdown through simple projection subqueries
 - FK semantics keep premises explicit: relationships prove parent existence for
   non-null child values; child `not_null` and parent `unique` remain separate
@@ -47,11 +48,9 @@ unbounded list of optimizer rewrites.
    - Teach the join IR to represent conjunctions such as
      `child.k1 = parent.k1 AND child.k2 = parent.k2`.
 
-2. **Accepted Values / Enum Domains**
-   - Ingest dbt `accepted_values` as bounded-domain premises.
-   - Start with redundant `IN (...)` predicate elimination.
-   - Treat NULL behavior explicitly before using these premises for CASE-branch
-     or broader predicate rewrites.
+2. **Broader Accepted Values / Enum Domains**
+   - Treat NULL behavior explicitly before using accepted-values premises for
+     CASE-branch or broader predicate rewrites.
 
 3. **Broader Aggregates Over Unique Keys**
    - Defer full `GROUP BY pk` collapse until aggregate expression semantics and

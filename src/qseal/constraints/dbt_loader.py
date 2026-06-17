@@ -5,6 +5,7 @@ from typing import Any
 import yaml
 
 from qseal.constraints.model import (
+    AcceptedValue,
     ColumnConstraint,
     ConstraintCatalog,
     ForeignKeyConstraint,
@@ -52,7 +53,8 @@ def _constraints_for_relation(relation: dict[str, Any]) -> TableConstraints:
         # downstream consumers (solver schemas, column attribution) know
         # which table owns a column.
         columns[column_name] = ColumnConstraint(
-            nullable=False if "not_null" in test_names else None
+            nullable=False if "not_null" in test_names else None,
+            accepted_values=_accepted_values_for_column(column_tests),
         )
         if "unique" in test_names:
             unique.append((column_name,))
@@ -136,6 +138,32 @@ def _unique_combinations_for_relation(relation: dict[str, Any]) -> list[tuple[st
         if columns:
             combinations.append(columns)
     return combinations
+
+
+def _accepted_values_for_column(tests: list[Any]) -> tuple[AcceptedValue, ...]:
+    for test in tests:
+        test_name = _test_name(test)
+        if test_name != "accepted_values":
+            continue
+        payload = test.get(test_name) if isinstance(test, dict) else None
+        if not isinstance(payload, dict):
+            continue
+        arguments = payload.get("arguments")
+        if isinstance(arguments, dict):
+            payload = {**payload, **arguments}
+        raw_values = payload.get("values")
+        if not isinstance(raw_values, list):
+            continue
+        quote_values = payload.get("quote") is not False
+        return tuple(
+            AcceptedValue(
+                value=str(value),
+                is_string=quote_values and isinstance(value, str),
+            )
+            for value in raw_values
+            if isinstance(value, str | int | float)
+        )
+    return ()
 
 
 def _relationships_for_column(

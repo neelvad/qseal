@@ -82,6 +82,7 @@ Currently supported dbt model/source tests:
 - column `unique` -> trusted single-column unique key
 - column `not_null` -> trusted `nullable: false`
 - column `relationships` -> trusted single-column foreign key
+- column `accepted_values` -> trusted bounded value domain
 - relation-level `dbt_utils.unique_combination_of_columns` -> trusted
   composite unique key
 
@@ -104,6 +105,13 @@ premise, duplicate NULL rows could make removal unsafe.
 Rewrites `COUNT(DISTINCT col)` to `COUNT(col)` when `col` is trusted unique and
 non-null on the direct base table. The first version supports direct table
 queries with no joins, no `HAVING`, and no `QUALIFY`; `GROUP BY` is allowed.
+
+### `remove_redundant_accepted_values_filter`
+
+Removes a positive `IN (...)` predicate when the predicate's values exactly
+match the trusted `accepted_values` domain and the column is also trusted
+non-null. The non-null premise is required because removing `WHERE col IN (...)`
+would otherwise allow NULL rows through.
 
 ### `predicate_pushdown`
 

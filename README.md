@@ -133,6 +133,18 @@ FROM dim_users;
 With `dim_users.user_id` trusted unique and non-null, QuerySeal can rewrite the
 aggregate to `COUNT(user_id)` (`remove_redundant_count_distinct`).
 
+### Accepted-values filter removal
+
+```sql
+SELECT order_id
+FROM orders
+WHERE status IN ('placed', 'shipped');
+```
+
+With `accepted_values` proving that `status` can only be `placed` or `shipped`
+and `not_null` proving NULL rows cannot appear, the filter is a no-op
+(`remove_redundant_accepted_values_filter`).
+
 ### Unused LEFT JOIN elimination
 
 ```sql
