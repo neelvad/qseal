@@ -1,6 +1,7 @@
 from rich.text import Text
 
 from qseal.benchmark.model import BenchmarkResult, BenchmarkStatus
+from qseal.benchmark.snowflake_suite import SnowflakeFamilySuiteReport
 from qseal.fixtures.model import DuckDbFixtureManifest
 from qseal.report.diff import render_rewrite_diff
 from qseal.report.guards import required_guarding_tests
@@ -62,8 +63,53 @@ def render_snowflake_benchmark_report(result: BenchmarkResult) -> Text:
     return output
 
 
+def render_snowflake_family_suite_report(result: SnowflakeFamilySuiteReport) -> Text:
+    output = Text()
+    output.append("Snowflake family benchmark suite\n", style="bold")
+    output.append(f"Suite: {result.suite_id}\n")
+    output.append(f"Output: {result.output_dir}\n")
+    output.append(
+        f"Runs: {result.runs}; scales: {', '.join(str(scale) for scale in result.scales)}; "
+        f"modes: {', '.join(result.modes)}; warmups/repetitions: "
+        f"{result.warmups}/{result.repetitions}\n"
+    )
+    output.append(
+        f"Completed: {result.completed_count}/{result.result_count}; "
+        f"classifications: {_format_counts(result.classification_counts)}\n\n"
+    )
+    output.append(
+        "case                     run class          wall speedup "
+        "exec speedup bytes orig->rew\n",
+        style="bold",
+    )
+    for summary in result.summaries:
+        output.append(
+            f"{summary.case_id:<24} "
+            f"{summary.run_index:>3} "
+            f"{summary.classification:<14} "
+            f"{_format_ratio(summary.wall_speedup):>12} "
+            f"{_format_ratio(summary.execution_speedup):>12} "
+            f"{summary.original_bytes_scanned}->{summary.rewritten_bytes_scanned}\n"
+        )
+        for note in summary.notes:
+            output.append(f"  note: {note}\n")
+        if summary.reason:
+            output.append(f"  reason: {summary.reason}\n")
+    return output
+
+
 def _sum_optional_ints(values: tuple[int, ...]) -> int:
     return sum(values)
+
+
+def _format_counts(counts: dict[str, int]) -> str:
+    if not counts:
+        return "none"
+    return ", ".join(f"{key}={value}" for key, value in counts.items())
+
+
+def _format_ratio(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:.3f}x"
 
 
 def render_duckdb_fixture_report(manifest: DuckDbFixtureManifest) -> Text:

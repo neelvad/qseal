@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from qseal.benchmark.model import BenchmarkResult
+from qseal.benchmark.snowflake_suite import SnowflakeFamilySuiteReport
 from qseal.dialects import DEFAULT_DIALECT
 from qseal.fixtures.model import DuckDbFixtureManifest
 from qseal.report.guards import required_guarding_tests
@@ -66,6 +67,10 @@ def render_snowflake_benchmark_json(result: BenchmarkResult) -> str:
     payload["artifact_type"] = "snowflake_benchmark"
     payload["dialect"] = "snowflake"
     return _dumps(payload)
+
+
+def render_snowflake_family_suite_json(result: SnowflakeFamilySuiteReport) -> str:
+    return _dumps(result.model_dump(mode="json"))
 
 
 def render_duckdb_fixture_json(manifest: DuckDbFixtureManifest) -> str:
