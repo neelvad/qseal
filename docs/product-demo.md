@@ -158,12 +158,15 @@ The current small aggregate suite covers:
 - `JOIN DISTINCT` to `EXISTS`
 - predicate pushdown
 
-A 2026-06-17 1M-row aggregate run classified three families as positive
-(`DISTINCT`, unused `LEFT JOIN`, `JOIN DISTINCT` to `EXISTS`), one as neutral or
-metadata-noisy (`IS NOT NULL`), and one as neutral / optimizer-normalized
-(predicate pushdown). The `DISTINCT` and unused-join aggregate wins include a
-metadata-answerable caveat, so the honest claim is aggregate-query evidence, not
-a blanket full-result-query claim.
+A 2026-06-17 1M-row aggregate rerun classified four families as positive
+(`DISTINCT`, unused `LEFT JOIN`, `JOIN DISTINCT` to `EXISTS`, and predicate
+pushdown) and `IS NOT NULL` as neutral/noisy. A matching bounded
+materialized-output run was much more conservative: only unused `LEFT JOIN`
+stayed positive, `DISTINCT` and `JOIN DISTINCT` to `EXISTS` were mixed,
+`IS NOT NULL` was negative, and predicate pushdown was neutral. That is the
+honest product lesson: aggregate-only wins are candidate signals, while
+production-shaped Tier 3 evidence decides whether a safe rewrite is actually
+worth applying.
 
 ## Demo Narrative
 

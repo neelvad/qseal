@@ -149,17 +149,34 @@ per-case `benchmark.json`, and a top-level
 `IS NOT NULL`, unused `LEFT JOIN`, `JOIN DISTINCT` to `EXISTS`, and predicate
 pushdown.
 
-One small aggregate run on 2026-06-17 (1M users, 2M orders where applicable):
+Two small 2026-06-17 runs at 1M users and 2M orders where applicable showed
+why the suite records evidence scope. Aggregate queries can expose optimizer
+and metadata effects, while bounded materialized-output queries are a more
+conservative check that Snowflake still has to return rows.
+
+Aggregate mode:
 
 | Family | Classification | Wall speedup | Snowflake execution speedup | Notes |
 |---|---:|---:|---:|---|
-| redundant `DISTINCT` | positive | 3.504x | 114.000x | Rewritten aggregate was metadata-answerable; aggregate-query evidence only. |
-| redundant `IS NOT NULL` | neutral/noisy | 0.738x | 0.500x | Both sides looked metadata-only; no durable direction. |
-| unused `LEFT JOIN` | positive | 4.385x | 153.000x | Rewritten aggregate was metadata-answerable; aggregate-query evidence only. |
-| `JOIN DISTINCT` to `EXISTS` | positive | 1.449x | 1.468x | Both sides scanned the same bytes; rewritten shape executed faster. |
-| predicate pushdown | neutral | 0.952x | 1.000x | Snowflake normalized the shape. |
+| redundant `DISTINCT` | positive | 7.888x | 140.000x | Rewritten aggregate was metadata-answerable; aggregate-query evidence only. |
+| redundant `IS NOT NULL` | neutral/noisy | 1.155x | 1.000x | Both sides looked metadata-only or near-metadata-only. |
+| unused `LEFT JOIN` | positive | 6.586x | 161.000x | Rewritten aggregate was metadata-answerable; aggregate-query evidence only. |
+| `JOIN DISTINCT` to `EXISTS` | positive | 1.542x | 1.479x | Both sides scanned the same bytes; rewritten shape executed faster. |
+| predicate pushdown | positive | 1.534x | 1.067x | Same bytes scanned; a single run is not enough to call this durable. |
+
+Bounded materialized-output mode:
+
+| Family | Classification | Wall speedup | Snowflake execution speedup | Notes |
+|---|---:|---:|---:|---|
+| redundant `DISTINCT` | mixed | 0.683x | 1.692x | Wall-clock and query-history execution medians disagreed. |
+| redundant `IS NOT NULL` | negative | 0.916x | 0.917x | Same bytes scanned; no useful win. |
+| unused `LEFT JOIN` | positive | 1.132x | 2.100x | Bytes scanned fell from 21.2 MB to 12.5 MB. |
+| `JOIN DISTINCT` to `EXISTS` | mixed | 0.844x | 1.285x | Wall-clock and query-history execution medians disagreed. |
+| predicate pushdown | neutral | 0.974x | 0.944x | Same bytes scanned; Snowflake appears to normalize the shape. |
 
 This is enough to support the narrower product thesis: generic rewrites are
-often already handled by Snowflake, while premise-enabled rewrites can still
-remove work because the optimizer cannot safely infer dbt tests as trusted
-execution facts.
+often already handled by Snowflake or produce scope-specific wins, while
+premise-enabled rewrites can still remove work because the optimizer cannot
+safely infer dbt tests as trusted execution facts. Treat aggregate-only wins as
+candidate signals, not dollar-savings claims, until they survive a query shape
+that matches the production workload.
