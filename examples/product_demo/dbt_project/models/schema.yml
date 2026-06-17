@@ -7,3 +7,12 @@ models:
         tests:
           - unique
           - not_null
+  - name: fct_orders
+    columns:
+      - name: order_id
+        tests:
+          - unique
+          - not_null
+      - name: user_id
+        tests:
+          - not_null

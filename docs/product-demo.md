@@ -37,14 +37,19 @@ requires no external solver or Snowflake credentials.
 uv run qseal dbt scan examples/product_demo/dbt_project --format text
 ```
 
-This finds one proven rewrite in the bundled product-demo project:
+This finds two proven rewrites in the bundled product-demo project:
 
 - `remove_redundant_distinct` on `dim_users.sql`, guarded by `unique` and
   `not_null` tests on `dim_users.user_id`
+- `remove_unused_left_join` on `fct_orders.sql`, guarded by `unique` on
+  `dim_users.user_id`
 
 The important product behavior is not just that rewrites are found. The output
 groups rewrites into review sections such as "Safe and apply-ready" and "Safe,
 manual review needed", then names the ongoing tests that make each proof valid.
+The `fct_orders.sql` finding is the deterministic proof side of the Snowflake
+dbt-demo benchmark: the local scan proves the rewrite is safe, while Tier 3
+measures whether the same rewrite family is worth applying on Snowflake.
 
 CI shape:
 
