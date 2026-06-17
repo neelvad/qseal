@@ -66,7 +66,7 @@ def render_snowflake_benchmark_report(result: BenchmarkResult) -> Text:
 
 def render_snowflake_family_suite_report(result: SnowflakeFamilySuiteReport) -> Text:
     output = Text()
-    output.append("Snowflake family benchmark suite\n", style="bold")
+    output.append("Snowflake benchmark suite\n", style="bold")
     output.append(f"Suite: {result.suite_id}\n")
     output.append(f"Output: {result.output_dir}\n")
     output.append(
@@ -96,7 +96,24 @@ def render_snowflake_family_suite_report(result: SnowflakeFamilySuiteReport) -> 
             output.append(f"  note: {note}\n")
         if summary.reason:
             output.append(f"  reason: {summary.reason}\n")
+        spec = _snowflake_suite_spec_for_summary(result, summary.case_id, summary.run_index)
+        if spec is not None:
+            for assumption in spec.trusted_assumptions:
+                output.append(f"  trusted assumption: {assumption}\n")
+            for note in spec.review_notes:
+                output.append(f"  context: {note}\n")
     return output
+
+
+def _snowflake_suite_spec_for_summary(
+    result: SnowflakeFamilySuiteReport,
+    case_id: str,
+    run_index: int,
+):
+    for case_result in result.results:
+        if case_result.spec.case_id == case_id and case_result.run_index == run_index:
+            return case_result.spec
+    return None
 
 
 def render_candidate_evidence_report(report: CandidateEvidenceReport) -> Text:

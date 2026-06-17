@@ -8,7 +8,9 @@ from qseal.benchmark.model import (
 )
 from qseal.benchmark.snowflake import SnowflakeConnectionConfig
 from qseal.benchmark.snowflake_suite import (
+    run_snowflake_dbt_demo_suite,
     run_snowflake_family_suite,
+    snowflake_dbt_demo_cases,
     snowflake_family_cases,
     summarize_snowflake_family_case,
 )
@@ -80,8 +82,85 @@ def test_runs_snowflake_family_suite_with_fake_connector(tmp_path) -> None:
     assert suite_payload["artifact_type"] == "snowflake_family_benchmark_suite"
     assert suite_payload["result_count"] == 5
     text = render_snowflake_family_suite_report(report).plain
-    assert "Snowflake family benchmark suite" in text
+    assert "Snowflake benchmark suite" in text
     assert "aggregate-1k-distinct" in text
+
+
+def test_builds_snowflake_dbt_demo_case_with_trusted_assumptions() -> None:
+    cases = snowflake_dbt_demo_cases(
+        scales=(1_000,),
+        modes=("materialized",),
+        materialized_limit=25,
+    )
+
+    assert len(cases) == 1
+    case = cases[0]
+    assert case.case_id == "materialized-1k-dbt_left_join"
+    assert case.rewrite_family == "dbt_left_join"
+    assert case.evidence_scope == "bounded_materialized_output"
+    assert "qseal_dbt_stg_orders" in case.setup_sql
+    assert "qseal_dbt_dim_users" in case.original_sql
+    assert "LEFT JOIN qseal_dbt_dim_users" in case.original_sql
+    assert "LEFT JOIN" not in case.rewritten_sql
+    assert "LIMIT 25" in case.original_sql
+    assert case.trusted_assumptions == (
+        "dbt test: unique on dim_users.user_id",
+        "dbt test: not_null on dim_users.user_id",
+    )
+
+
+def test_runs_snowflake_dbt_demo_suite_with_fake_connector(tmp_path) -> None:
+    connections: list[_FakeConnection] = []
+
+    def factory(_config: SnowflakeConnectionConfig) -> _FakeConnection:
+        connection = _FakeConnection()
+        connections.append(connection)
+        return connection
+
+    report = run_snowflake_dbt_demo_suite(
+        tmp_path,
+        scales=(1_000,),
+        modes=("materialized",),
+        runs=1,
+        warmups=0,
+        repetitions=1,
+        config=_config(),
+        connector_factory=factory,
+    )
+
+    assert report.suite_id == "snowflake-dbt-demo-v1"
+    assert report.result_count == 1
+    assert report.completed_count == 1
+    assert len(connections) == 1
+    assert connections[0].closed
+
+    case_dir = tmp_path / "run-001" / "1k" / "materialized" / "dbt_left_join"
+    assert (case_dir / "setup.sql").exists()
+    assert (case_dir / "original.sql").exists()
+    assert (case_dir / "rewritten.sql").exists()
+    assert "LEFT JOIN qseal_dbt_dim_users" in (case_dir / "original.sql").read_text()
+
+    suite_payload = json.loads(render_snowflake_family_suite_json(report))
+    assert suite_payload["suite_id"] == "snowflake-dbt-demo-v1"
+    assert suite_payload["results"][0]["spec"]["trusted_assumptions"] == [
+        "dbt test: unique on dim_users.user_id",
+        "dbt test: not_null on dim_users.user_id",
+    ]
+    text = render_snowflake_family_suite_report(report).plain
+    assert "trusted assumption: dbt test: unique on dim_users.user_id" in text
+    assert "context: The model projects only columns from stg_orders" in text
+
+
+def test_snowflake_dbt_demo_cli_is_registered() -> None:
+    from click.testing import CliRunner
+
+    from qseal.cli import main
+
+    result = CliRunner().invoke(main, ["benchmark-suite", "snowflake-dbt-demo", "--help"])
+
+    assert result.exit_code == 0
+    assert "unused LEFT JOIN demo benchmark" in result.output
+    assert "--mode [aggregate|materialized]" in result.output
 
 
 def test_classifies_near_threshold_disagreement_as_neutral_noisy(tmp_path) -> None:

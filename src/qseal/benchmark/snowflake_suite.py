@@ -16,6 +16,7 @@ from qseal.benchmark.snowflake import (
 )
 
 SNOWFLAKE_FAMILY_SUITE_ID = "snowflake-family-v1"
+SNOWFLAKE_DBT_DEMO_SUITE_ID = "snowflake-dbt-demo-v1"
 SnowflakeFamilyMode = Literal["aggregate", "materialized"]
 
 
@@ -31,6 +32,8 @@ class SnowflakeFamilyCaseSpec(BaseModel):
     setup_sql: str
     original_sql: str
     rewritten_sql: str
+    trusted_assumptions: tuple[str, ...] = Field(default_factory=tuple)
+    review_notes: tuple[str, ...] = Field(default_factory=tuple)
 
 
 class SnowflakeFamilyCaseSummary(BaseModel):
@@ -158,6 +161,124 @@ def run_snowflake_family_suite(
         modes=modes,
         materialized_limit=materialized_limit,
     )
+    return _run_snowflake_suite(
+        output_dir,
+        suite_id=SNOWFLAKE_FAMILY_SUITE_ID,
+        cases=cases,
+        scales=scales,
+        modes=modes,
+        runs=runs,
+        warmups=warmups,
+        repetitions=repetitions,
+        timeout_seconds=timeout_seconds,
+        minimum_duration_ms=minimum_duration_ms,
+        materialized_limit=materialized_limit,
+        query_tag_prefix=query_tag_prefix,
+        config=config,
+        connector_factory=connector_factory,
+    )
+
+
+def snowflake_dbt_demo_cases(
+    *,
+    scales: Sequence[int] = (1_000_000,),
+    modes: Sequence[SnowflakeFamilyMode] = ("materialized",),
+    materialized_limit: int = 10_000,
+) -> tuple[SnowflakeFamilyCaseSpec, ...]:
+    _validate_case_settings(scales, modes, materialized_limit)
+    cases = []
+    for scale_rows in scales:
+        for mode in modes:
+            for definition in _dbt_demo_definitions(scale_rows):
+                original_sql = _shape_query(
+                    definition["original_sql"],
+                    mode=mode,
+                    materialized_limit=materialized_limit,
+                )
+                rewritten_sql = _shape_query(
+                    definition["rewritten_sql"],
+                    mode=mode,
+                    materialized_limit=materialized_limit,
+                )
+                cases.append(
+                    SnowflakeFamilyCaseSpec(
+                        case_id=f"{mode}-{_scale_slug(scale_rows)}-{definition['id']}",
+                        rewrite_family=definition["id"],
+                        mode=mode,
+                        scale_rows=scale_rows,
+                        evidence_scope=(
+                            "aggregate_query"
+                            if mode == "aggregate"
+                            else "bounded_materialized_output"
+                        ),
+                        description=definition["description"],
+                        setup_sql=definition["setup_sql"],
+                        original_sql=original_sql,
+                        rewritten_sql=rewritten_sql,
+                        trusted_assumptions=tuple(definition["trusted_assumptions"]),
+                        review_notes=tuple(definition["review_notes"]),
+                    )
+                )
+    return tuple(cases)
+
+
+def run_snowflake_dbt_demo_suite(
+    output_dir: Path,
+    *,
+    scales: Sequence[int] = (1_000_000,),
+    modes: Sequence[SnowflakeFamilyMode] = ("materialized",),
+    runs: int = 1,
+    warmups: int = 1,
+    repetitions: int = 3,
+    timeout_seconds: float = 30.0,
+    minimum_duration_ms: float = 0.0,
+    materialized_limit: int = 10_000,
+    query_tag_prefix: str = "qseal-tier3-dbt-demo",
+    config: SnowflakeConnectionConfig | None = None,
+    connector_factory: ConnectorFactory | None = None,
+) -> SnowflakeFamilySuiteReport:
+    if runs < 1:
+        raise ValueError("runs must be one or greater.")
+    cases = snowflake_dbt_demo_cases(
+        scales=scales,
+        modes=modes,
+        materialized_limit=materialized_limit,
+    )
+    return _run_snowflake_suite(
+        output_dir,
+        suite_id=SNOWFLAKE_DBT_DEMO_SUITE_ID,
+        cases=cases,
+        scales=scales,
+        modes=modes,
+        runs=runs,
+        warmups=warmups,
+        repetitions=repetitions,
+        timeout_seconds=timeout_seconds,
+        minimum_duration_ms=minimum_duration_ms,
+        materialized_limit=materialized_limit,
+        query_tag_prefix=query_tag_prefix,
+        config=config,
+        connector_factory=connector_factory,
+    )
+
+
+def _run_snowflake_suite(
+    output_dir: Path,
+    *,
+    suite_id: str,
+    cases: Sequence[SnowflakeFamilyCaseSpec],
+    scales: Sequence[int],
+    modes: Sequence[SnowflakeFamilyMode],
+    runs: int,
+    warmups: int,
+    repetitions: int,
+    timeout_seconds: float,
+    minimum_duration_ms: float,
+    materialized_limit: int,
+    query_tag_prefix: str,
+    config: SnowflakeConnectionConfig | None,
+    connector_factory: ConnectorFactory | None,
+) -> SnowflakeFamilySuiteReport:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     results: list[SnowflakeFamilyCaseResult] = []
@@ -190,7 +311,7 @@ def run_snowflake_family_suite(
                 update={
                     "inputs": {
                         "engine": "snowflake",
-                        "suite_id": SNOWFLAKE_FAMILY_SUITE_ID,
+                        "suite_id": suite_id,
                         "case_id": spec.case_id,
                         "rewrite_family": spec.rewrite_family,
                         "mode": spec.mode,
@@ -226,6 +347,7 @@ def run_snowflake_family_suite(
             )
 
     return SnowflakeFamilySuiteReport(
+        suite_id=suite_id,
         output_dir=str(output_dir),
         runs=runs,
         modes=tuple(modes),
@@ -374,6 +496,49 @@ def _family_definitions(scale_rows: int) -> tuple[dict[str, str], ...]:
     )
 
 
+def _dbt_demo_definitions(scale_rows: int) -> tuple[dict[str, object], ...]:
+    orders = scale_rows * 2
+    return (
+        {
+            "id": "dbt_left_join",
+            "description": (
+                "dbt-like model rewrite: remove an unused LEFT JOIN to dim_users "
+                "under trusted dbt uniqueness tests."
+            ),
+            "setup_sql": _dbt_left_join_demo_setup(
+                user_rows=scale_rows,
+                order_rows=orders,
+            ),
+            "original_sql": (
+                "SELECT\n"
+                "  orders.order_id,\n"
+                "  orders.user_id,\n"
+                "  orders.order_total_cents,\n"
+                "  orders.order_status\n"
+                "FROM qseal_dbt_stg_orders AS orders\n"
+                "LEFT JOIN qseal_dbt_dim_users AS dim_users\n"
+                "  ON orders.user_id = dim_users.user_id"
+            ),
+            "rewritten_sql": (
+                "SELECT\n"
+                "  orders.order_id,\n"
+                "  orders.user_id,\n"
+                "  orders.order_total_cents,\n"
+                "  orders.order_status\n"
+                "FROM qseal_dbt_stg_orders AS orders"
+            ),
+            "trusted_assumptions": (
+                "dbt test: unique on dim_users.user_id",
+                "dbt test: not_null on dim_users.user_id",
+            ),
+            "review_notes": (
+                "The model projects only columns from stg_orders; dim_users columns are unused.",
+                "The uniqueness premise prevents the LEFT JOIN from duplicating order rows.",
+            ),
+        },
+    )
+
+
 def _users_setup(rows: int) -> str:
     return (
         "CREATE OR REPLACE TEMPORARY TABLE qseal_users AS\n"
@@ -410,6 +575,24 @@ def _orders_setup(rows: int, user_rows: int) -> str:
         f"  MOD(SEQ4(), {user_rows}) + 1 AS user_id,\n"
         "  MOD(SEQ4(), 10000) AS amount_cents\n"
         f"FROM TABLE(GENERATOR(ROWCOUNT => {rows}));"
+    )
+
+
+def _dbt_left_join_demo_setup(*, user_rows: int, order_rows: int) -> str:
+    return (
+        "CREATE OR REPLACE TEMPORARY TABLE qseal_dbt_dim_users AS\n"
+        "SELECT\n"
+        "  SEQ4() + 1 AS user_id,\n"
+        "  'segment-' || MOD(SEQ4(), 20) AS segment,\n"
+        "  IFF(MOD(SEQ4(), 5) = 0, TRUE, FALSE) AS is_enterprise\n"
+        f"FROM TABLE(GENERATOR(ROWCOUNT => {user_rows}));\n\n"
+        "CREATE OR REPLACE TEMPORARY TABLE qseal_dbt_stg_orders AS\n"
+        "SELECT\n"
+        "  SEQ4() + 1 AS order_id,\n"
+        f"  MOD(SEQ4(), {user_rows}) + 1 AS user_id,\n"
+        "  MOD(SEQ4(), 10000) + 100 AS order_total_cents,\n"
+        "  IFF(MOD(SEQ4(), 4) = 0, 'paid', 'pending') AS order_status\n"
+        f"FROM TABLE(GENERATOR(ROWCOUNT => {order_rows}));"
     )
 
 

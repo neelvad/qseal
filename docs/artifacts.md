@@ -106,11 +106,15 @@ Emitted by:
 qseal benchmark-suite snowflake-family snowflake-family-run \
   --report-file suite.json \
   --format json
+
+qseal benchmark-suite snowflake-dbt-demo snowflake-dbt-demo-run \
+  --report-file suite.json \
+  --format json
 ```
 
 Important fields:
 
-- `suite_id`: currently `snowflake-family-v1`
+- `suite_id`: currently `snowflake-family-v1` or `snowflake-dbt-demo-v1`
 - `runs`, `modes`, `scales`, `warmups`, `repetitions`, and timeout settings:
   the measurement configuration
 - `classification_counts`: counts such as `positive`, `neutral`,
@@ -119,7 +123,8 @@ Important fields:
   Snowflake query-history execution speedup, bytes scanned, row-count match,
   timing confidence, classification, notes, and artifact paths
 - `results`: the full case spec and embedded `snowflake_benchmark` result for
-  each case/run
+  each case/run. dbt-demo specs also include trusted dbt assumptions and review
+  notes.
 
 The suite also writes each generated `setup.sql`, `original.sql`,
 `rewritten.sql`, and per-case `benchmark.json` under the output directory.

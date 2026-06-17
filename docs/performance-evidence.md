@@ -149,6 +149,30 @@ per-case `benchmark.json`, and a top-level
 `IS NOT NULL`, unused `LEFT JOIN`, `JOIN DISTINCT` to `EXISTS`, and predicate
 pushdown.
 
+For the product-shaped Tier 3 demo, use the dbt-like unused `LEFT JOIN` case:
+
+```bash
+uv run qseal benchmark-suite snowflake-dbt-demo snowflake-dbt-demo-run \
+  --scale 1000000 \
+  --mode materialized \
+  --runs 1 \
+  --warmups 1 \
+  --repetitions 3
+```
+
+That case creates a `stg_orders`-style table, a `dim_users`-style table with
+trusted `unique` and `not_null` tests on `dim_users.user_id`, and compares a
+model that left-joins `dim_users` while projecting only order columns against
+the verified rewrite with the join removed. The default materialized mode is the
+stronger demo shape because Snowflake must return bounded rows rather than only
+answering an aggregate count.
+
+The first 2026-06-17 materialized demo run at 1M users and 2M orders classified
+the rewrite as positive: wall-clock speedup was 1.200x, Snowflake query-history
+execution speedup was 1.316x, and bytes scanned fell from 21.6 MB to 12.0 MB.
+The artifact also records the query tag, measured query IDs, generated SQL,
+trusted dbt assumptions, row-count check, and plan counts.
+
 Two small 2026-06-17 runs at 1M users and 2M orders where applicable showed
 why the suite records evidence scope. Aggregate queries can expose optimizer
 and metadata effects, while bounded materialized-output queries are a more

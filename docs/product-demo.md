@@ -125,8 +125,30 @@ not a proof. The proof must come first.
 
 ## Flow 4: Snowflake Family Suite
 
-Use the repeatable Snowflake suite when the question is whether a rewrite family
-survives Snowflake's optimizer and execution model:
+Use the dbt-like Snowflake demo when the question is whether the strongest
+current product-shaped case survives Snowflake's optimizer and execution model:
+
+```bash
+uv run qseal benchmark-suite snowflake-dbt-demo snowflake-dbt-demo-run \
+  --scale 1000000 \
+  --mode materialized \
+  --runs 1 \
+  --warmups 1 \
+  --repetitions 3
+```
+
+The demo creates `stg_orders` and `dim_users`-style tables, records the trusted
+dbt assumptions (`unique` and `not_null` on `dim_users.user_id`), and benchmarks
+the verified rewrite that removes an unused `LEFT JOIN` from an order model.
+Materialized mode is the default because it is closer to a model-review query
+than an aggregate-only count.
+
+The first 2026-06-17 materialized run classified the case as positive: 1.200x
+wall-clock speedup, 1.316x Snowflake query-history execution speedup, and bytes
+scanned down from 21.6 MB to 12.0 MB.
+
+Use the broader repeatable Snowflake family suite when the question is how other
+rewrite families behave:
 
 ```bash
 uv run qseal benchmark-suite snowflake-family snowflake-family-run \

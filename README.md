@@ -160,8 +160,15 @@ uv run qseal benchmark examples/product_demo/original.sql \
   --setup examples/product_demo/setup.sql
 ```
 
-With Snowflake credentials configured, the repeatable Tier-3 family suite tests
-which rewrite classes survive Snowflake's optimizer and execution model:
+With Snowflake credentials configured, the product-shaped Tier-3 demo benchmarks
+a dbt-like unused `LEFT JOIN` rewrite on Snowflake:
+
+```bash
+uv run qseal benchmark-suite snowflake-dbt-demo snowflake-dbt-demo-run
+```
+
+The broader repeatable Tier-3 family suite tests which rewrite classes survive
+Snowflake's optimizer and execution model:
 
 ```bash
 uv run qseal benchmark-suite snowflake-family snowflake-family-run
