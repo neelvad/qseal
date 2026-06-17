@@ -40,6 +40,48 @@ models:
     assert result.results[0].suggestions[0].status == VerificationStatus.PROVEN_EQUIVALENT
 
 
+def test_scan_dbt_project_uses_unique_combination_for_distinct(
+    tmp_path: Path,
+) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "orders.sql").write_text(
+        "SELECT DISTINCT tenant_id, order_id, status FROM orders"
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: orders
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - tenant_id
+            - order_id
+    columns:
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: order_id
+        tests:
+          - not_null
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.proven_finding_count() == 1
+    suggestion = result.results[0].suggestions[0]
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rule_name == "remove_redundant_distinct"
+    assert required_guarding_tests(suggestion) == (
+        "dbt test: unique combination on orders(tenant_id, order_id)",
+        "dbt test: not_null on orders.tenant_id",
+        "dbt test: not_null on orders.order_id",
+    )
+    assert suggestion.rewritten_sql == "SELECT tenant_id, order_id, status\nFROM orders;"
+
+
 def test_scan_dbt_project_uses_relationships_for_inner_join_elimination(
     tmp_path: Path,
 ) -> None:

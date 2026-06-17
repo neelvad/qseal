@@ -138,3 +138,68 @@ sources:
     assert customers is not None
     assert customers.has_unique_key(("id",))
     assert customers.is_non_null("id")
+
+
+def test_load_dbt_utils_unique_combination_tests(tmp_path: Path) -> None:
+    schema = tmp_path / "schema.yml"
+    schema.write_text(
+        """
+version: 2
+models:
+  - name: fact_orders
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - tenant_id
+            - order_id
+    columns:
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: order_id
+        tests:
+          - not_null
+"""
+    )
+
+    constraints = load_dbt_constraints(schema)
+
+    fact_orders = constraints.table("fact_orders")
+    assert fact_orders is not None
+    assert fact_orders.has_unique_key(("tenant_id", "order_id"))
+    assert fact_orders.has_non_null_unique_key(("tenant_id", "order_id"))
+
+
+def test_load_unique_combination_tests_from_data_tests_arguments_block(
+    tmp_path: Path,
+) -> None:
+    schema = tmp_path / "schema.yml"
+    schema.write_text(
+        """
+version: 2
+sources:
+  - name: raw
+    tables:
+      - name: events
+        data_tests:
+          - unique_combination_of_columns:
+              arguments:
+                combination_of_columns:
+                  - tenant_id
+                  - natural_key
+        columns:
+          - name: tenant_id
+            data_tests:
+              - not_null
+          - name: natural_key
+            data_tests:
+              - not_null
+"""
+    )
+
+    constraints = load_dbt_constraints(schema)
+
+    events = constraints.table("events")
+    assert events is not None
+    assert events.has_unique_key(("tenant_id", "natural_key"))
+    assert events.has_non_null_unique_key(("tenant_id", "natural_key"))

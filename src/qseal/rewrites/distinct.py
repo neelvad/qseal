@@ -104,7 +104,8 @@ class RemoveRedundantDistinct:
         projected_columns = tuple(column.name for column in query.projections)
         # Unique keys exempt NULL rows (dbt-test semantics), so DISTINCT removal
         # also needs the key columns trusted non-null to rule out duplicate NULLs.
-        if not table.has_non_null_unique_key(projected_columns):
+        unique_key = table.non_null_unique_key_contained_in(projected_columns)
+        if unique_key is None:
             return RewriteSuggestion(
                 rule_name=self.rule_name,
                 status=VerificationStatus.UNKNOWN,
@@ -119,6 +120,6 @@ class RemoveRedundantDistinct:
             rewritten_sql=query.without_distinct_sql(),
             assumptions=(
                 f"{table_name} has a trusted non-null unique key contained in "
-                f"({', '.join(projected_columns)}).",
+                f"({', '.join(unique_key)}).",
             ),
         )

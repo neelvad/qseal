@@ -119,6 +119,10 @@ proven safe *because* of them. (Unique alone is not enough — a NULL-exempt dbt
 unique test still allows duplicate NULLs, so QuerySeal requires the column be
 non-null too.)
 
+Composite dbt-utils uniqueness tests are supported too: a
+`dbt_utils.unique_combination_of_columns` test plus `not_null` on each key
+column can prove `DISTINCT` redundant when the projection contains that key.
+
 ### Unused LEFT JOIN elimination
 
 ```sql

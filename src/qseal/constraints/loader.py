@@ -23,12 +23,14 @@ def load_constraint_catalog(path: Path, schema_format: str = "auto") -> Constrai
     if detected == "dbt":
         return load_dbt_constraints(path)
 
-    raise ValueError("Could not detect schema format. Expected top-level 'tables' or 'models'.")
+    raise ValueError(
+        "Could not detect schema format. Expected top-level 'tables', 'models', or 'sources'."
+    )
 
 
 def detect_schema_format(payload: dict[str, Any]) -> str | None:
     if "tables" in payload:
         return "qseal"
-    if "models" in payload:
+    if "models" in payload or "sources" in payload:
         return "dbt"
     return None

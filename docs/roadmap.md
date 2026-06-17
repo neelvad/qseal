@@ -18,7 +18,8 @@ unbounded list of optimizer rewrites.
   benchmarking, and Snowflake benchmark suites.
 - Snowflake and DuckDB dialect propagation through parsing, verification,
   scanning, and artifacts.
-- dbt model/source `unique`, `not_null`, and `relationships` ingestion.
+- dbt model/source `unique`, `not_null`, `relationships`, and dbt-utils
+  `unique_combination_of_columns` ingestion.
 - Conservative deterministic rewrite rules for:
   - redundant `DISTINCT`
   - redundant `IS NOT NULL`
@@ -40,10 +41,10 @@ unbounded list of optimizer rewrites.
 
 ## Near-Term Product Roadmap
 
-1. **Composite Keys**
-   - Ingest dbt-utils `unique_combination_of_columns`.
-   - Extend uniqueness-dependent rewrites to multi-column keys.
+1. **Composite Join Premises**
    - Extend FK premises and join elimination to composite relationships.
+   - Teach the join IR to represent conjunctions such as
+     `child.k1 = parent.k1 AND child.k2 = parent.k2`.
 
 2. **Accepted Values / Enum Domains**
    - Ingest dbt `accepted_values` as bounded-domain premises.

@@ -45,7 +45,8 @@ def _constraints_for_relation(relation: dict[str, Any]) -> TableConstraints:
         if not column_name:
             continue
 
-        test_names = {_test_name(test) for test in column.get("tests", []) or []}
+        column_tests = _tests(column)
+        test_names = {_test_name(test) for test in column_tests}
         # Every declared column is recorded; nullable stays unknown unless
         # a not_null test makes it trusted. Declared column lists let
         # downstream consumers (solver schemas, column attribution) know
@@ -58,10 +59,11 @@ def _constraints_for_relation(relation: dict[str, Any]) -> TableConstraints:
         foreign_keys.extend(
             _relationships_for_column(
                 column_name,
-                column.get("tests", []) or [],
+                column_tests,
             )
         )
 
+    unique.extend(_unique_combinations_for_relation(relation))
     return TableConstraints(
         columns=columns,
         unique=unique,
@@ -109,6 +111,31 @@ def _test_name(test: Any) -> str:
     if isinstance(test, dict) and test:
         return next(iter(test))
     return ""
+
+
+def _tests(node: dict[str, Any]) -> list[Any]:
+    return [*(node.get("tests") or []), *(node.get("data_tests") or [])]
+
+
+def _unique_combinations_for_relation(relation: dict[str, Any]) -> list[tuple[str, ...]]:
+    combinations = []
+    for test in _tests(relation):
+        test_name = _test_name(test)
+        if test_name.split(".")[-1] != "unique_combination_of_columns":
+            continue
+        payload = test.get(test_name) if isinstance(test, dict) else None
+        if not isinstance(payload, dict):
+            continue
+        arguments = payload.get("arguments")
+        if isinstance(arguments, dict):
+            payload = {**payload, **arguments}
+        raw_columns = payload.get("combination_of_columns")
+        if not isinstance(raw_columns, list):
+            continue
+        columns = tuple(column for column in raw_columns if isinstance(column, str) and column)
+        if columns:
+            combinations.append(columns)
+    return combinations
 
 
 def _relationships_for_column(

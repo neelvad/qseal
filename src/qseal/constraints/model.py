@@ -19,15 +19,27 @@ class TableConstraints(BaseModel):
     foreign_keys: list[ForeignKeyConstraint] = Field(default_factory=list)
 
     def has_unique_key(self, columns: tuple[str, ...]) -> bool:
+        return self.unique_key_contained_in(columns) is not None
+
+    def unique_key_contained_in(self, columns: tuple[str, ...]) -> tuple[str, ...] | None:
         requested = set(columns)
-        return any(set(key) <= requested for key in self.unique)
+        for key in self.unique:
+            if set(key) <= requested:
+                return key
+        return None
 
     def has_non_null_unique_key(self, columns: tuple[str, ...]) -> bool:
+        return self.non_null_unique_key_contained_in(columns) is not None
+
+    def non_null_unique_key_contained_in(
+        self,
+        columns: tuple[str, ...],
+    ) -> tuple[str, ...] | None:
         requested = set(columns)
-        return any(
-            set(key) <= requested and all(self.is_non_null(column) for column in key)
-            for key in self.unique
-        )
+        for key in self.unique:
+            if set(key) <= requested and all(self.is_non_null(column) for column in key):
+                return key
+        return None
 
     def is_non_null(self, column: str) -> bool:
         constraint = self.columns.get(column)

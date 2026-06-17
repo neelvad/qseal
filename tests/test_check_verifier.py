@@ -24,6 +24,30 @@ def test_check_proves_distinct_removal_with_unique_key() -> None:
     assert result.assumptions
 
 
+def test_check_proves_distinct_removal_with_composite_unique_key() -> None:
+    original = parse_select("SELECT DISTINCT tenant_id, order_id, status FROM orders")
+    rewritten = parse_select("SELECT tenant_id, order_id, status FROM orders")
+    constraints = ConstraintCatalog(
+        tables={
+            "orders": TableConstraints(
+                columns={
+                    "tenant_id": ColumnConstraint(nullable=False),
+                    "order_id": ColumnConstraint(nullable=False),
+                },
+                unique=[("tenant_id", "order_id")],
+            )
+        }
+    )
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "remove_redundant_distinct"
+    assert result.assumptions == (
+        "orders has a trusted non-null unique key contained in (tenant_id, order_id).",
+    )
+
+
 def test_check_proves_distinct_removal_with_matching_where_predicates() -> None:
     original = parse_select("SELECT DISTINCT user_id FROM users WHERE status = 'active'")
     rewritten = parse_select("SELECT user_id FROM users WHERE status = 'active'")

@@ -77,11 +77,13 @@ QuerySeal treats this YAML as trusted. It does not currently inspect Snowflake
 or production data to validate that the constraint is true.
 
 QuerySeal can also load dbt-style `schema.yml` files with `--schema-format dbt`.
-Currently supported dbt model/source column tests:
+Currently supported dbt model/source tests:
 
 - column `unique` -> trusted single-column unique key
 - column `not_null` -> trusted `nullable: false`
 - column `relationships` -> trusted single-column foreign key
+- relation-level `dbt_utils.unique_combination_of_columns` -> trusted
+  composite unique key
 
 These dbt tests are still treated as assumptions. QuerySeal does not run dbt
 tests or verify that they passed.

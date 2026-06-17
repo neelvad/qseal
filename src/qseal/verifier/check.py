@@ -175,7 +175,10 @@ def _check_distinct_removal(
 
     table = constraints.table(table_name)
 
-    if table is not None and table.has_non_null_unique_key(projected_columns):
+    unique_key = (
+        None if table is None else table.non_null_unique_key_contained_in(projected_columns)
+    )
+    if unique_key is not None:
         return VerificationResult(
             status=VerificationStatus.PROVEN_EQUIVALENT,
             original_sql=original.raw_sql,
@@ -183,7 +186,7 @@ def _check_distinct_removal(
             rule_name="remove_redundant_distinct",
             assumptions=(
                 f"{table_name} has a trusted non-null unique key contained in "
-                f"({', '.join(projected_columns)}).",
+                f"({', '.join(unique_key)}).",
             ),
             reason="DISTINCT cannot remove rows when the projection contains a unique key.",
         )

@@ -13,6 +13,10 @@ def test_detects_dbt_schema_format() -> None:
     assert detect_schema_format({"models": []}) == "dbt"
 
 
+def test_detects_source_only_dbt_schema_format() -> None:
+    assert detect_schema_format({"sources": []}) == "dbt"
+
+
 def test_auto_loads_qseal_constraints(tmp_path: Path) -> None:
     schema = tmp_path / "schema.yml"
     schema.write_text(
@@ -64,6 +68,28 @@ models:
 
     assert constraints.table("users") is not None
     assert constraints.table("users").has_unique_key(("user_id",))
+
+
+def test_auto_loads_source_only_dbt_constraints(tmp_path: Path) -> None:
+    schema = tmp_path / "schema.yml"
+    schema.write_text(
+        """
+version: 2
+sources:
+  - name: raw
+    tables:
+      - name: orders
+        columns:
+          - name: order_id
+            tests:
+              - unique
+"""
+    )
+
+    constraints = load_constraint_catalog(schema)
+
+    assert constraints.table("orders") is not None
+    assert constraints.table("orders").has_unique_key(("order_id",))
 
 
 def test_auto_rejects_unknown_schema_format(tmp_path: Path) -> None:
