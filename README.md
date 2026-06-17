@@ -123,6 +123,16 @@ Composite dbt-utils uniqueness tests are supported too: a
 `dbt_utils.unique_combination_of_columns` test plus `not_null` on each key
 column can prove `DISTINCT` redundant when the projection contains that key.
 
+### COUNT(DISTINCT) simplification
+
+```sql
+SELECT COUNT(DISTINCT user_id) AS unique_users
+FROM dim_users;
+```
+
+With `dim_users.user_id` trusted unique and non-null, QuerySeal can rewrite the
+aggregate to `COUNT(user_id)` (`remove_redundant_count_distinct`).
+
 ### Unused LEFT JOIN elimination
 
 ```sql

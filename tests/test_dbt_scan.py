@@ -82,6 +82,40 @@ models:
     assert suggestion.rewritten_sql == "SELECT tenant_id, order_id, status\nFROM orders;"
 
 
+def test_scan_dbt_project_rewrites_count_distinct(
+    tmp_path: Path,
+) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "users.sql").write_text(
+        "SELECT COUNT(DISTINCT user_id) AS unique_users FROM users"
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+          - not_null
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.proven_finding_count() == 1
+    suggestion = result.results[0].suggestions[0]
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rule_name == "remove_redundant_count_distinct"
+    assert required_guarding_tests(suggestion) == (
+        "dbt test: unique on users.user_id",
+        "dbt test: not_null on users.user_id",
+    )
+    assert suggestion.rewritten_sql == "SELECT COUNT(user_id) AS unique_users\nFROM users;"
+
+
 def test_scan_dbt_project_uses_relationships_for_inner_join_elimination(
     tmp_path: Path,
 ) -> None:

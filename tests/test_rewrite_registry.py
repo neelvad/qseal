@@ -27,6 +27,7 @@ def test_registry_returns_rules_in_default_order() -> None:
         "rewrite_join_distinct_to_exists",
         "remove_redundant_not_null_filter",
         "remove_redundant_distinct",
+        "remove_redundant_count_distinct",
         "predicate_pushdown",
     ]
 
@@ -57,5 +58,6 @@ def test_rule_names_returns_cli_choices() -> None:
         "rewrite_join_distinct_to_exists",
         "remove_redundant_not_null_filter",
         "remove_redundant_distinct",
+        "remove_redundant_count_distinct",
         "predicate_pushdown",
     )

@@ -77,6 +77,36 @@ def test_rejects_aggregate_projection_expression() -> None:
         parse_select("SELECT SUM(price) AS total FROM orders")
 
 
+def test_parse_count_distinct_projection_without_group_by() -> None:
+    query = parse_select(
+        "SELECT COUNT(DISTINCT user_id) AS unique_users FROM users"
+    )
+
+    assert query.projections[0].to_sql() == "COUNT(DISTINCT user_id) AS unique_users"
+    assert query.projections[0].referenced_tables == ()
+    assert query.projections[0].references_unqualified_columns is True
+    assert query.to_sql() == (
+        "SELECT COUNT(DISTINCT user_id) AS unique_users\n"
+        "FROM users;"
+    )
+
+
+def test_parse_unaliased_count_distinct_projection_without_group_by() -> None:
+    query = parse_select("SELECT COUNT(DISTINCT user_id) FROM users")
+
+    assert query.projections[0].to_sql() == "COUNT(DISTINCT user_id)"
+    assert query.to_sql() == "SELECT COUNT(DISTINCT user_id)\nFROM users;"
+
+
+def test_parse_plain_count_projection_without_group_by() -> None:
+    query = parse_select("SELECT COUNT(user_id) AS users_seen, COUNT(*) AS rows FROM users")
+
+    assert [projection.to_sql() for projection in query.projections] == [
+        "COUNT(user_id) AS users_seen",
+        "COUNT(*) AS rows",
+    ]
+
+
 def test_parse_group_by_with_aggregate_projection() -> None:
     query = parse_select(
         """

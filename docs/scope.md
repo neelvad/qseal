@@ -99,6 +99,12 @@ whose columns are also trusted non-null. Unique keys follow SQL/dbt-test
 semantics, so NULL rows are exempt from uniqueness; without the non-null
 premise, duplicate NULL rows could make removal unsafe.
 
+### `remove_redundant_count_distinct`
+
+Rewrites `COUNT(DISTINCT col)` to `COUNT(col)` when `col` is trusted unique and
+non-null on the direct base table. The first version supports direct table
+queries with no joins, no `HAVING`, and no `QUALIFY`; `GROUP BY` is allowed.
+
 ### `predicate_pushdown`
 
 Pushes an outer filter into a simple projection subquery when the filtered

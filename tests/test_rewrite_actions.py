@@ -3,6 +3,7 @@ import pytest
 from qseal.constraints.model import ColumnConstraint, ConstraintCatalog, TableConstraints
 from qseal.parser.sqlglot_parser import parse_select
 from qseal.rewrites.base import RewriteMatch, VerificationStatus
+from qseal.rewrites.count_distinct import RemoveRedundantCountDistinct
 from qseal.rewrites.distinct import RemoveRedundantDistinct
 from qseal.rewrites.join_distinct_exists import RewriteJoinDistinctToExists
 from qseal.rewrites.join_elimination import RemoveForeignKeyInnerJoin, RemoveUnusedLeftJoin
@@ -22,6 +23,15 @@ from qseal.rewrites.registry import apply_rewrite_match, available_rewrite_match
                 unique=[("user_id",)],
             )}),
             "query:distinct",
+        ),
+        (
+            RemoveRedundantCountDistinct(),
+            "SELECT COUNT(DISTINCT user_id) AS unique_users FROM users",
+            ConstraintCatalog(tables={"users": TableConstraints(
+                columns={"user_id": {"nullable": False}},
+                unique=[("user_id",)],
+            )}),
+            "projection:0",
         ),
         (
             RemoveUnusedLeftJoin(),

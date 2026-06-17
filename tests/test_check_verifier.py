@@ -48,6 +48,24 @@ def test_check_proves_distinct_removal_with_composite_unique_key() -> None:
     )
 
 
+def test_check_proves_count_distinct_removal_with_unique_key() -> None:
+    original = parse_select("SELECT COUNT(DISTINCT user_id) AS unique_users FROM users")
+    rewritten = parse_select("SELECT COUNT(user_id) AS unique_users FROM users")
+    constraints = ConstraintCatalog(
+        tables={
+            "users": TableConstraints(
+                columns={"user_id": ColumnConstraint(nullable=False)},
+                unique=[("user_id",)],
+            )
+        }
+    )
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "remove_redundant_count_distinct"
+
+
 def test_check_proves_distinct_removal_with_matching_where_predicates() -> None:
     original = parse_select("SELECT DISTINCT user_id FROM users WHERE status = 'active'")
     rewritten = parse_select("SELECT user_id FROM users WHERE status = 'active'")

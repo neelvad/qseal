@@ -417,15 +417,24 @@ def _projection_to_column(
             name=node.this.name,
             alias=node.alias,
         )
-    if isinstance(
-        node,
-        exp.Alias,
-    ) and _is_supported_opaque_projection(node.this, allow_aggregate=allow_aggregate):
+    if isinstance(node, exp.Alias) and (
+        _is_supported_opaque_projection(node.this, allow_aggregate=allow_aggregate)
+        or _is_count_projection(node.this)
+    ):
         referenced_tables, references_unqualified = _expression_column_references(node.this)
         return ColumnRef(
             name=node.alias,
             alias=node.alias,
             expression_sql=node.this.sql(dialect=dialect),
+            referenced_tables=referenced_tables,
+            references_unqualified_columns=references_unqualified,
+        )
+    if _is_count_projection(node):
+        referenced_tables, references_unqualified = _expression_column_references(node)
+        expression_sql = node.sql(dialect=dialect)
+        return ColumnRef(
+            name=expression_sql,
+            expression_sql=expression_sql,
             referenced_tables=referenced_tables,
             references_unqualified_columns=references_unqualified,
         )
@@ -451,6 +460,19 @@ def _contains_aggregate(node: exp.Expression) -> bool:
     return any(
         isinstance(child, exp.AggFunc) and child.find_ancestor(exp.Window) is None
         for child in node.walk()
+    )
+
+
+def _is_count_projection(node: exp.Expression) -> bool:
+    if not isinstance(node, exp.Count):
+        return False
+    counted = node.this
+    if isinstance(counted, exp.Column | exp.Star):
+        return True
+    return (
+        isinstance(counted, exp.Distinct)
+        and len(counted.expressions) == 1
+        and isinstance(counted.expressions[0], exp.Column)
     )
 
 

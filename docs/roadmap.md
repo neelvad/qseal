@@ -26,6 +26,7 @@ unbounded list of optimizer rewrites.
   - unused `LEFT JOIN`
   - FK-backed `INNER JOIN` elimination
   - `JOIN DISTINCT` to `EXISTS`
+  - `COUNT(DISTINCT col)` to `COUNT(col)`
   - predicate pushdown through simple projection subqueries
 - FK semantics keep premises explicit: relationships prove parent existence for
   non-null child values; child `not_null` and parent `unique` remain separate
@@ -52,9 +53,7 @@ unbounded list of optimizer rewrites.
    - Treat NULL behavior explicitly before using these premises for CASE-branch
      or broader predicate rewrites.
 
-3. **Aggregates Over Unique Keys**
-   - Start with `COUNT(DISTINCT col) -> COUNT(col)` when `col` is trusted
-     unique and non-null.
+3. **Broader Aggregates Over Unique Keys**
    - Defer full `GROUP BY pk` collapse until aggregate expression semantics and
      NULL behavior are covered carefully.
 
