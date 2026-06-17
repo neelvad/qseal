@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "artifact_type": "candidate_bundle",
+  "source": "manual-demo",
+  "original_path": "../original.sql",
+  "candidates": [
+    {
+      "path": "001_remove_distinct.sql",
+      "source": "manual-demo",
+      "description": "Remove DISTINCT from a projection guarded by unique + not_null tests."
+    },
+    {
+      "path": "002_filter_rows.sql",
+      "source": "manual-demo",
+      "description": "Unsafe candidate that filters rows and should not be benchmarked."
+    }
+  ]
+}

@@ -151,12 +151,13 @@ contract for gating untrusted (e.g. LLM-generated) candidates.
 The compact demo path is:
 
 ```bash
-uv run qseal dbt scan examples/dbt_project --format text
-uv run qseal candidates evidence examples/candidates/original.sql \
-  --candidates-dir examples/candidates/manual \
-  --schema examples/candidates/schema.yml
-uv run qseal benchmark examples/benchmark/original.sql examples/benchmark/rewritten.sql \
-  --setup examples/benchmark/setup.sql
+uv run qseal dbt scan examples/product_demo/dbt_project --format text
+uv run qseal candidates evidence examples/product_demo/original.sql \
+  --candidates-dir examples/product_demo/candidates \
+  --schema examples/product_demo/dbt_project/models/schema.yml
+uv run qseal benchmark examples/product_demo/original.sql \
+  examples/product_demo/candidates/001_remove_distinct.sql \
+  --setup examples/product_demo/setup.sql
 ```
 
 With Snowflake credentials configured, the repeatable Tier-3 family suite tests

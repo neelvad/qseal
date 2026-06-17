@@ -10,6 +10,8 @@ QuerySeal is not a general SQL optimizer. The product wedge is narrower:
 The durable claim is semantic safety under declared assumptions. Performance is
 measured separately and used for ranking or suppression.
 
+The runnable fixture for this page lives at `examples/product_demo/`.
+
 ## What the Demo Should Prove
 
 The demo should leave a reviewer with four concrete takeaways:
@@ -32,16 +34,13 @@ Start with the pure-Python deterministic tier. It is the product default and
 requires no external solver or Snowflake credentials.
 
 ```bash
-uv run qseal dbt scan examples/dbt_project --format text
+uv run qseal dbt scan examples/product_demo/dbt_project --format text
 ```
 
-This finds three proven rewrites in the bundled example project:
+This finds one proven rewrite in the bundled product-demo project:
 
 - `remove_redundant_distinct` on `dim_users.sql`, guarded by `unique` and
   `not_null` tests on `dim_users.user_id`
-- `remove_unused_left_join` on `fact_orders.sql`, guarded by uniqueness on
-  `dim_users.user_id`
-- `predicate_pushdown` on `marts/positive_orders.sql`
 
 The important product behavior is not just that rewrites are found. The output
 also says whether each rewrite is apply-ready and names the ongoing tests that
@@ -67,19 +66,19 @@ benchmarks candidates that verify.
 
 ```bash
 uv run qseal candidates evidence \
-  examples/candidates/original.sql \
-  --candidates-dir examples/candidates/manual \
-  --schema examples/candidates/schema.yml \
+  examples/product_demo/original.sql \
+  --candidates-dir examples/product_demo/candidates \
+  --schema examples/product_demo/dbt_project/models/schema.yml \
   --rows 10000 \
   --warmups 0 \
   --repetitions 1 \
   --format text
 ```
 
-Expected result: one candidate checked, one proven equivalent by builtin rule
-replay, one synthetic DuckDB benchmark, and a recommendation. In a production
-candidate flow, use `--fail-on unproven` so unknown or unsupported candidates
-cannot pass silently.
+Expected result: two candidates checked. `001_remove_distinct.sql` is proven by
+builtin rule replay and benchmarked; `002_filter_rows.sql` is not proven and is
+not benchmarked. In a production candidate flow, use `--fail-on unproven` so
+unknown or unsupported candidates cannot pass silently.
 
 ```bash
 qseal candidates evidence original.sql \
@@ -107,11 +106,11 @@ Once a pair is proven, benchmark it as a separate evidence artifact:
 
 ```bash
 uv run qseal benchmark \
-  examples/benchmark/original.sql \
-  examples/benchmark/rewritten.sql \
-  --setup examples/benchmark/setup.sql \
-  --warmups 1 \
-  --repetitions 3 \
+  examples/product_demo/original.sql \
+  examples/product_demo/candidates/001_remove_distinct.sql \
+  --setup examples/product_demo/setup.sql \
+  --warmups 0 \
+  --repetitions 1 \
   --format text
 ```
 
