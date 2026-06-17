@@ -12,6 +12,7 @@ from qseal.benchmark import (
 )
 from qseal.candidates.benchmarking import benchmark_proven
 from qseal.candidates.bundle import load_candidate_metadata
+from qseal.candidates.evidence import build_candidate_evidence
 from qseal.candidates.explain import explain_proven
 from qseal.candidates.generation import generate_candidates
 from qseal.candidates.verification import merge_reports, verify_bundles
@@ -67,6 +68,7 @@ from qseal.policy import (
     write_policy_model,
 )
 from qseal.report.json import (
+    render_candidate_evidence_json,
     render_candidate_generation_json,
     render_candidate_run_json,
     render_candidate_verifications_json,
@@ -82,6 +84,7 @@ from qseal.report.json import (
 from qseal.report.markdown import render_dbt_scan_markdown
 from qseal.report.patch import apply_dbt_scan_patches, write_dbt_scan_patch_results
 from qseal.report.text import (
+    render_candidate_evidence_report,
     render_candidate_verifications_report,
     render_dbt_scan_diff_report,
     render_dbt_scan_report,
@@ -3070,6 +3073,162 @@ def candidates_check(
     if fail_on == "unproven" and any(
         result.status != VerificationStatus.PROVEN_EQUIVALENT for result in results
     ):
+        raise click.exceptions.Exit(1)
+
+
+@candidates_group.command(name="evidence")
+@click.argument("original_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument(
+    "candidate_paths",
+    nargs=-1,
+    required=False,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--schema",
+    "schema_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="YAML file containing trusted schema constraints.",
+)
+@click.option(
+    "--schema-format",
+    type=SchemaFormat,
+    default="auto",
+    show_default=True,
+    help="Schema constraint format.",
+)
+@click.option(
+    "--candidates-dir",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Directory containing candidate .sql files to verify and benchmark.",
+)
+@click.option(
+    "--rows",
+    type=click.IntRange(min=1),
+    default=100_000,
+    show_default=True,
+    help="Synthetic DuckDB rows per referenced table.",
+)
+@click.option("--warmups", type=click.IntRange(min=0), default=1, show_default=True)
+@click.option("--repetitions", type=click.IntRange(min=1), default=3, show_default=True)
+@click.option(
+    "--benchmark-timeout",
+    "benchmark_timeout_seconds",
+    type=click.FloatRange(min=0, min_open=True),
+    default=30.0,
+    show_default=True,
+    help="Per-query benchmark timeout in seconds.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+@click.option(
+    "--report-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write a versioned candidate evidence artifact to this file.",
+)
+@click.option(
+    "--fail-on",
+    type=CheckFailOn,
+    default="none",
+    show_default=True,
+    help="Exit nonzero when any candidate is not proven.",
+)
+@click.option(
+    "--verifier",
+    type=VerifierChoice,
+    default="builtin",
+    show_default=True,
+    help="Verifier backend.",
+)
+@click.option(
+    "--solver-command",
+    help="External verifier command to use with --verifier external.",
+)
+@click.option(
+    "--timeout",
+    "timeout_seconds",
+    type=int,
+    help="External verifier timeout in seconds.",
+)
+@click.option(
+    "--dialect",
+    type=DialectChoice,
+    default=DEFAULT_DIALECT,
+    show_default=True,
+    help="SQL dialect used for verification and DuckDB benchmark transpilation.",
+)
+def candidates_evidence(
+    original_path: Path,
+    candidate_paths: tuple[Path, ...],
+    schema_path: Path,
+    schema_format: str,
+    candidates_dir: Path | None,
+    rows: int,
+    warmups: int,
+    repetitions: int,
+    benchmark_timeout_seconds: float,
+    output_format: str,
+    report_file: Path | None,
+    fail_on: str,
+    verifier: str,
+    solver_command: str | None,
+    timeout_seconds: int | None,
+    dialect: str,
+) -> None:
+    """Verify candidates, then benchmark only the proven candidates on DuckDB."""
+    original_sql = original_path.read_text()
+    resolved_candidate_paths = _resolve_candidate_paths(candidate_paths, candidates_dir)
+
+    try:
+        constraints = _load_constraints(schema_path, schema_format)
+        verifications = _verify_candidates(
+            original_path,
+            original_sql,
+            resolved_candidate_paths,
+            schema_path,
+            schema_format,
+            constraints,
+            verifier=verifier,
+            solver_command=solver_command,
+            timeout_seconds=timeout_seconds,
+            dialect=dialect,
+        )
+        evidence = build_candidate_evidence(
+            original_path,
+            resolved_candidate_paths,
+            verifications,
+            constraints,
+            schema_path=schema_path,
+            schema_format=schema_format,
+            dialect=dialect,
+            rows=rows,
+            warmups=warmups,
+            repetitions=repetitions,
+            benchmark_timeout_seconds=benchmark_timeout_seconds,
+            candidate_metadata=load_candidate_metadata(candidates_dir),
+        )
+    except ValueError as error:
+        raise click.ClickException(str(error)) from error
+
+    json_report = render_candidate_evidence_json(evidence)
+    if output_format == "json":
+        click.echo(json_report)
+    else:
+        console.print(render_candidate_evidence_report(evidence))
+
+    if report_file is not None:
+        report_file.parent.mkdir(parents=True, exist_ok=True)
+        report_file.write_text(f"{json_report}\n")
+        click.echo(f"Evidence report written: {report_file}", err=True)
+
+    if fail_on == "unproven" and any(not row.proven for row in evidence.results):
         raise click.exceptions.Exit(1)
 
 

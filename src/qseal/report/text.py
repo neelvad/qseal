@@ -2,6 +2,7 @@ from rich.text import Text
 
 from qseal.benchmark.model import BenchmarkResult, BenchmarkStatus
 from qseal.benchmark.snowflake_suite import SnowflakeFamilySuiteReport
+from qseal.candidates.evidence import CandidateEvidenceReport
 from qseal.fixtures.model import DuckDbFixtureManifest
 from qseal.report.diff import render_rewrite_diff
 from qseal.report.guards import required_guarding_tests
@@ -98,8 +99,61 @@ def render_snowflake_family_suite_report(result: SnowflakeFamilySuiteReport) -> 
     return output
 
 
+def render_candidate_evidence_report(report: CandidateEvidenceReport) -> Text:
+    output = Text()
+    output.append("Candidate evidence\n", style="bold")
+    output.append(f"Candidates: {report.candidate_count}\n")
+    output.append(f"Proven: {report.proven_count}\n")
+    output.append(f"Benchmarked: {report.benchmarked_count}\n")
+    output.append(
+        f"Benchmark: {report.benchmark_engine} {report.benchmark_data}, "
+        f"rows={report.rows}, warmups/repetitions={report.warmups}/{report.repetitions}\n"
+    )
+    if report.verification_counts:
+        output.append(f"Verification: {_format_counts(report.verification_counts)}\n")
+    if report.benchmark_outcomes:
+        output.append(f"Benchmark outcomes: {_format_counts(report.benchmark_outcomes)}\n")
+    output.append("\n")
+
+    for row in report.results:
+        output.append(f"{row.candidate_path}\n", style="bold")
+        output.append(f"  Safety: {row.verification.status.value}\n")
+        if row.verification.verification_method or row.verification.rule_name:
+            output.append(
+                "  Proof: "
+                f"{row.verification.verification_method or 'unknown'}"
+                f"{_format_rule(row.verification.rule_name)}\n"
+            )
+        if row.verification.assumptions:
+            output.append("  Assumptions:\n")
+            for assumption in row.verification.assumptions:
+                output.append(f"    - {assumption}\n")
+        if row.benchmark is None:
+            output.append(f"  Benchmark: skipped ({row.benchmark_skip_reason})\n")
+        else:
+            output.append(
+                "  Benchmark: "
+                f"{row.benchmark.get('outcome', 'unknown')}"
+                f"{_format_speedup(row.benchmark.get('speedup'))}\n"
+            )
+            if row.benchmark.get("reason"):
+                output.append(f"    reason: {row.benchmark['reason']}\n")
+        output.append(f"  Recommendation: {row.recommendation}\n")
+    return output
+
+
 def _sum_optional_ints(values: tuple[int, ...]) -> int:
     return sum(values)
+
+
+def _format_rule(rule_name: str | None) -> str:
+    return "" if not rule_name else f" / {rule_name}"
+
+
+def _format_speedup(speedup: object) -> str:
+    if speedup is None:
+        return ""
+    return f", speedup={speedup}x"
 
 
 def _format_counts(counts: dict[str, int]) -> str:

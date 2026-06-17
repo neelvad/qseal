@@ -59,26 +59,30 @@ That is the pull-request comment surface: reviewable diffs plus explicit
 guarding tests. Use `--fail-on findings` only when the team wants to turn
 proven findings into an enforcement gate.
 
-## Flow 2: Candidate Gate
+## Flow 2: Candidate Gate and Evidence
 
 The same safety boundary works for untrusted candidates from an LLM, a human, or
 another tool. The candidate producer is outside the trusted path; QuerySeal only
-accepts candidates that verify.
+benchmarks candidates that verify.
 
 ```bash
-uv run qseal candidates check \
+uv run qseal candidates evidence \
   examples/candidates/original.sql \
   --candidates-dir examples/candidates/manual \
   --schema examples/candidates/schema.yml \
+  --rows 10000 \
+  --warmups 0 \
+  --repetitions 1 \
   --format text
 ```
 
 Expected result: one candidate checked, one proven equivalent by builtin rule
-replay. In a production candidate flow, use `--fail-on unproven` so unknown or
-unsupported candidates cannot pass silently.
+replay, one synthetic DuckDB benchmark, and a recommendation. In a production
+candidate flow, use `--fail-on unproven` so unknown or unsupported candidates
+cannot pass silently.
 
 ```bash
-qseal candidates check original.sql \
+qseal candidates evidence original.sql \
   --candidates-dir generated-candidates \
   --schema schema.yml \
   --fail-on unproven \

@@ -4,6 +4,7 @@ from typing import Any
 
 from qseal.benchmark.model import BenchmarkResult
 from qseal.benchmark.snowflake_suite import SnowflakeFamilySuiteReport
+from qseal.candidates.evidence import CandidateEvidenceReport
 from qseal.dialects import DEFAULT_DIALECT
 from qseal.fixtures.model import DuckDbFixtureManifest
 from qseal.report.guards import required_guarding_tests
@@ -159,6 +160,10 @@ def render_candidate_run_json(
             },
         }
     )
+
+
+def render_candidate_evidence_json(report: CandidateEvidenceReport) -> str:
+    return _dumps(report.model_dump(mode="json"))
 
 
 def render_dbt_scan_json(

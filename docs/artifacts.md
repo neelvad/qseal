@@ -215,6 +215,33 @@ Important fields:
 
 This is the preferred artifact for a candidate-producing CI step.
 
+## `candidate_evidence`
+
+Emitted by:
+
+```bash
+qseal candidates evidence original.sql \
+  --candidates-dir candidates/ \
+  --schema schema.yml \
+  --report-file evidence.json \
+  --format json
+```
+
+Important fields:
+
+- `candidate_count`, `proven_count`, and `benchmarked_count`
+- `verification_counts`: status counts across all candidate verifications
+- `benchmark_outcomes`: outcomes for the proven candidates that were
+  benchmarked
+- `results`: one row per candidate with the embedded verification result,
+  candidate metadata, benchmark skip reason for unproven candidates, optional
+  benchmark evidence, and a recommendation
+
+Only candidates with `PROVEN_EQUIVALENT` verification are benchmarked. The
+current benchmark evidence uses deterministic synthetic DuckDB data derived from
+the trusted schema constraints. It is ranking evidence, not a semantic proof and
+not a Snowflake dollar-savings claim.
+
 ## `dbt_scan`
 
 Emitted by:

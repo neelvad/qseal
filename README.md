@@ -152,7 +152,7 @@ The compact demo path is:
 
 ```bash
 uv run qseal dbt scan examples/dbt_project --format text
-uv run qseal candidates check examples/candidates/original.sql \
+uv run qseal candidates evidence examples/candidates/original.sql \
   --candidates-dir examples/candidates/manual \
   --schema examples/candidates/schema.yml
 uv run qseal benchmark examples/benchmark/original.sql examples/benchmark/rewritten.sql \
