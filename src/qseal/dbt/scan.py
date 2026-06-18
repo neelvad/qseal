@@ -9,6 +9,7 @@ from qseal.dbt.project import discover_dbt_project
 from qseal.dialects import DEFAULT_DIALECT, SqlDialect
 from qseal.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from qseal.rewrites.base import RewriteSuggestion, VerificationStatus
+from qseal.rewrites.chain import RewriteChainResult, suggest_rewrite_chain
 from qseal.rewrites.registry import RewriteRule, first_applicable_suggestion, suggest_rewrites
 from qseal.rewrites.subtree import suggest_subtree_rewrites
 
@@ -21,12 +22,29 @@ class DbtModelScanResult(BaseModel):
     source_path: Path | None = None
     source_sql_preprocessed: bool = False
     suggestions: tuple[RewriteSuggestion, ...] = Field(default_factory=tuple)
+    rewrite_chain: RewriteChainResult | None = None
 
     def has_proven_findings(self) -> bool:
         return any(
             suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
             for suggestion in self.suggestions
+        ) or self.has_proven_chain()
+
+    def has_proven_chain(self) -> bool:
+        return self.rewrite_chain is not None and self.rewrite_chain.step_count > 0
+
+    def proven_finding_count(self) -> int:
+        if self.rewrite_chain is not None:
+            return self.rewrite_chain.step_count
+        return sum(
+            suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+            for suggestion in self.suggestions
         )
+
+    def metric_suggestions(self) -> tuple[RewriteSuggestion, ...]:
+        if self.rewrite_chain is not None:
+            return tuple(step.suggestion for step in self.rewrite_chain.steps)
+        return self.suggestions
 
     def display_path(self) -> Path:
         return self.source_path or self.path
@@ -70,31 +88,26 @@ class DbtScanResult(BaseModel):
         return any(result.has_proven_findings() for result in self.results)
 
     def proven_finding_count(self) -> int:
-        return sum(
-            1
-            for result in self.results
-            for suggestion in result.suggestions
-            if suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
-        )
+        return sum(result.proven_finding_count() for result in self.results)
 
     def status_counts(self) -> dict[str, int]:
         counts = {}
         for result in self.results:
-            for suggestion in result.suggestions:
+            for suggestion in result.metric_suggestions():
                 counts[suggestion.status.value] = counts.get(suggestion.status.value, 0) + 1
         return counts
 
     def rule_counts(self) -> dict[str, int]:
         counts = {}
         for result in self.results:
-            for suggestion in result.suggestions:
+            for suggestion in result.metric_suggestions():
                 counts[suggestion.rule_name] = counts.get(suggestion.rule_name, 0) + 1
         return counts
 
     def reason_counts(self) -> dict[str, int]:
         counts = {}
         for result in self.results:
-            for suggestion in result.suggestions:
+            for suggestion in result.metric_suggestions():
                 if suggestion.reason:
                     counts[suggestion.reason] = counts.get(suggestion.reason, 0) + 1
         return counts
@@ -117,6 +130,8 @@ def scan_dbt_project(
     compiled_path: Path | None = None,
     dialect: SqlDialect = DEFAULT_DIALECT,
     only_paths: set[Path] | None = None,
+    chain: bool = False,
+    max_chain_steps: int = 8,
 ) -> DbtScanResult:
     project = discover_dbt_project(project_path, compiled_path=compiled_path)
     constraints = _load_project_constraints(project.schema_yml_files)
@@ -130,8 +145,16 @@ def scan_dbt_project(
 
     results = []
     for model_path in model_paths:
-        suggestions = _scan_model(model_path, constraints, rules, include_all, dialect)
-        if suggestions:
+        suggestions, rewrite_chain = _scan_model(
+            model_path,
+            constraints,
+            rules,
+            include_all,
+            dialect,
+            chain=chain,
+            max_chain_steps=max_chain_steps,
+        )
+        if suggestions or rewrite_chain is not None:
             source_sql = model_path.read_text()
             preprocessed = preprocess_dbt_sql(source_sql)
             source_sql_preprocessed = preprocessed.changed or _has_with_clause(preprocessed.sql)
@@ -144,6 +167,7 @@ def scan_dbt_project(
                         source_sql_preprocessed and compiled_path is None
                     ),
                     suggestions=tuple(suggestions),
+                    rewrite_chain=rewrite_chain,
                 )
             )
 
@@ -161,7 +185,10 @@ def _scan_model(
     rules: tuple[RewriteRule, ...],
     include_all: bool,
     dialect: SqlDialect,
-) -> list[RewriteSuggestion]:
+    *,
+    chain: bool = False,
+    max_chain_steps: int = 8,
+) -> tuple[list[RewriteSuggestion], RewriteChainResult | None]:
     source_sql = model_path.read_text()
     preprocessed = preprocess_dbt_sql(source_sql)
     if preprocessed.unsupported_reason is not None:
@@ -175,7 +202,28 @@ def _scan_model(
                 )
             ],
             include_all,
+        ), None
+
+    if chain:
+        rewrite_chain = suggest_rewrite_chain(
+            preprocessed.sql,
+            constraints,
+            rules=rules,
+            dialect=dialect,
+            max_steps=max_chain_steps,
         )
+        if rewrite_chain.step_count > 0:
+            return [], rewrite_chain
+        if include_all and rewrite_chain.status == "UNSUPPORTED":
+            return [
+                RewriteSuggestion(
+                    rule_name="dbt_scan",
+                    status=VerificationStatus.UNSUPPORTED,
+                    original_sql=source_sql.strip(),
+                    reason=rewrite_chain.reason,
+                )
+            ], None
+        return [], None
 
     try:
         query = parse_select(preprocessed.sql, dialect=dialect)
@@ -187,7 +235,7 @@ def _scan_model(
             dialect=dialect,
         )
         if subtree:
-            return subtree if include_all else [subtree[0]]
+            return subtree if include_all else [subtree[0]], None
         return _visible_suggestions(
             [
                 RewriteSuggestion(
@@ -198,7 +246,7 @@ def _scan_model(
                 )
             ],
             include_all,
-        )
+        ), None
 
     suggestions = suggest_rewrites(query, constraints, rules=rules)
     has_proven = any(
@@ -224,14 +272,14 @@ def _scan_model(
                 for suggestion in suggestions
                 if suggestion.status != VerificationStatus.NOT_APPLICABLE
             ),
-        ]
+        ], None
 
     if subtree:
-        return [subtree[0]]
+        return [subtree[0]], None
     suggestion = first_applicable_suggestion(suggestions)
     if suggestion.status == VerificationStatus.PROVEN_EQUIVALENT:
-        return [suggestion]
-    return []
+        return [suggestion], None
+    return [], None
 
 
 def _visible_suggestions(

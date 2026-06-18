@@ -56,18 +56,7 @@ def render_rewrite_chain_json(
             "schema_version": 1,
             "artifact_type": "rewrite_chain",
             "dialect": dialect,
-            "status": chain.status,
-            "reason": chain.reason,
-            "step_count": chain.step_count,
-            "original_sql": chain.original_sql,
-            "final_sql": chain.final_sql,
-            "steps": [
-                {
-                    "step_index": step.step_index,
-                    "suggestion": _suggestion_payload(step.suggestion),
-                }
-                for step in chain.steps
-            ],
+            **_rewrite_chain_payload(chain),
         }
     )
 
@@ -208,6 +197,10 @@ def render_dbt_scan_json(
             _suggestion_payload(suggestion)
             for suggestion in result.suggestions
         ]
+        if result.rewrite_chain is not None:
+            payload["results"][index]["rewrite_chain"] = _rewrite_chain_payload(
+                result.rewrite_chain
+            )
     payload["summary"] = scan_result.summary()
     return _dumps(payload)
 
@@ -231,6 +224,23 @@ def _suggestion_payload(suggestion: RewriteSuggestion) -> dict[str, Any]:
     payload = suggestion.model_dump(mode="json")
     payload["required_tests"] = list(required_guarding_tests(suggestion))
     return payload
+
+
+def _rewrite_chain_payload(chain) -> dict[str, Any]:
+    return {
+        "status": chain.status,
+        "reason": chain.reason,
+        "step_count": chain.step_count,
+        "original_sql": chain.original_sql,
+        "final_sql": chain.final_sql,
+        "steps": [
+            {
+                "step_index": step.step_index,
+                "suggestion": _suggestion_payload(step.suggestion),
+            }
+            for step in chain.steps
+        ],
+    }
 
 
 def _dumps(payload: Any) -> str:

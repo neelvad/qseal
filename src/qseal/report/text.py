@@ -239,6 +239,10 @@ def _indent_sql(sql: str, *, spaces: int) -> str:
     return "\n".join(f"{prefix}{line}" for line in sql.strip().splitlines())
 
 
+def _step_word(count: int) -> str:
+    return "step" if count == 1 else "steps"
+
+
 def _format_counts(counts: dict[str, int]) -> str:
     if not counts:
         return "none"
@@ -438,18 +442,16 @@ def render_dbt_scan_report(scan_result) -> Text:
 
     output.append("\nReview sections:\n", style="bold")
     for section, title in _dbt_scan_sections():
-        rows = [
-            (result, suggestion)
-            for result in scan_result.results
-            for suggestion in result.suggestions
-            if _dbt_scan_section(result, suggestion) == section
-        ]
+        rows = _dbt_scan_section_rows(scan_result, section)
         output.append(f"{title} ({len(rows)})\n", style="bold")
         if not rows:
             output.append("  None\n")
             continue
         for result, suggestion in rows:
-            _append_dbt_scan_row(output, result, suggestion)
+            if suggestion is None:
+                _append_dbt_scan_chain_row(output, result)
+            else:
+                _append_dbt_scan_row(output, result, suggestion)
 
     return output
 
@@ -466,6 +468,74 @@ def _dbt_scan_section(result, suggestion: RewriteSuggestion) -> str:
     if suggestion.status == VerificationStatus.PROVEN_EQUIVALENT:
         return "apply_ready" if result.apply_ready() else "manual_review"
     return "not_proven"
+
+
+def _dbt_scan_chain_section(result) -> str:
+    return "apply_ready" if result.apply_ready() else "manual_review"
+
+
+def _dbt_scan_section_rows(scan_result, section: str):
+    rows = []
+    for result in scan_result.results:
+        if result.rewrite_chain is not None and result.rewrite_chain.step_count > 0:
+            if _dbt_scan_chain_section(result) == section:
+                rows.append((result, None))
+        rows.extend(
+            (result, suggestion)
+            for suggestion in result.suggestions
+            if _dbt_scan_section(result, suggestion) == section
+        )
+    return rows
+
+
+def _append_dbt_scan_chain_row(output: Text, result) -> None:
+    chain = result.rewrite_chain
+    if chain is None:
+        return
+    output.append(f"  {result.display_path()}\n", style="bold")
+    if result.scanned_from_source():
+        output.append(f"    Scanned SQL: {result.scanned_path}\n")
+    output.append("    Safety: PROVEN_EQUIVALENT\n")
+    output.append(
+        f"    Rewrite chain: {chain.step_count} verified {_step_word(chain.step_count)}\n"
+    )
+    output.append(f"    Apply ready: {'yes' if result.apply_ready() else 'no'}\n")
+    apply_blocker = result.apply_blocker()
+    if apply_blocker:
+        output.append(f"    Apply blocker: {apply_blocker}\n")
+    if chain.reason:
+        output.append(f"    Chain status: {chain.status} ({chain.reason})\n")
+    else:
+        output.append(f"    Chain status: {chain.status}\n")
+    output.append("    Steps:\n")
+    for step in chain.steps:
+        suggestion = step.suggestion
+        output.append(f"      {step.step_index}. {suggestion.rule_name}\n")
+        if suggestion.fragment_location:
+            output.append(f"         Fragment: {suggestion.fragment_location}\n")
+        tests = required_guarding_tests(suggestion)
+        if tests:
+            output.append("         Required tests:\n")
+            for test in tests:
+                output.append(f"           - {test}\n")
+        if suggestion.reason:
+            output.append(f"         Reason: {suggestion.reason}\n")
+    output.append(f"    Recommendation: {_dbt_scan_chain_recommendation(result)}\n")
+    output.append("    Final SQL:\n")
+    output.append(_indent_sql(chain.final_sql, spaces=6))
+    output.append("\n")
+    diff = render_rewrite_diff(
+        result.display_path(),
+        RewriteSuggestion(
+            rule_name="rewrite_chain",
+            status=VerificationStatus.PROVEN_EQUIVALENT,
+            original_sql=chain.original_sql,
+            rewritten_sql=chain.final_sql,
+        ),
+    )
+    if diff:
+        output.append("    Final diff:\n")
+        _append_indented_diff(output, diff, max_lines=80)
 
 
 def _append_dbt_scan_row(output: Text, result, suggestion: RewriteSuggestion) -> None:
@@ -519,6 +589,12 @@ def _dbt_scan_recommendation(result, suggestion: RewriteSuggestion) -> str:
     if section == "manual_review":
         return "review manually; source file is not directly apply-ready"
     return "do not apply automatically"
+
+
+def _dbt_scan_chain_recommendation(result) -> str:
+    if result.apply_ready():
+        return "review final diff; safe to apply final SQL while all required tests pass"
+    return "review chain manually; source file is not directly apply-ready"
 
 
 def render_dbt_scan_diff_report(scan_result) -> str:

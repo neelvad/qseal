@@ -270,3 +270,6 @@ Important fields:
 - `apply_ready`: whether a proven rewrite can be directly applied
 - `apply_blocker`: reason direct apply is unavailable
 - `patches`: patch paths when `--write-patches` is used
+- `rewrite_chain`: present for `qseal dbt scan --chain`; includes `status`,
+  `reason`, `step_count`, `original_sql`, `final_sql`, and per-step
+  suggestions with `required_tests`

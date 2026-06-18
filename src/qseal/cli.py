@@ -2209,6 +2209,20 @@ def snowflake_dbt_demo_benchmark_suite(
     help="Show unknown and unsupported scan results in addition to proven rewrites.",
 )
 @click.option(
+    "--chain",
+    "use_chain",
+    is_flag=True,
+    help="Repeatedly apply verified rewrites per model until a fixed point is reached.",
+)
+@click.option(
+    "--max-steps",
+    "max_chain_steps",
+    type=click.IntRange(min=1),
+    default=8,
+    show_default=True,
+    help="Maximum verified rewrite steps per model when --chain is enabled.",
+)
+@click.option(
     "--rule",
     "selected_rules",
     multiple=True,
@@ -2279,6 +2293,8 @@ def snowflake_dbt_demo_benchmark_suite(
 def dbt_scan(
     project_path: Path,
     show_all: bool,
+    use_chain: bool,
+    max_chain_steps: int,
     selected_rules: tuple[str, ...],
     output_format: str,
     show_diff: bool,
@@ -2306,6 +2322,12 @@ def dbt_scan(
         raise click.ClickException("--compiled-dir and --use-compiled cannot be used together.")
     if changed_since is not None and (use_compiled or compiled_path is not None):
         raise click.ClickException("--changed-since scans source models, not compiled SQL.")
+    if use_chain and show_diff:
+        raise click.ClickException("--chain cannot be used with --diff yet.")
+    if use_chain and patch_dir is not None:
+        raise click.ClickException("--chain cannot be used with --write-patches yet.")
+    if use_chain and apply_patches:
+        raise click.ClickException("--chain cannot be used with --apply-patches yet.")
 
     only_paths: set[Path] | None = None
     if changed_since is not None:
@@ -2324,6 +2346,8 @@ def dbt_scan(
             compiled_path=compiled_path,
             dialect=dialect,
             only_paths=only_paths,
+            chain=use_chain,
+            max_chain_steps=max_chain_steps,
         )
     except DbtProjectDiscoveryError as error:
         raise click.ClickException(str(error)) from error

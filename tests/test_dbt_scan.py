@@ -1,8 +1,13 @@
+import json
 from pathlib import Path
 
+from click.testing import CliRunner
+
+from qseal.cli import main
 from qseal.dbt.project import discover_compiled_sql_path
 from qseal.dbt.scan import scan_dbt_project
 from qseal.report.guards import required_guarding_tests
+from qseal.report.markdown import render_dbt_scan_markdown
 from qseal.rewrites.base import VerificationStatus
 from qseal.rewrites.registry import DEFAULT_RULES
 
@@ -38,6 +43,101 @@ models:
     assert result.results[0].scanned_path == models / "dim_users.sql"
     assert result.results[0].source_path == models / "dim_users.sql"
     assert result.results[0].suggestions[0].status == VerificationStatus.PROVEN_EQUIVALENT
+
+
+def test_scan_dbt_project_reports_verified_rewrite_chain(tmp_path: Path) -> None:
+    _write_chain_project(tmp_path)
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES, chain=True)
+
+    assert result.model_count == 1
+    assert result.proven_finding_count() == 2
+    assert result.status_counts() == {"PROVEN_EQUIVALENT": 2}
+    assert result.rule_counts() == {
+        "remove_redundant_not_null_filter": 1,
+        "remove_redundant_distinct": 1,
+    }
+    model = result.results[0]
+    assert model.suggestions == ()
+    assert model.rewrite_chain is not None
+    assert model.rewrite_chain.step_count == 2
+    assert [step.suggestion.rule_name for step in model.rewrite_chain.steps] == [
+        "remove_redundant_not_null_filter",
+        "remove_redundant_distinct",
+    ]
+    assert model.rewrite_chain.final_sql == "SELECT user_id\nFROM dim_users;"
+
+
+def test_dbt_scan_chain_cli_json_reports_steps(tmp_path: Path) -> None:
+    _write_chain_project(tmp_path)
+
+    result = CliRunner().invoke(
+        main,
+        ["dbt", "scan", str(tmp_path), "--chain", "--format", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["summary"]["proven_finding_count"] == 2
+    row = payload["results"][0]
+    assert row["apply_ready"] is True
+    assert row["suggestions"] == []
+    assert row["rewrite_chain"]["status"] == "FIXED_POINT"
+    assert row["rewrite_chain"]["step_count"] == 2
+    assert row["rewrite_chain"]["steps"][0]["suggestion"]["required_tests"] == [
+        "dbt test: not_null on dim_users.user_id"
+    ]
+    assert row["rewrite_chain"]["steps"][1]["suggestion"]["required_tests"] == [
+        "dbt test: unique on dim_users.user_id",
+        "dbt test: not_null on dim_users.user_id",
+    ]
+
+
+def test_dbt_scan_chain_cli_text_reports_final_diff(tmp_path: Path) -> None:
+    _write_chain_project(tmp_path)
+
+    result = CliRunner().invoke(
+        main,
+        ["dbt", "scan", str(tmp_path), "--chain", "--format", "text"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Rewrite chain: 2 verified steps" in result.output
+    assert "1. remove_redundant_not_null_filter" in result.output
+    assert "2. remove_redundant_distinct" in result.output
+    assert "Final diff:" in result.output
+    assert "-SELECT DISTINCT user_id FROM dim_users WHERE user_id IS NOT NULL" in result.output
+
+
+def test_dbt_scan_chain_markdown_reports_steps(tmp_path: Path) -> None:
+    _write_chain_project(tmp_path)
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES, chain=True)
+
+    markdown = render_dbt_scan_markdown(result)
+
+    assert "**Rewrite chain:** 2 verified steps" in markdown
+    assert "`1. remove_redundant_not_null_filter`" in markdown
+    assert "`2. remove_redundant_distinct`" in markdown
+    assert "```diff" in markdown
+
+
+def test_dbt_scan_chain_rejects_patch_output(tmp_path: Path) -> None:
+    _write_chain_project(tmp_path)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "dbt",
+            "scan",
+            str(tmp_path),
+            "--chain",
+            "--write-patches",
+            str(tmp_path / "patches"),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--chain cannot be used with --write-patches yet" in result.output
 
 
 def test_scan_dbt_project_uses_unique_combination_for_distinct(
@@ -80,6 +180,26 @@ models:
         "dbt test: not_null on orders.order_id",
     )
     assert suggestion.rewritten_sql == "SELECT tenant_id, order_id, status\nFROM orders;"
+
+
+def _write_chain_project(project: Path) -> None:
+    models = project / "models"
+    models.mkdir()
+    (models / "dim_users.sql").write_text(
+        "SELECT DISTINCT user_id FROM dim_users WHERE user_id IS NOT NULL"
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+          - not_null
+"""
+    )
 
 
 def test_scan_dbt_project_rewrites_count_distinct(

@@ -51,6 +51,22 @@ jobs:
           if-no-files-found: ignore
 ```
 
+## Composition Evidence
+
+Use `--chain` when the review question is whether multiple verified rewrites
+compose on the same model. Chain mode records every proven step and the final
+SQL/diff in the JSON, text, or markdown report. It is report-only for now and
+cannot be combined with `--write-patches`, `--apply-patches`, or `--diff`.
+
+```yaml
+      - name: Scan dbt models for rewrite chains
+        run: |
+          uv run qseal dbt scan . \
+            --chain \
+            --format markdown \
+            --report-file qseal-chain-report.json
+```
+
 ## Finding-Gated Scan
 
 This workflow fails when QuerySeal finds at least one proven rewrite opportunity.

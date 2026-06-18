@@ -4,7 +4,7 @@ from pathlib import Path
 
 from qseal.report.diff import render_rewrite_diff
 from qseal.report.guards import required_guarding_tests
-from qseal.rewrites.base import VerificationStatus
+from qseal.rewrites.base import RewriteSuggestion, VerificationStatus
 
 # A stable marker so a CI bot can find and update its own comment idempotently.
 COMMENT_MARKER = "<!-- qseal-scan -->"
@@ -51,18 +51,16 @@ def render_dbt_scan_markdown(scan_result) -> str:
     )
 
     for section, title in _scan_sections():
-        rows = [
-            (result, suggestion)
-            for result in scan_result.results
-            for suggestion in result.suggestions
-            if _scan_section(result, suggestion) == section
-        ]
+        rows = _scan_section_rows(scan_result, section)
         if not rows:
             continue
         lines.extend(["", f"### {title} ({len(rows)})"])
         for result, suggestion in rows:
             relative = _relative_path(result.display_path(), scan_result.project_path)
-            lines.extend(_render_finding(result, suggestion, relative))
+            if suggestion is None:
+                lines.extend(_render_chain_finding(result, relative))
+            else:
+                lines.extend(_render_finding(result, suggestion, relative))
 
     return "\n".join(lines) + "\n"
 
@@ -79,6 +77,24 @@ def _scan_section(result, suggestion) -> str:
     if suggestion.status == VerificationStatus.PROVEN_EQUIVALENT:
         return "apply_ready" if result.apply_ready() else "manual_review"
     return "not_proven"
+
+
+def _scan_chain_section(result) -> str:
+    return "apply_ready" if result.apply_ready() else "manual_review"
+
+
+def _scan_section_rows(scan_result, section: str):
+    rows = []
+    for result in scan_result.results:
+        if result.rewrite_chain is not None and result.rewrite_chain.step_count > 0:
+            if _scan_chain_section(result) == section:
+                rows.append((result, None))
+        rows.extend(
+            (result, suggestion)
+            for suggestion in result.suggestions
+            if _scan_section(result, suggestion) == section
+        )
+    return rows
 
 
 def _render_finding(result, suggestion, relative: Path) -> list[str]:
@@ -117,6 +133,54 @@ def _render_finding(result, suggestion, relative: Path) -> list[str]:
     return lines
 
 
+def _render_chain_finding(result, relative: Path) -> list[str]:
+    chain = result.rewrite_chain
+    if chain is None:
+        return []
+    apply_ready = result.apply_ready()
+    if apply_ready:
+        apply_state = "yes"
+    else:
+        apply_state = f"no ({result.apply_blocker() or 'unknown'})"
+    lines = [
+        "",
+        f"#### `{relative}`",
+        "",
+        f"- **Rewrite chain:** {chain.step_count} verified {_step_word(chain.step_count)}",
+        "- **Safety:** PROVEN_EQUIVALENT",
+        f"- **Apply ready:** {apply_state}",
+        f"- **Chain status:** {chain.status}",
+        f"- **Recommendation:** {_chain_recommendation(result)}",
+        "- **Steps:**",
+    ]
+    for step in chain.steps:
+        suggestion = step.suggestion
+        lines.append(f"  - `{step.step_index}. {suggestion.rule_name}`")
+        if suggestion.fragment_location:
+            lines.append(f"    - Fragment: `{suggestion.fragment_location}`")
+        tests = required_guarding_tests(suggestion)
+        if tests:
+            lines.append("    - Stays valid while these dbt tests pass:")
+            lines.extend(f"      - {test}" for test in tests)
+        if suggestion.reason:
+            lines.append(f"    - Reason: {suggestion.reason}")
+    if chain.reason:
+        lines.append(f"- **Fixed point:** {chain.reason}")
+
+    diff = render_rewrite_diff(
+        relative,
+        RewriteSuggestion(
+            rule_name="rewrite_chain",
+            status=VerificationStatus.PROVEN_EQUIVALENT,
+            original_sql=chain.original_sql,
+            rewritten_sql=chain.final_sql,
+        ),
+    )
+    if diff:
+        lines.extend(["", "```diff", diff.rstrip("\n"), "```"])
+    return lines
+
+
 def _apply_blocker(result, suggestion) -> str:
     if suggestion.status != VerificationStatus.PROVEN_EQUIVALENT:
         return "rewrite is not proven equivalent"
@@ -130,3 +194,13 @@ def _recommendation(result, suggestion) -> str:
     if section == "manual_review":
         return "Review manually; the source file is not directly apply-ready."
     return "Do not apply automatically."
+
+
+def _chain_recommendation(result) -> str:
+    if result.apply_ready():
+        return "Review the final diff; safe to apply while required tests pass."
+    return "Review manually; the source file is not directly apply-ready."
+
+
+def _step_word(count: int) -> str:
+    return "step" if count == 1 else "steps"

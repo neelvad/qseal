@@ -229,6 +229,13 @@ generated rewrites while matching dbt constraints by the unqualified model name.
 Default scan output reports only proven rewrite findings. `--all` includes
 unknown and unsupported results.
 
+`--chain` switches a dbt scan from independent one-step findings to composition
+evidence. For each model, QuerySeal repeatedly applies the first verified
+rewrite until no further verified rewrite applies, records every verified step,
+and reports the final SQL. The JSON, text, and markdown reports include the
+chain status, per-step rule names, required dbt tests, and a final diff from the
+original SQL to the fixed point.
+
 Raw dbt scans statically resolve simple `{{ ref('model') }}` and
 `{{ source('name', 'table') }}` relation references. QuerySeal does not evaluate
 arbitrary Jinja, macros, or dbt adapter helpers; those models are reported as
@@ -253,7 +260,9 @@ SQL is not the source model text. Findings from statically preprocessed raw dbt
 SQL are also not apply-ready for the same reason.
 
 `--diff` prints unified diffs for proven rewrites with generated SQL. It is
-read-only and does not modify project files.
+read-only and does not modify project files. Chain scans currently reject
+`--diff`; use the normal text, markdown, or JSON report to inspect the final
+chain diff.
 
 `--write-patches DIR` writes patch files for proven rewrites. It also does not
 modify project files. Patch file paths preserve the model path and append the
@@ -263,6 +272,10 @@ rewrite rule name.
 explicitly opt-in. QuerySeal refuses to apply a rewrite when the scan came from
 compiled SQL, when raw dbt SQL was statically preprocessed, or when the current
 source file no longer exactly matches the verified original SQL.
+
+Chain scans currently reject `--write-patches` and `--apply-patches`. The report
+is the productized evidence surface; final-SQL patch generation is separate
+follow-up work.
 
 `--fail-on findings` exits nonzero only when at least one proven rewrite finding
 exists. Unsupported SQL, unknown equivalence, missing constraints, and uncompiled
