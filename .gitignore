@@ -9,7 +9,7 @@ dist/
 build/
 *.egg-info/
 .DS_Store
-core
-core.*
-hs_err_pid*.log
+/core
+/core.*
+/hs_err_pid*.log
 qseal-runs/
