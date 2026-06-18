@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-QSEAL_DIR="${QSEAL_DIR:-${SNOWPROVE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}}"
+QSEAL_DIR="${QSEAL_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 CLONE_DIR="${CLONE_DIR:-/tmp/qseal-real-projects}"
 REPORT_ROOT="${REPORT_ROOT:-$QSEAL_DIR/qseal-runs/real-projects/$(date -u +%Y%m%dT%H%M%SZ)}"
 RUN_COMPILED="${RUN_COMPILED:-0}"

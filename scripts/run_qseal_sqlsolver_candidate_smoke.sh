@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-QSEAL_DIR="${QSEAL_DIR:-${SNOWPROVE_DIR:-/qseal}}"
+QSEAL_DIR="${QSEAL_DIR:-/qseal}"
 FIXTURE_DIR="$QSEAL_DIR/tests/fixtures/solver_compat"
 CASE_NAME="${CASE_NAME:-redundant_distinct}"
 RUN_DIR="${RUN_DIR:-/tmp/qseal-sqlsolver-candidates}"

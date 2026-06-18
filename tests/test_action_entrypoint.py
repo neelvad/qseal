@@ -23,15 +23,6 @@ def test_find_comment_id_matches_marker() -> None:
     assert module.find_comment_id([], module.COMMENT_MARKERS) is None
 
 
-def test_find_comment_id_matches_legacy_marker() -> None:
-    module = _load_module()
-    comments = [
-        {"id": 2, "body": "<!-- snowprove-scan -->\nold report"},
-    ]
-
-    assert module.find_comment_id(comments, module.COMMENT_MARKERS) == 2
-
-
 def _git(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
 

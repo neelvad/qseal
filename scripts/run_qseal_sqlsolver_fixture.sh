@@ -2,7 +2,7 @@
 set -euo pipefail
 
 CASE_NAME="${CASE_NAME:-redundant_distinct}"
-QSEAL_DIR="${QSEAL_DIR:-${SNOWPROVE_DIR:-/qseal}}"
+QSEAL_DIR="${QSEAL_DIR:-/qseal}"
 FIXTURE_DIR="$QSEAL_DIR/tests/fixtures/solver_compat"
 CASES_MANIFEST="$FIXTURE_DIR/cases.yml"
 SOLVER_COMMAND="${SOLVER_COMMAND:-$QSEAL_DIR/scripts/sqlsolver_command.sh}"

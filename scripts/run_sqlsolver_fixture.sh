@@ -2,7 +2,7 @@
 set -euo pipefail
 
 CASE_NAME="${CASE_NAME:-redundant_distinct}"
-QSEAL_DIR="${QSEAL_DIR:-${SNOWPROVE_DIR:-/qseal}}"
+QSEAL_DIR="${QSEAL_DIR:-/qseal}"
 SQLSOLVER_DIR="${SQLSOLVER_DIR:-/sqlsolver}"
 RUN_DIR="${RUN_DIR:-/tmp/sqlsolver-run}"
 JAR_PATH="${JAR_PATH:-$SQLSOLVER_DIR/build/libs/sqlsolver-v1.1.0.jar}"

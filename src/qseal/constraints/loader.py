@@ -9,7 +9,7 @@ from qseal.constraints.yaml_loader import load_constraints
 
 
 def load_constraint_catalog(path: Path, schema_format: str = "auto") -> ConstraintCatalog:
-    if schema_format in {"qseal", "snowprove"}:
+    if schema_format == "qseal":
         return load_constraints(path)
     if schema_format == "dbt":
         return load_dbt_constraints(path)

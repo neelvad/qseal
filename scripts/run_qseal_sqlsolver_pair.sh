@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-QSEAL_DIR="${QSEAL_DIR:-${SNOWPROVE_DIR:-/qseal}}"
+QSEAL_DIR="${QSEAL_DIR:-/qseal}"
 SOLVER_COMMAND="${SOLVER_COMMAND:-$QSEAL_DIR/scripts/sqlsolver_command.sh}"
 TIMEOUT="${TIMEOUT:-30}"
 REPORT_DIR="${REPORT_DIR:-/tmp/qseal-sqlsolver-pair}"

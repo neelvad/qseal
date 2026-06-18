@@ -22,8 +22,7 @@ class QedBackend:
 
     Both components run natively; configure via constructor arguments or the
     QSEAL_QED_PARSER_JAR / QSEAL_QED_PROVER / QSEAL_QED_JAVA /
-    QSEAL_QED_SOLVER_BIN environment variables. The former SNOWPROVE_QED_*
-    names remain supported as legacy aliases. The prover needs z3 and cvc5
+    QSEAL_QED_SOLVER_BIN environment variables. The prover needs z3 and cvc5
     executables reachable through PATH at runtime.
     """
 
@@ -40,22 +39,18 @@ class QedBackend:
         self.parser_jar = _option(
             parser_jar,
             "QSEAL_QED_PARSER_JAR",
-            "SNOWPROVE_QED_PARSER_JAR",
         )
         self.prover_path = _option(
             prover_path,
             "QSEAL_QED_PROVER",
-            "SNOWPROVE_QED_PROVER",
         )
         self.java_path = _option(
             java_path,
             "QSEAL_QED_JAVA",
-            "SNOWPROVE_QED_JAVA",
         ) or _default_java()
         self.solver_bin_dir = _option(
             solver_bin_dir,
             "QSEAL_QED_SOLVER_BIN",
-            "SNOWPROVE_QED_SOLVER_BIN",
         )
         self.timeout_seconds = timeout_seconds
 

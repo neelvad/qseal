@@ -8,8 +8,7 @@ from qseal.rewrites.base import RewriteSuggestion, VerificationStatus
 
 # A stable marker so a CI bot can find and update its own comment idempotently.
 COMMENT_MARKER = "<!-- qseal-scan -->"
-LEGACY_COMMENT_MARKERS = ("<!-- snowprove-scan -->",)
-COMMENT_MARKERS = (COMMENT_MARKER, *LEGACY_COMMENT_MARKERS)
+COMMENT_MARKERS = (COMMENT_MARKER,)
 
 
 def _relative_path(path: Path, project_path: Path) -> Path:

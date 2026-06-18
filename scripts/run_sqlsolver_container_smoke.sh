@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-QSEAL_DIR="${QSEAL_DIR:-${SNOWPROVE_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}}"
+QSEAL_DIR="${QSEAL_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 SQLSOLVER_DIR="${SQLSOLVER_DIR:-$HOME/workspace/qseal-eval/SQLSolver}"
 COLIMA_PROFILE="${COLIMA_PROFILE:-sqlsolver-x86}"
 COLIMA_CPUS="${COLIMA_CPUS:-2}"

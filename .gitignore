@@ -1,5 +1,6 @@
 .venv/
 .uv-cache/
+.claude/
 .ruff_cache/
 .pytest_cache/
 __pycache__/
@@ -11,6 +12,4 @@ build/
 core
 core.*
 hs_err_pid*.log
-snowprove-runs/
 qseal-runs/
-.snowprove-cache/

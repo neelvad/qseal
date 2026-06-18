@@ -34,22 +34,6 @@ tables:
     assert constraints.table("users").has_unique_key(("user_id",))
 
 
-def test_loads_legacy_snowprove_schema_format(tmp_path: Path) -> None:
-    schema = tmp_path / "schema.yml"
-    schema.write_text(
-        """
-tables:
-  users:
-    unique:
-      - [user_id]
-"""
-    )
-
-    constraints = load_constraint_catalog(schema, schema_format="snowprove")
-
-    assert constraints.table("users") is not None
-
-
 def test_auto_loads_dbt_constraints(tmp_path: Path) -> None:
     schema = tmp_path / "schema.yml"
     schema.write_text(
