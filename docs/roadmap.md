@@ -39,6 +39,8 @@ unbounded list of optimizer rewrites.
   surfaces.
 - Product demo fixture connecting deterministic dbt scan output to Snowflake
   Tier 3 evidence.
+- Local dbt yield-pack fixture covering all default scanner rule families and
+  the composed chain-reporting path.
 - Snowflake Tier 3 family suite and dbt-like unused-join demo suite.
 - DuckDB rewrite-policy research harness with structured actions, search
   baselines, policy models, corpus runs, and stability reports.

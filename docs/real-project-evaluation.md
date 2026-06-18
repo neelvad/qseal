@@ -45,6 +45,24 @@ without cloud credentials or a global dbt-duckdb installation.
 Use `QSEAL_DBT_SCAN_ARGS` to compare rule subsets against the default rule set
 without checking out an older QuerySeal revision.
 
+## Local Yield Pack
+
+The public demo repos are useful for blocker measurement, but they do not
+currently contain many premise-bearing query shapes. For a deterministic scanner
+yield regression, use the checked-in dbt-style fixture:
+
+```bash
+uv run qseal dbt scan tests/fixtures/dbt_projects/yield_pack --format text
+uv run qseal dbt scan tests/fixtures/dbt_projects/yield_pack --chain --format text
+```
+
+The one-step scan covers all current default rule families with 12 apply-ready
+findings across 12 models. The chain scan reports 13 verified steps because one
+model composes redundant `IS NOT NULL` removal with redundant `DISTINCT`
+removal. This fixture is a smoke test for supported premise vocabulary and
+evidence reporting; it is not a substitute for measuring yield on design-partner
+or production dbt projects.
+
 Compare one or more completed run directories:
 
 ```bash
@@ -57,6 +75,12 @@ uv run scripts/compare_real_project_reports.py \
   --format json \
   qseal-runs/real-projects/RUN_A
 ```
+
+The comparison table includes `SILENT`, the number of scanned models with no
+visible scan result in the artifact, and `HIT/M`, proven findings per scanned
+model. A high silent count means the scan did not find a proven, unknown, or
+unsupported result for many models; inspect the raw `--all` reports and top
+reasons before treating it as a parser problem.
 
 If an individual repository has an unexpected layout or QuerySeal rejects it
 before producing a report, the script records `raw-skipped.txt` and continues to

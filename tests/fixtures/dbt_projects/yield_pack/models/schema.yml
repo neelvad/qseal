@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: dim_users
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - tenant_id
+            - user_id
+    columns:
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: user_id
+        tests:
+          - unique
+          - not_null
+      - name: email
+
+  - name: stg_orders
+    columns:
+      - name: order_id
+        tests:
+          - unique
+          - not_null
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: user_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_users')
+              field: user_id
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - placed
+                - shipped
+      - name: order_total_cents

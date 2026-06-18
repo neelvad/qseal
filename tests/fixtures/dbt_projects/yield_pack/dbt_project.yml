@@ -1,0 +1,5 @@
+name: yield_pack
+profile: yield_pack
+version: "1.0"
+
+model-paths: ["models"]

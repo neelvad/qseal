@@ -66,7 +66,10 @@ def test_compares_real_project_reports(tmp_path: Path) -> None:
     assert payload["totals"] == {
         "model_count": 15,
         "result_count": 3,
+        "silent_model_count": 12,
         "proven_count": 1,
+        "result_rate": 0.2,
+        "proven_per_model": 1 / 15,
         "status_counts": {
             "PROVEN_EQUIVALENT": 1,
             "UNKNOWN": 1,
@@ -81,7 +84,8 @@ def test_compares_real_project_reports(tmp_path: Path) -> None:
     rendered = render_comparison(reports)
     assert "project-a" in rendered
     assert "project-b" in rendered
-    assert "15 models, 3 results, 1 proven" in rendered
+    assert "15 models, 3 results, 12 silent, 1 proven" in rendered
+    assert "0.067 proven/model" in rendered
 
 
 def test_rejects_non_dbt_scan_artifact(tmp_path: Path) -> None:

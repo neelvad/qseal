@@ -947,6 +947,64 @@ def test_scan_synthetic_duckdb_fixture_reports_compiled_blockers() -> None:
     )
 
 
+def test_scan_yield_pack_fixture_reports_rule_family_yield() -> None:
+    project = FIXTURES / "dbt_projects" / "yield_pack"
+
+    result = scan_dbt_project(project, rules=DEFAULT_RULES)
+
+    assert result.model_count == 12
+    assert result.proven_finding_count() == 12
+    assert result.status_counts() == {"PROVEN_EQUIVALENT": 12}
+    assert result.rule_counts() == {
+        "collapse_unique_group_by": 1,
+        "predicate_pushdown": 1,
+        "remove_foreign_key_inner_join": 1,
+        "remove_redundant_accepted_values_filter": 1,
+        "remove_redundant_count_distinct": 1,
+        "remove_redundant_distinct": 1,
+        "remove_redundant_not_null_filter": 2,
+        "remove_unused_left_join": 2,
+        "rewrite_join_distinct_to_exists": 1,
+        "simplify_accepted_values_case": 1,
+    }
+    assert all(scan_result.apply_ready() for scan_result in result.results)
+
+
+def test_scan_yield_pack_fixture_reports_chain_yield() -> None:
+    project = FIXTURES / "dbt_projects" / "yield_pack"
+
+    result = scan_dbt_project(project, rules=DEFAULT_RULES, chain=True)
+
+    assert result.model_count == 12
+    assert result.proven_finding_count() == 13
+    assert result.status_counts() == {"PROVEN_EQUIVALENT": 13}
+    assert result.rule_counts() == {
+        "collapse_unique_group_by": 1,
+        "predicate_pushdown": 1,
+        "remove_foreign_key_inner_join": 1,
+        "remove_redundant_accepted_values_filter": 1,
+        "remove_redundant_count_distinct": 1,
+        "remove_redundant_distinct": 2,
+        "remove_redundant_not_null_filter": 2,
+        "remove_unused_left_join": 2,
+        "rewrite_join_distinct_to_exists": 1,
+        "simplify_accepted_values_case": 1,
+    }
+
+    chain_model = next(
+        scan_result
+        for scan_result in result.results
+        if scan_result.path.name == "orders_distinct_chain.sql"
+    )
+    assert chain_model.apply_ready()
+    assert chain_model.rewrite_chain is not None
+    assert chain_model.rewrite_chain.step_count == 2
+    assert [step.suggestion.rule_name for step in chain_model.rewrite_chain.steps] == [
+        "remove_redundant_not_null_filter",
+        "remove_redundant_distinct",
+    ]
+
+
 def test_scan_dbt_project_finds_subtree_rewrites_behind_opaque_cte_outer_query(
     tmp_path: Path,
 ) -> None:
