@@ -2,6 +2,7 @@ import pytest
 
 from qseal.constraints.model import ColumnConstraint, ConstraintCatalog, TableConstraints
 from qseal.parser.sqlglot_parser import parse_select
+from qseal.rewrites.accepted_values_case import SimplifyAcceptedValuesCase
 from qseal.rewrites.accepted_values_filter import RemoveRedundantAcceptedValuesFilter
 from qseal.rewrites.base import RewriteMatch, VerificationStatus
 from qseal.rewrites.count_distinct import RemoveRedundantCountDistinct
@@ -46,6 +47,19 @@ from qseal.rewrites.registry import apply_rewrite_match, available_rewrite_match
                 },
             )}),
             "predicate:0",
+        ),
+        (
+            SimplifyAcceptedValuesCase(),
+            "SELECT CASE WHEN status = 'cancelled' THEN 'bad' ELSE 'ok' END AS label FROM orders",
+            ConstraintCatalog(tables={"orders": TableConstraints(
+                columns={
+                    "status": {
+                        "nullable": False,
+                        "accepted_values": ["placed", "shipped"],
+                    }
+                },
+            )}),
+            "projection:0",
         ),
         (
             RemoveUnusedLeftJoin(),

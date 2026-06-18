@@ -90,6 +90,30 @@ def test_check_proves_accepted_values_filter_removal() -> None:
     assert result.rule_name == "remove_redundant_accepted_values_filter"
 
 
+def test_check_proves_accepted_values_case_simplification() -> None:
+    original = parse_select(
+        "SELECT CASE WHEN status = 'cancelled' THEN 'bad' ELSE 'ok' END AS label FROM orders"
+    )
+    rewritten = parse_select("SELECT 'ok' AS label FROM orders")
+    constraints = ConstraintCatalog(
+        tables={
+            "orders": TableConstraints(
+                columns={
+                    "status": ColumnConstraint(
+                        nullable=False,
+                        accepted_values=["placed", "shipped"],
+                    )
+                }
+            )
+        }
+    )
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "simplify_accepted_values_case"
+
+
 def test_check_proves_distinct_removal_with_matching_where_predicates() -> None:
     original = parse_select("SELECT DISTINCT user_id FROM users WHERE status = 'active'")
     rewritten = parse_select("SELECT user_id FROM users WHERE status = 'active'")

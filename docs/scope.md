@@ -113,6 +113,13 @@ match the trusted `accepted_values` domain and the column is also trusted
 non-null. The non-null premise is required because removing `WHERE col IN (...)`
 would otherwise allow NULL rows through.
 
+### `simplify_accepted_values_case`
+
+Simplifies searched `CASE` projection expressions when non-null accepted-values
+premises prove a branch unreachable or prove the first reachable branch always
+selected. The first version supports direct table queries without joins,
+`GROUP BY`, `HAVING`, or `QUALIFY`.
+
 ### `predicate_pushdown`
 
 Pushes an outer filter into a simple projection subquery when the filtered

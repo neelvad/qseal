@@ -145,6 +145,10 @@ With `accepted_values` proving that `status` can only be `placed` or `shipped`
 and `not_null` proving NULL rows cannot appear, the filter is a no-op
 (`remove_redundant_accepted_values_filter`).
 
+The same premise can simplify searched projection `CASE` expressions when a
+branch is unreachable or the first reachable branch is always selected
+(`simplify_accepted_values_case`).
+
 ### Unused LEFT JOIN elimination
 
 ```sql

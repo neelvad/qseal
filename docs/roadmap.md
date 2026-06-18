@@ -29,6 +29,7 @@ unbounded list of optimizer rewrites.
   - `JOIN DISTINCT` to `EXISTS`
   - `COUNT(DISTINCT col)` to `COUNT(col)`
   - redundant accepted-values `IN (...)` filters
+  - accepted-values CASE projection simplification
   - predicate pushdown through simple projection subqueries
 - FK semantics keep premises explicit: relationships prove parent existence for
   non-null child values; child `not_null` and parent `unique` remain separate
@@ -45,8 +46,8 @@ unbounded list of optimizer rewrites.
 ## Near-Term Product Roadmap
 
 1. **Broader Accepted Values / Enum Domains**
-   - Treat NULL behavior explicitly before using accepted-values premises for
-     CASE-branch or broader predicate rewrites.
+   - Extend beyond projection CASE simplification into broader predicate and
+     expression rewrites.
 
 2. **Broader Aggregates Over Unique Keys**
    - Defer full `GROUP BY pk` collapse until aggregate expression semantics and
