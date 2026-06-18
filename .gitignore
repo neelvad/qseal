@@ -12,4 +12,5 @@ core
 core.*
 hs_err_pid*.log
 snowprove-runs/
+qseal-runs/
 .snowprove-cache/

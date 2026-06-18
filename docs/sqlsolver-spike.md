@@ -121,14 +121,17 @@ Observed successful fixture results:
 redundant_distinct: EQ
 unsafe_distinct: NEQ
 unused_left_join: EQ
+fk_inner_join: EQ
 join_distinct_exists: EQ
 ```
 
-`fk_inner_join` was added after the first smoke pass to exercise FK-backed
-inner-join elimination. It emits a `FOREIGN KEY` DDL premise through both the
-direct SQLSolver fixture runner and QuerySeal's `sqlsolver` backend; rerun it
-inside the x86 SQLSolver container before treating that prover path as
-validated for FK rules.
+`fk_inner_join` exercises FK-backed inner-join elimination. A 2026-06-18
+x86_64 Colima run validated it both ways:
+
+- QuerySeal backend artifact:
+  `qseal-runs/sqlsolver-smoke/fk-inner-join-20260618/check/fk_inner_join.verification.json`
+  reported `PROVEN_EQUIVALENT` with `SQLSolver returned EQ.`
+- Direct SQLSolver fixture runner reported `Summary: [EQ]` in 3644 ms.
 
 If `uname -m` prints `aarch64` while `file /sqlsolver/lib/libz3java.so` prints
 `x86-64`, restart Colima with `--arch x86_64`.
