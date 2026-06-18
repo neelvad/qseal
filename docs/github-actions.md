@@ -1,8 +1,17 @@
 # GitHub Actions
 
-These examples assume QuerySeal is already available in the repository through
-`uv sync`. They are intended for dbt projects that want CI-visible rewrite
-findings before any LLM-generated rewrite flow exists.
+These examples run QuerySeal as a CLI in ordinary workflow steps. QuerySeal is
+not currently published as a GitHub Marketplace Action.
+
+Until a PyPI package is published, external repositories can install from Git:
+
+```yaml
+      - name: Install QuerySeal
+        run: uv tool install "qseal @ git+https://github.com/neelvad/qseal.git"
+```
+
+If you are running these workflows inside the QuerySeal checkout itself, replace
+that install step with `uv sync --locked` and call `uv run qseal ...`.
 
 ## Advisory Scan
 
@@ -32,12 +41,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: uv sync --locked
+      - name: Install QuerySeal
+        run: uv tool install "qseal @ git+https://github.com/neelvad/qseal.git"
 
       - name: Scan dbt models
         run: |
-          uv run qseal dbt scan . \
+          qseal dbt scan . \
             --report-file qseal-report.json \
             --write-patches qseal-patches
 
@@ -61,7 +70,7 @@ cannot be combined with `--write-patches`, `--apply-patches`, or `--diff`.
 ```yaml
       - name: Scan dbt models for rewrite chains
         run: |
-          uv run qseal dbt scan . \
+          qseal dbt scan . \
             --chain \
             --format markdown \
             --report-file qseal-chain-report.json
@@ -96,12 +105,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: uv sync --locked
+      - name: Install QuerySeal
+        run: uv tool install "qseal @ git+https://github.com/neelvad/qseal.git"
 
       - name: Scan dbt models
         run: |
-          uv run qseal dbt scan . \
+          qseal dbt scan . \
             --report-file qseal-report.json \
             --write-patches qseal-patches \
             --fail-on findings
@@ -120,7 +129,7 @@ jobs:
 For Jinja-heavy projects, run `dbt compile` first and scan compiled SQL:
 
 ```bash
-uv run qseal dbt scan . --use-compiled --report-file qseal-report.json
+qseal dbt scan . --use-compiled --report-file qseal-report.json
 ```
 
 Compiled scan findings are useful for review, but they are not directly
@@ -157,8 +166,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: uv sync --locked
+      - name: Install QuerySeal
+        run: uv tool install "qseal @ git+https://github.com/neelvad/qseal.git"
 
       # Replace this with an LLM/manual/rule experiment candidate producer.
       - name: Generate candidates
@@ -166,7 +175,7 @@ jobs:
 
       - name: Verify and benchmark candidates
         run: |
-          uv run qseal candidates evidence transform/models/dim_users.sql \
+          qseal candidates evidence transform/models/dim_users.sql \
             --candidates-dir qseal-candidates/dim_users \
             --schema transform/models/schema.yml \
             --fail-on unproven \

@@ -1,7 +1,13 @@
 # LLM Candidate Generation and Verification
 
-The untrusted-generator / trusted-verifier loop from `AGENTS.md`, as shipped.
-The generator proposes; only `PROVEN_EQUIVALENT` survives.
+This is a historical research workflow for untrusted candidate generation. It is
+not the default public-v0 product surface and should not be treated as a
+production optimizer. The generator proposes; only `PROVEN_EQUIVALENT`
+candidates survive.
+
+The corpus numbers below are research notes from local/private evaluation runs.
+They are useful for understanding direction and failure modes, but they are not
+a benchmark claim that can be reproduced from this repository alone.
 
 ## Generate
 

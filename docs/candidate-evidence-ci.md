@@ -100,7 +100,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: uv sync --locked
+      - name: Install QuerySeal
+        run: uv tool install "qseal @ git+https://github.com/neelvad/qseal.git"
 
       # Replace this with your candidate producer.
       - name: Generate candidates
@@ -108,7 +109,7 @@ jobs:
 
       - name: Verify and benchmark candidates
         run: |
-          uv run qseal candidates evidence transform/models/dim_users.sql \
+          qseal candidates evidence transform/models/dim_users.sql \
             --candidates-dir qseal-candidates/dim_users \
             --schema transform/models/schema.yml \
             --fail-on unproven \

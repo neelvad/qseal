@@ -9,6 +9,7 @@ dist/
 build/
 *.egg-info/
 .DS_Store
+/AGENTS.md
 /core
 /core.*
 /hs_err_pid*.log

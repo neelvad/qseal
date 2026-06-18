@@ -64,6 +64,7 @@ blocked_roots = {
     ".ruff_cache",
     ".uv-cache",
     ".venv",
+    "AGENTS.md",
     "build",
     "dist",
     "qseal-runs",

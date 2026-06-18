@@ -1,303 +1,241 @@
 # QuerySeal
 
-**Your dbt tests know things your warehouse optimizer can't use. QuerySeal turns
-them into verified-safe SQL rewrites.**
+QuerySeal is a research-grade CLI for verified SQL rewrite experiments.
 
-A warehouse like Snowflake does not enforce dbt tests, so its optimizer cannot
-assume a column is unique, non-null, or related to a parent table — it must keep
-defensive `DISTINCT`, filters, and joins even when the data contract says they
-are redundant. QuerySeal reads dbt `unique`, `not_null`, and `relationships`
-tests as trusted premises and uses them to prove rewrites the engine
-structurally cannot perform — then emits the guarding tests that must keep
-passing for the rewrite to stay valid.
+It has two public-v0 surfaces:
 
-It does **not** claim a rewrite is faster. It claims a supported rewrite returns
-**the same rows under the declared assumptions** — and separately measures
-whether it helps (see [performance evidence](docs/performance-evidence.md)).
+- **dbt scanner:** find small, premise-backed SQL rewrites that are safe under
+  trusted dbt tests or QuerySeal YAML constraints.
+- **rewrite-policy gym:** run search, ranking, and policy-learning experiments
+  over a finite SQL rewrite action space where every transition is verified and
+  rewards come from repeatable DuckDB benchmarks.
 
-## How it works in CI
+QuerySeal is intentionally not a general SQL optimizer, not a full SQL
+equivalence prover, and not a warehouse savings guarantee. A proven rewrite
+means: for the supported SQL subset, the rewritten query returns the same rows
+as the original under the declared assumptions.
 
-On a pull request that touches dbt models, QuerySeal scans only the changed
-models and comments the proven-safe rewrites it finds:
+## Why This Exists
 
-```yaml
-# .github/workflows/qseal.yml
-on:
-  pull_request:
-    paths: ["**/models/**/*.sql"]
-permissions:
-  contents: read
-  pull-requests: write
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-      - uses: your-org/qseal@v0
-        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        with:
-          project: transform/snowflake-dbt
-          base-ref: origin/${{ github.base_ref }}
-```
+Warehouses such as Snowflake cannot generally use dbt tests as optimizer
+premises. If dbt says a column is unique, non-null, or related to a parent table,
+that is valuable semantic information, but it is not an enforced database
+constraint. QuerySeal treats those tests as explicit trusted assumptions and
+uses them to prove conservative rewrites such as:
 
-The comment lists each rewrite, the dbt tests that keep it valid, whether it is
-apply-ready, and a diff. See [docs/ci.md](docs/ci.md). The same thing runs
-locally:
+- removing redundant `DISTINCT`
+- removing redundant `IS NOT NULL` filters
+- removing unused `LEFT JOIN`s
+- removing FK-backed unused `INNER JOIN`s
+- simplifying `COUNT(DISTINCT col)` when `col` is unique and non-null
+- removing accepted-values filters and simplifying accepted-values `CASE`
+- collapsing narrow `GROUP BY` queries over trusted unique keys
+- pushing predicates through simple projection subqueries
 
-```bash
-qseal dbt scan transform/snowflake-dbt --changed-since origin/main --format markdown
-```
-
-## The three tiers
-
-| Tier | Engine | Dependencies | Use |
-|---|---|---|---|
-| **Deterministic** | Hand-written rules + rule-replay verification | Pure Python (`pip install qseal`) | The CI scanner. Runs anywhere, no external solvers. |
-| **Prover-backed** | + [QED](https://github.com/qed-solver) and [SQLSolver](https://github.com/SJTU-IPADS/SQLSolver) equivalence provers | Rust/Java toolchain | Verifies general rewrites beyond the rule shapes, with an independent proof. |
-| **LLM-generated** | + an LLM proposing candidates, gated by the prover cascade | Anthropic API key | Finds rewrites no rule encodes; every candidate is proven or discarded. |
-
-The deterministic tier is the product for a data team's CI. The upper tiers run
-out of band. Across two production dbt corpora, the LLM+prover pipeline proved
-**284 of 406** generated candidates safe (282/400 on GitLab alone, 71%) and
-refuted **zero** — see [docs/llm-candidates.md](docs/llm-candidates.md).
-
-## What "proven" means
-
-QuerySeal is a portfolio of sound verifiers; a finding is proven if **any** of
-them certifies it, and the source is always reported:
-
-- **builtin** — the rewritten query matches what one of QuerySeal's
-  hand-written rules would produce after IR normalization. Sound if the rules
-  are sound (rule-replay, not an independent proof). Reported as
-  `VERIFIED_BY_RULE`.
-- **SQLSolver / QED** — independent formal equivalence provers (U-expressions /
-  Q-expressions over SMT). Reported as `SOLVER_PROVEN_EQUIVALENT`.
-- **VeriEQL** — a bounded *refuter*: it produces a counterexample database when
-  two queries differ. A counterexample soundly disproves equivalence; finding
-  none up to the bound is evidence, never a proof. (CC BY-NC-SA — never
-  bundled; see [docs/verieql-spike.md](docs/verieql-spike.md).)
-
-Every constraint-dependent rewrite is conditional on a *time-varying* data
-contract: if QuerySeal removes a `DISTINCT` because a column is unique, the dbt
-`unique` test must keep running or data drift can invalidate the rewrite. Scan
-output therefore names the **required ongoing tests** for each finding.
+The proof is conditional. If a rewrite depends on a dbt `unique`, `not_null`,
+`relationships`, or `accepted_values` test, that test must keep passing.
 
 ## Install
 
-```bash
-uv sync   # development
-```
-
-The deterministic tier is a pure-Python package; the prover and LLM tiers need
-external toolchains and keys (see the docs below).
-
-## Examples
-
-### Redundant DISTINCT removal — the canonical premise-enabled rewrite
-
-```sql
-SELECT DISTINCT user_id FROM dim_users;
-```
-
-```yaml
-# dbt schema.yml — the unique + not_null tests are the trusted premise
-models:
-  - name: dim_users
-    columns:
-      - name: user_id
-        tests: [unique, not_null]
-```
+From a checkout:
 
 ```bash
-uv run qseal suggest examples/dbt/distinct.sql --schema examples/dbt/schema.yml
-# Result: PROVEN_EQUIVALENT  (remove_redundant_distinct)
+uv sync
+uv run qseal --help
 ```
 
-The `unique` + `not_null` tests become the premise; removing the `DISTINCT` is
-proven safe *because* of them. (Unique alone is not enough — a NULL-exempt dbt
-unique test still allows duplicate NULLs, so QuerySeal requires the column be
-non-null too.)
-
-Composite dbt-utils uniqueness tests are supported too: a
-`dbt_utils.unique_combination_of_columns` test plus `not_null` on each key
-column can prove `DISTINCT` redundant when the projection contains that key.
-
-### COUNT(DISTINCT) simplification
-
-```sql
-SELECT COUNT(DISTINCT user_id) AS unique_users
-FROM dim_users;
-```
-
-With `dim_users.user_id` trusted unique and non-null, QuerySeal can rewrite the
-aggregate to `COUNT(user_id)` (`remove_redundant_count_distinct`).
-
-### Accepted-values filter removal
-
-```sql
-SELECT order_id
-FROM orders
-WHERE status IN ('placed', 'shipped');
-```
-
-With `accepted_values` proving that `status` can only be `placed` or `shipped`
-and `not_null` proving NULL rows cannot appear, the filter is a no-op
-(`remove_redundant_accepted_values_filter`).
-
-The same premise can simplify searched projection `CASE` expressions when a
-branch is unreachable or the first reachable branch is always selected
-(`simplify_accepted_values_case`).
-
-### Unique GROUP BY collapse
-
-```sql
-SELECT user_id, MAX(email) AS email
-FROM dim_users
-GROUP BY user_id;
-```
-
-With `dim_users.user_id` trusted unique and non-null, each group has at most one
-row, so supported single-row aggregates such as `MAX`, `MIN`, and `ANY_VALUE`
-can collapse to the direct column value (`collapse_unique_group_by`).
-
-### Unused LEFT JOIN elimination
-
-```sql
-SELECT f.user_id, f.revenue
-FROM fact_orders f
-LEFT JOIN dim_users u ON f.user_id = u.user_id;
-```
-
-With `dim_users.user_id` unique, the join cannot duplicate or filter rows and
-nothing references `u` — so it is removed (`remove_unused_left_join`).
-
-### FK-backed INNER JOIN elimination
-
-```sql
-SELECT f.order_id, f.user_id
-FROM fact_orders f
-INNER JOIN dim_users u ON f.user_id = u.user_id;
-```
-
-With a dbt `relationships` test from `fact_orders.user_id` to
-`dim_users.user_id`, `not_null` on `fact_orders.user_id`, and `unique` on
-`dim_users.user_id`, the parent join cannot filter or duplicate child rows and
-can be removed when no parent columns are referenced
-(`remove_foreign_key_inner_join`).
-
-Other built-in rules: redundant `IS NOT NULL` removal, predicate pushdown, and
-`JOIN`+`DISTINCT` -> `EXISTS`.
-
-## Verifying a specific pair, or refuting one
+After the package is published, the intended quick paths are:
 
 ```bash
-# Prove a rewrite with an external solver
-qseal check original.sql rewritten.sql --schema schema.yml --verifier qed
-
-# Search for a counterexample database that disproves a pair
-qseal refute original.sql rewritten.sql --schema schema.yml --verieql-dir /path/to/VeriEQL
+uvx qseal --help
+pipx install qseal
 ```
 
-`check --fail-on unproven` exits nonzero unless the pair is certified — the
-contract for gating untrusted (e.g. LLM-generated) candidates.
+The default scanner, corpus runner, and DuckDB benchmark tools are pure Python.
+Optional external solver integrations require user-supplied toolchains:
 
-## Product demo flow
+- **SQLSolver**: optional independent equivalence prover; Apache 2.0 upstream.
+- **QED**: optional independent equivalence prover; MIT/Apache-compatible
+  upstream components.
+- **VeriEQL**: optional bounded refuter for research/evaluation only. It is
+  CC BY-NC-SA 4.0 and is not bundled, vendored, or part of a commercial path.
 
-The compact demo path is:
+## Quick Demos
+
+Suggest a rewrite for one query:
+
+```bash
+uv run qseal suggest examples/dbt/distinct.sql \
+  --schema examples/dbt/schema.yml \
+  --all
+```
+
+Scan a small dbt-like fixture and produce a privacy-preserving intake report:
+
+```bash
+uv run qseal dbt intake tests/fixtures/dbt_projects/yield_pack
+```
+
+Scan the product demo project for advisory findings:
 
 ```bash
 uv run qseal dbt scan examples/product_demo/dbt_project --format text
-uv run qseal candidates evidence examples/product_demo/original.sql \
-  --candidates-dir examples/product_demo/candidates \
-  --schema examples/product_demo/dbt_project/models/schema.yml
-uv run qseal benchmark examples/product_demo/original.sql \
-  examples/product_demo/candidates/001_remove_distinct.sql \
-  --setup examples/product_demo/setup.sql
 ```
 
-The dbt scan finds a guarded `DISTINCT` removal plus guarded `LEFT JOIN` and
-FK-backed `INNER JOIN` removals. The join findings are the deterministic proof
-side of the Snowflake Tier-3 dbt demo below.
-
-With Snowflake credentials configured, the product-shaped Tier-3 demo benchmarks
-dbt-like join-elimination rewrites on Snowflake:
+Run a tiny rewrite-policy corpus experiment:
 
 ```bash
-uv run qseal benchmark-suite snowflake-dbt-demo snowflake-dbt-demo-run
+uv run qseal corpus run /tmp/qseal-corpus-smoke \
+  --task redundant-distinct-users \
+  --strategy fixed_order \
+  --strategy greedy \
+  --warmups 0 \
+  --repetitions 1
 ```
 
-The broader repeatable Tier-3 family suite tests which rewrite classes survive
-Snowflake's optimizer and execution model:
+## Mode A: dbt Scanner
 
-```bash
-uv run qseal benchmark-suite snowflake-family snowflake-family-run
-```
+The dbt scanner is an advisory workflow for data projects. It scans dbt model
+SQL, reads nearby `schema.yml` / `.yaml` tests, and reports proven-safe rewrite
+opportunities. It can emit text, JSON, markdown, diffs, patch files, and
+redacted intake artifacts.
 
-See [docs/product-demo.md](docs/product-demo.md) for the full narrative and
-what claims the demo should and should not make. See
-[docs/candidate-evidence-ci.md](docs/candidate-evidence-ci.md) for the CI shape
-when candidate SQL is generated by a human, LLM, or another tool.
-
-For private dbt projects, generate an aggregate intake artifact that can be
-shared without source SQL, model names, file paths, diffs, raw unsupported
-reasons, or literal accepted values:
+Recommended first command for a private project:
 
 ```bash
 uv run qseal dbt intake . --use-compiled --report-file qseal-intake.json
 ```
 
-## The LLM + prover pipeline
+The intake artifact is aggregate-only. It omits SQL, model names, file paths,
+diffs, raw unsupported reasons, and literal accepted values. It keeps the useful
+fit signals: scanned model count, silent model count, proven finding count, rule
+counts, required test categories, redacted unsupported reason categories, and
+apply-readiness counts.
+
+For local advisory review:
 
 ```bash
-qseal llm generate PROJECT --out bundles/        # premise-targeted candidates
-qseal llm verify bundles/ --qed --report-file report.json
-qseal llm benchmark report.json bundles/ --report-file bench.json   # Tier-1 DuckDB
-qseal llm explain   report.json bundles/ --report-file plan.json     # Tier-2 Snowflake EXPLAIN
+uv run qseal dbt scan . --all --report-file qseal-report.json
+uv run qseal dbt scan . --use-compiled --all --report-file qseal-compiled-report.json
 ```
 
-The generator proposes; the prover cascade gates; the evidence layers rank
-proven rewrites by measured benefit. See
-[docs/llm-candidates.md](docs/llm-candidates.md) and
-[docs/performance-evidence.md](docs/performance-evidence.md). Verification fans
-out across containers via [Modal](docs/llm-candidates.md) (full corpus in ~70s).
+For CI today, use the CLI in your workflow. The repository contains workflow
+examples, but the project should not be treated as a published Marketplace
+Action yet. See [docs/github-actions.md](docs/github-actions.md) and
+[docs/ci.md](docs/ci.md).
 
-## Scope
+## Mode B: Rewrite-Policy Gym
 
-QuerySeal models a deliberately small SQL subset and grows it conservatively.
-Currently supported:
+The policy/research side exposes QuerySeal's rewrite rules as a finite action
+space. An environment step proposes one rewrite action, verifies semantic
+safety, optionally benchmarks the transition on DuckDB, and records the reward.
 
-- direct / star / aliased scalar (incl. window) projections
-- direct tables, simple subquery sources, non-recursive CTE pass-throughs
-- proven rewrites inside individual CTE bodies of larger `WITH` queries (even
-  when the outer query is itself outside the subset)
-- `WHERE` `AND` predicates, simple `EXISTS`, `INNER`/`LEFT JOIN` with one or
-  more `AND`ed column equalities, opaque `QUALIFY` (treated conservatively)
-- `GROUP BY` / aggregate / window projections (parsed; rewritten only where a
-  rule or prover applies)
-- trusted constraints from QuerySeal YAML or dbt `schema.yml`; dbt project scans
+This is for experiments in search, ranking, RL-style policy learning, and
+verified action selection. It is not production query optimization.
 
-Out of scope: `ORDER BY` / `LIMIT`, `OR` / `IN` / general subquery predicates,
-join reordering, recursive CTEs, UDFs, semi-structured `VARIANT` / `FLATTEN`,
-dbt manifest ingestion (backlog). Full detail in [docs/scope.md](docs/scope.md).
+Useful commands:
 
-## Docs
+```bash
+uv run qseal corpus run /tmp/qseal-run \
+  --strategy fixed_order \
+  --strategy random \
+  --strategy greedy \
+  --strategy beam \
+  --reward-margin 0.05
 
-- [CI integration](docs/ci.md) — the GitHub Action and `--changed-since`
-- [Candidate evidence CI](docs/candidate-evidence-ci.md) — gate untrusted
-  candidate SQL and upload evidence
-- [LLM candidates](docs/llm-candidates.md) — generate → verify → measure
-- [Product demo flow](docs/product-demo.md) — thesis, commands, and claims
-- [Performance evidence](docs/performance-evidence.md) — DuckDB, Snowflake
-  EXPLAIN, and Snowflake execution suites
-- [QED](docs/qed-spike.md) · [SQLSolver](docs/sqlsolver-spike.md) ·
-  [VeriEQL](docs/verieql-spike.md) — the prover/refuter backends
-- [Scope](docs/scope.md) · [Architecture](docs/architecture.md) ·
-  [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md)
+uv run qseal corpus export-trajectories \
+  /tmp/qseal-run/corpus-run.json \
+  --output /tmp/qseal-trajectories.jsonl
 
-The research surfaces — `qseal.environment.RewriteEnvironment`, the search
-baselines (`qseal.search`), and the bundled DuckDB task corpus
-(`qseal corpus`) — are documented in
+uv run qseal policy train-ranker \
+  /tmp/qseal-trajectories.jsonl \
+  --model-file /tmp/qseal-ranker.json
+```
+
+The bundled DuckDB corpus is deliberately small and controlled. That is useful
+for reproducibility and policy debugging, but it is not evidence that the same
+policy improves arbitrary production SQL. See
+[docs/rewrite-policy-gym.md](docs/rewrite-policy-gym.md),
 [docs/rewrite-environment.md](docs/rewrite-environment.md),
 [docs/search-baselines.md](docs/search-baselines.md), and
 [docs/task-corpus.md](docs/task-corpus.md).
+
+## What "Proven" Means
+
+QuerySeal reports how a finding was certified:
+
+- **builtin**: a hand-written rule replayed the same rewrite after parsing and
+  normalization. This is the default scanner path.
+- **SQLSolver / QED**: an external prover returned an equivalence result.
+- **VeriEQL**: a bounded refuter found a counterexample or did not find one up
+  to a bound. A counterexample is a sound disproof; bounded-OK is evidence, not
+  a proof.
+
+Runtime speed is separate from semantic safety. QuerySeal can benchmark proven
+pairs with DuckDB or Snowflake helpers, but performance evidence is diagnostic
+and workload-specific.
+
+## Supported Inputs
+
+The SQL subset is intentionally conservative:
+
+- direct table sources and simple subquery sources
+- narrow non-recursive CTE pass-through chains
+- direct, star, and simple aliased scalar projections
+- simple `WHERE` predicates joined by `AND`
+- simple `EXISTS`
+- `INNER JOIN` / `LEFT JOIN` with column equality predicates
+- qualified Snowflake relation names
+- selected `GROUP BY`, aggregate, window, and `QUALIFY` shapes where a parser or
+  rule explicitly supports them
+
+Trusted constraints can come from QuerySeal YAML or dbt `schema.yml` / `.yaml`.
+Supported dbt premise types include:
+
+- `unique`
+- `not_null`
+- `relationships`
+- `accepted_values`
+- `dbt_utils.unique_combination_of_columns`
+
+Out of scope includes full SQL equivalence, arbitrary subqueries, join
+reordering, recursive CTEs, UDFs, semi-structured `VARIANT` / `FLATTEN`, and any
+rewrite that QuerySeal cannot verify. Full detail: [docs/scope.md](docs/scope.md).
+
+## Candidate Verification
+
+If another tool, human, or model generates candidate SQL files, keep generation
+outside the trusted path and gate candidates with QuerySeal:
+
+```bash
+uv run qseal candidates evidence original.sql \
+  --candidates-dir generated-candidates \
+  --schema schema.yml \
+  --fail-on unproven \
+  --report-file qseal-candidate-evidence.json
+```
+
+Only `PROVEN_EQUIVALENT` candidates should be considered for review. See
+[docs/candidate-evidence-ci.md](docs/candidate-evidence-ci.md).
+
+## Documentation
+
+- [Scope](docs/scope.md): supported SQL, assumptions, and non-goals.
+- [Artifacts](docs/artifacts.md): JSON report contracts.
+- [GitHub workflow examples](docs/github-actions.md): CLI-based CI examples.
+- [Candidate evidence](docs/candidate-evidence-ci.md): verify generated SQL.
+- [Rewrite-policy gym](docs/rewrite-policy-gym.md): corpus, search, and policy
+  experiments.
+- [Performance evidence](docs/performance-evidence.md): benchmark tiers and
+  evidence limits.
+- [Product demo](docs/product-demo.md): product-shaped demo narrative.
+- [Roadmap](docs/roadmap.md): near-term premise/rewrite direction.
+- Solver notes: [SQLSolver](docs/sqlsolver-spike.md),
+  [QED](docs/qed-spike.md), [VeriEQL](docs/verieql-spike.md).
+
+## Public v0 Status
+
+This is an alpha research/prototype release. The useful public artifact is a
+reproducible verified-rewrite workbench, not a mature optimizer. If you try it
+on a real dbt project, start with `qseal dbt intake` and share the redacted
+artifact before sharing source SQL.

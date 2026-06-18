@@ -1,74 +1,116 @@
 # QuerySeal in CI
 
-The deterministic rule scanner runs in CI with no external solvers — a pure
-`pip install qseal`. On a pull request it scans only the dbt models the PR
-changed and comments the proven-safe rewrites it finds.
+The public-v0 CI path is the CLI. QuerySeal is not currently presented as a
+published GitHub Marketplace Action. Use a normal workflow step to install the
+package and run `qseal`.
 
-## GitHub Action
+The deterministic scanner has no external solver dependency. It can run on pull
+requests to produce advisory reports, markdown comments, or JSON artifacts.
 
-Add `.github/workflows/qseal.yml` to your dbt repo:
+## Advisory Scan
+
+This workflow records findings without failing the pull request:
 
 ```yaml
-name: qseal
+name: QuerySeal
+
 on:
   pull_request:
     paths:
       - "**/models/**/*.sql"
 
-permissions:
-  contents: read
-  pull-requests: write   # to post the findings comment
-
 jobs:
   scan:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # full history so --changed-since can diff
-      - uses: your-org/qseal@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
         with:
-          project: transform/snowflake-dbt        # path to the dbt project
-          base-ref: origin/${{ github.base_ref }}  # the PR's base branch
-          fail-on: none                            # or 'findings' to block the PR
-          comment: "true"
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install QuerySeal
+        run: uv tool install "qseal @ git+https://github.com/neelvad/qseal.git"
+
+      - name: Scan changed dbt models
+        run: |
+          qseal dbt scan . \
+            --changed-since origin/${{ github.base_ref }} \
+            --format markdown \
+            --report-file qseal-report.json
+
+      - name: Upload QuerySeal report
+        uses: actions/upload-artifact@v4
+        with:
+          name: qseal-report
+          path: qseal-report.json
 ```
 
-The action posts (and idempotently updates) a single PR comment marked with
-`<!-- qseal-scan -->`, grouping proven rewrites by review readiness and listing
-the dbt tests that keep each proof valid, apply-readiness, a recommendation, and
-a diff. Each rewrite returns the same rows under the listed dbt-test assumptions;
-no performance claim is made.
+Once QuerySeal is published to PyPI, the install step can become
+`uv tool install qseal`. For a repository that vendors QuerySeal or runs from a
+checkout, replace the install step with `uv sync --locked` and use
+`uv run qseal ...`.
 
-### Inputs
+## Finding-Gated Scan
 
-| Input | Default | Meaning |
-|---|---|---|
-| `project` | `.` | Path to the dbt project (contains `models/`). |
-| `base-ref` | `""` | Scan only models changed vs this git ref. Empty scans all models. |
-| `fail-on` | `none` | `findings` fails the check when proven rewrites exist. |
-| `comment` | `true` | Post/update a PR comment. |
-| `dialect` | `snowflake` | `snowflake` or `duckdb`. |
-
-## Without the Action
-
-The Action is a thin wrapper over the CLI. Any CI system can run:
+Use `--fail-on findings` when the policy is "do not merge when a proven rewrite
+opportunity exists." `UNKNOWN` and `UNSUPPORTED` results do not fail this
+policy.
 
 ```bash
-pip install qseal
-qseal dbt scan transform/snowflake-dbt \
-  --changed-since origin/main --format markdown
+qseal dbt scan . \
+  --changed-since origin/main \
+  --format json \
+  --report-file qseal-report.json \
+  --fail-on findings
 ```
 
-`--format json --fail-on findings` gives a machine-readable report and a
-nonzero exit when proven rewrites are found.
+## Intake Artifact
+
+For private projects or early design-partner conversations, prefer a redacted
+intake artifact before sharing raw scan output:
+
+```bash
+qseal dbt intake . --use-compiled --report-file qseal-intake.json
+```
+
+The intake artifact omits SQL, model names, file paths, diffs, raw unsupported
+reasons, and literal accepted values.
+
+## Markdown Comments
+
+`qseal dbt scan --format markdown` emits a GitHub-comment-friendly markdown
+report with a stable `<!-- qseal-scan -->` marker. You can post or update that
+comment using your own workflow logic, `gh`, or a small script.
+
+The repository contains `scripts/action_entrypoint.py`, but treat it as a thin
+example wrapper around the CLI until an Action release is explicitly published.
+
+## Compiled dbt SQL
+
+For Jinja-heavy projects, compile first and scan compiled SQL:
+
+```bash
+dbt compile
+qseal dbt scan . --use-compiled --all --report-file qseal-compiled-report.json
+```
+
+Compiled scan findings are useful for review, but they are not directly
+apply-ready because QuerySeal verified compiled SQL rather than source model
+text.
 
 ## Tiers
 
-This page covers the **deterministic** tier (hand-written rules, zero external
-dependencies) — the right default for CI. The prover-backed and
-LLM-generated tiers (`qseal llm ...`) need the QED/SQLSolver toolchain and
-an API key and are run out-of-band, not on every PR. See
-[llm-candidates.md](llm-candidates.md).
+This page covers the deterministic scanner. Prover-backed workflows with QED or
+SQLSolver, and candidate-generation workflows with an LLM, should run
+out-of-band unless you have explicitly provisioned those toolchains in CI.

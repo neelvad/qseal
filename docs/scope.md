@@ -25,7 +25,13 @@ artifact types are:
 - `candidate_generation`
 - `candidate_verifications`
 - `candidate_run`
+- `candidate_evidence`
 - `dbt_scan`
+- `dbt_intake`
+- `duckdb_benchmark`
+- `snowflake_benchmark`
+- `duckdb_fixture`
+- corpus and policy training/evaluation artifacts
 
 The `verification` artifact also includes:
 
