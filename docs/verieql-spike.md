@@ -14,10 +14,40 @@ candidate generator concrete corrective feedback.
 
 ## License
 
-VeriEQL is licensed **CC BY-NC-SA 4.0 (NonCommercial)**. QuerySeal must not
-bundle, vendor, or depend on it. Integration drives a separate user-supplied
-checkout, mirroring the SQLSolver arrangement. Revisit before any commercial
-use of the combined workflow.
+VeriEQL is licensed **CC BY-NC-SA 4.0** ([license.md](https://github.com/VeriEQL/VeriEQL/blob/main/license.md)),
+verified upstream 2026-06-18. This is the one backend QuerySeal touches that is
+**not** commercially usable, and the restriction is broader than "don't ship the
+binary":
+
+- **NonCommercial covers use, not just redistribution.** CC BY-NC-SA 4.0 defines
+  NonCommercial as "not primarily intended for or directed toward commercial
+  advantage or monetary compensation." Running VeriEQL inside a pipeline whose
+  purpose is building or validating a commercial product is plausibly commercial
+  use even if the binary is never distributed. "Internal use only" is not a
+  reliable defense for an NC license.
+- **ShareAlike is viral.** Any *adaptation* of VeriEQL (wrapping its encoder,
+  modifying it, deriving code from it) must itself be released under
+  CC BY-NC-SA 4.0, which would force a NonCommercial license onto whatever it is
+  combined with.
+
+Rules for this repo:
+
+- VeriEQL stays entirely on the **research/evaluation** side: this spike,
+  refutation experiments, and benchmarking QuerySeal's own provers against it.
+- It must **not** appear in the commercial product or in any pipeline used to
+  develop the commercial product. Integration drives a separate user-supplied
+  checkout (`VERIEQL_DIR`); QuerySeal never bundles, vendors, or depends on it.
+- VeriEQL is also the only **constraint-native** backend, so the commercial
+  tiers must route FK/constraint-dependent verification through SQLSolver and
+  QED instead — see below.
+- To use VeriEQL commercially, obtain a separate commercial license from the
+  authors (He, Zhao, Wang, Wang). This is a license-file reading, not legal
+  advice; clear the NC-internal-use boundary with counsel before any launch.
+
+For contrast, the prover backends are permissive and commercial-safe:
+**SQLSolver** is Apache 2.0, and **QED** is MIT (prover) plus Apache 2.0
+(parser) — all verified upstream 2026-06-18. Preserve their LICENSE/NOTICE
+files anywhere they are redistributed.
 
 ## Running the Spike
 
