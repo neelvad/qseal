@@ -116,6 +116,77 @@ def _snowflake_suite_spec_for_summary(
     return None
 
 
+def render_dbt_intake_report(report: dict) -> Text:
+    summary = report["summary"]
+    output = Text()
+    output.append("dbt intake report (redacted)\n", style="bold")
+    output.append(
+        "Redaction: aggregate only; no SQL, paths, model names, diffs, raw reasons, "
+        "or literal values.\n"
+    )
+    output.append(f"Dialect: {report['dialect']}\n")
+    output.append(
+        f"Scanned models: {summary['model_count']}  "
+        f"visible results: {summary['result_count']}  "
+        f"silent: {summary['silent_model_count']}\n"
+    )
+    output.append(
+        f"Proven findings: {summary['proven_finding_count']}  "
+        f"proven models: {summary['proven_model_count']}  "
+        f"apply-ready models: {summary['apply_ready_model_count']}\n"
+    )
+    output.append(
+        "Rates: "
+        f"result {summary['result_rate']:.3f}, "
+        f"proven models/scanned {summary['proven_models_per_scanned_model']:.3f}, "
+        f"proven findings/scanned {summary['proven_findings_per_scanned_model']:.3f}\n"
+    )
+
+    _append_count_section(output, "Statuses", summary["status_counts"])
+    _append_count_section(output, "Rules", summary["rule_counts"])
+    _append_count_section(output, "Reason categories", summary["reason_category_counts"])
+    _append_count_section(
+        output,
+        "Required test categories",
+        summary["required_test_category_counts"],
+    )
+    _append_count_section(
+        output,
+        "Apply blockers",
+        summary["apply_blocker_category_counts"],
+    )
+
+    chain = report["chain_summary"]
+    if chain["verified_step_count"]:
+        output.append("Chains:\n", style="bold")
+        output.append(
+            f"  models: {chain['model_count_with_chain']}; "
+            f"verified steps: {chain['verified_step_count']}; "
+            f"max steps/model: {chain['max_observed_steps']}\n"
+        )
+
+    if report["rule_families"]:
+        output.append("Rule families:\n", style="bold")
+        for family in report["rule_families"]:
+            output.append(
+                f"  {family['rule_name']}: "
+                f"{family['proven_count']} proven / {family['count']} observed"
+            )
+            if family["apply_ready_count"]:
+                output.append(f", {family['apply_ready_count']} apply-ready")
+            output.append("\n")
+
+    return output
+
+
+def _append_count_section(output: Text, title: str, counts: dict[str, int]) -> None:
+    if not counts:
+        return
+    output.append(f"{title}:\n", style="bold")
+    for key, count in counts.items():
+        output.append(f"  {key}: {count}\n")
+
+
 def render_candidate_evidence_report(report: CandidateEvidenceReport) -> Text:
     output = Text()
     output.append("Candidate evidence\n", style="bold")

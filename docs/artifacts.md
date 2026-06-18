@@ -273,3 +273,31 @@ Important fields:
 - `rewrite_chain`: present for `qseal dbt scan --chain`; includes `status`,
   `reason`, `step_count`, `original_sql`, `final_sql`, and per-step
   suggestions with `required_tests`
+
+## `dbt_intake`
+
+Emitted by:
+
+```bash
+qseal dbt intake ... --format json
+qseal dbt intake ... --report-file qseal-intake.json
+```
+
+This is the privacy-preserving companion to `dbt_scan`. It is meant for an
+initial design-partner or public-repo fit check when the project owner should
+not share source SQL.
+
+The artifact intentionally omits SQL, model names, file paths, diffs, raw
+unsupported reasons, and literal accepted values. It keeps only aggregate
+fields:
+
+- `redaction`: machine-readable booleans describing the omitted data classes
+- `scan_options`: dialect, rule set, compiled SQL mode, and chain mode
+- `summary.model_count`, `result_count`, `silent_model_count`
+- `summary.proven_model_count`, `proven_finding_count`,
+  `apply_ready_model_count`
+- `summary.status_counts`, `rule_counts`, `reason_category_counts`,
+  `required_test_category_counts`, and `apply_blocker_category_counts`
+- `chain_summary`: aggregate rewrite-chain step counts
+- `rule_families`: per-rule aggregate observed/proven/apply-ready counts and
+  required test categories

@@ -38,6 +38,7 @@ from qseal.corpus import (
     write_corpus_summary,
 )
 from qseal.dbt.git_diff import GitDiffError, changed_model_paths
+from qseal.dbt.intake import build_dbt_intake_report
 from qseal.dbt.project import (
     DbtProjectDiscoveryError,
     discover_compiled_sql_path,
@@ -73,6 +74,7 @@ from qseal.report.json import (
     render_candidate_generation_json,
     render_candidate_run_json,
     render_candidate_verifications_json,
+    render_dbt_intake_json,
     render_dbt_scan_json,
     render_duckdb_benchmark_json,
     render_duckdb_fixture_json,
@@ -88,6 +90,7 @@ from qseal.report.patch import apply_dbt_scan_patches, write_dbt_scan_patch_resu
 from qseal.report.text import (
     render_candidate_evidence_report,
     render_candidate_verifications_report,
+    render_dbt_intake_report,
     render_dbt_scan_diff_report,
     render_dbt_scan_report,
     render_duckdb_benchmark_report,
@@ -2392,6 +2395,113 @@ def dbt_scan(
 
     if fail_on == "findings" and result.has_proven_findings():
         raise click.exceptions.Exit(1)
+
+
+@dbt_group.command(name="intake")
+@click.argument("project_path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option(
+    "--chain",
+    "use_chain",
+    is_flag=True,
+    help="Repeatedly apply verified rewrites per model until a fixed point is reached.",
+)
+@click.option(
+    "--max-steps",
+    "max_chain_steps",
+    type=click.IntRange(min=1),
+    default=8,
+    show_default=True,
+    help="Maximum verified rewrite steps per model when --chain is enabled.",
+)
+@click.option(
+    "--rule",
+    "selected_rules",
+    multiple=True,
+    type=RuleChoice,
+    help="Only run a specific rewrite rule. Can be passed more than once.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=OutputFormat,
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+@click.option(
+    "--report-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the redacted JSON intake artifact to this file.",
+)
+@click.option(
+    "--compiled-dir",
+    "compiled_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Directory containing compiled dbt SQL files to scan instead of models/ SQL.",
+)
+@click.option(
+    "--use-compiled",
+    is_flag=True,
+    help="Auto-discover and scan compiled SQL under target/compiled/.",
+)
+@click.option(
+    "--dialect",
+    type=DialectChoice,
+    default=DEFAULT_DIALECT,
+    show_default=True,
+    help="SQL dialect used to parse model SQL.",
+)
+def dbt_intake(
+    project_path: Path,
+    use_chain: bool,
+    max_chain_steps: int,
+    selected_rules: tuple[str, ...],
+    output_format: str,
+    report_file: Path | None,
+    compiled_path: Path | None,
+    use_compiled: bool,
+    dialect: str,
+) -> None:
+    """Generate a privacy-preserving aggregate dbt scan report."""
+    if compiled_path is not None and use_compiled:
+        raise click.ClickException("--compiled-dir and --use-compiled cannot be used together.")
+
+    rules = select_rules(selected_rules)
+    try:
+        if use_compiled:
+            compiled_path = discover_compiled_sql_path(project_path)
+        scan = scan_dbt_project(
+            project_path,
+            rules=rules,
+            include_all=True,
+            compiled_path=compiled_path,
+            dialect=dialect,
+            chain=use_chain,
+            max_chain_steps=max_chain_steps,
+        )
+    except DbtProjectDiscoveryError as error:
+        raise click.ClickException(str(error)) from error
+
+    intake = build_dbt_intake_report(
+        scan,
+        rules=rules,
+        include_all=True,
+        compiled_sql=compiled_path is not None,
+        use_compiled_auto=use_compiled,
+        chain=use_chain,
+        max_chain_steps=max_chain_steps,
+    )
+    json_report = render_dbt_intake_json(intake)
+
+    if output_format == "json":
+        click.echo(json_report)
+    else:
+        console.print(render_dbt_intake_report(intake))
+
+    if report_file is not None:
+        report_file.parent.mkdir(parents=True, exist_ok=True)
+        report_file.write_text(f"{json_report}\n")
+        click.echo(f"Intake report file written: {report_file}", err=True)
 
 
 @main.command()

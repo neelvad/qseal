@@ -205,6 +205,10 @@ def render_dbt_scan_json(
     return _dumps(payload)
 
 
+def render_dbt_intake_json(report: dict[str, Any]) -> str:
+    return _dumps(report)
+
+
 def _patches_by_model(
     patch_results: Sequence[PatchWriteResult],
 ) -> dict[str, list[dict[str, str]]]:

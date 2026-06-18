@@ -86,6 +86,27 @@ If an individual repository has an unexpected layout or QuerySeal rejects it
 before producing a report, the script records `raw-skipped.txt` and continues to
 the next project.
 
+## Privacy-Preserving Intake
+
+For a private design-partner project, start with an aggregate intake artifact:
+
+```bash
+uv run qseal dbt intake . --report-file qseal-intake.json
+uv run qseal dbt intake . --use-compiled --report-file qseal-compiled-intake.json
+```
+
+`dbt intake` runs the scanner in all-results mode, then strips the fields that
+would expose private project details. The JSON artifact omits SQL, model names,
+file paths, diffs, raw unsupported reasons, and literal accepted values. It
+keeps the funnel metrics needed for a first-fit review: scanned model count,
+silent model count, proven finding count, rule counts, status counts, redacted
+unsupported reason categories, required dbt test categories, apply-readiness
+counts, and rewrite-chain totals.
+
+Use this before asking for a full corpus or source checkout. If the intake
+shows useful rule families and acceptable unsupported categories, the next step
+is a more detailed scan report under an NDA or in the partner's own CI.
+
 ## Static Raw SQL Scan
 
 ```bash
