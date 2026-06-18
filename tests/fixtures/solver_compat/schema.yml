@@ -24,3 +24,8 @@ tables:
   orders:
     columns:
       user_id: {}
+  stg_orders:
+    columns:
+      order_id: {}
+      user_id: {}
+      revenue: {}

@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from qseal.constraints.loader import load_constraint_catalog
 from qseal.constraints.model import (
     ConstraintCatalog,
     ForeignKeyConstraint,
@@ -8,6 +9,8 @@ from qseal.constraints.model import (
 )
 from qseal.rewrites.base import VerificationStatus
 from qseal.verifier.backends.verieql import VeriEqlBackend, _build_request
+
+SOLVER_FIXTURE = Path(__file__).parent / "fixtures" / "solver_compat"
 
 UNIQUE_NON_NULL_USERS = ConstraintCatalog(
     tables={
@@ -121,6 +124,61 @@ def test_build_request_resolves_star_passthrough_ctes() -> None:
     )
 
     assert request["schema"] == {"STG_USERS": {"USER_ID": "INT"}}
+
+
+def test_build_request_resolves_explicit_cte_projection_sources() -> None:
+    request = _build_request(
+        (
+            "WITH orders AS (SELECT order_id, user_id FROM stg_orders), "
+            "users AS (SELECT user_id FROM dim_users) "
+            "SELECT order_id FROM orders JOIN users "
+            "ON orders.user_id = users.user_id"
+        ),
+        (
+            "WITH orders AS (SELECT order_id, user_id FROM stg_orders), "
+            "users AS (SELECT user_id FROM dim_users) "
+            "SELECT order_id FROM orders JOIN users "
+            "ON orders.user_id = users.user_id"
+        ),
+        ConstraintCatalog(
+            tables={
+                "stg_orders": TableConstraints(
+                    columns={"order_id": {}, "user_id": {}},
+                ),
+                "dim_users": TableConstraints(
+                    columns={"user_id": {}},
+                ),
+            }
+        ),
+        "snowflake",
+        2,
+    )
+
+    assert not isinstance(request, str)
+    assert request["schema"] == {
+        "DIM_USERS": {"USER_ID": "INT"},
+        "STG_ORDERS": {"ORDER_ID": "INT", "USER_ID": "INT"},
+    }
+
+
+def test_solver_fixture_resolves_explicit_cte_projection_sources() -> None:
+    request = _build_request(
+        (SOLVER_FIXTURE / "cte_projection_attribution" / "original.sql").read_text(),
+        (SOLVER_FIXTURE / "cte_projection_attribution" / "rewritten.sql").read_text(),
+        load_constraint_catalog(SOLVER_FIXTURE / "schema.yml", "auto"),
+        "snowflake",
+        2,
+    )
+
+    assert not isinstance(request, str)
+    assert request["schema"] == {
+        "DIM_USERS": {"USER_ID": "INT"},
+        "STG_ORDERS": {
+            "ORDER_ID": "INT",
+            "REVENUE": "INT",
+            "USER_ID": "INT",
+        },
+    }
 
 
 def test_build_request_abstains_on_ambiguous_unqualified_columns() -> None:

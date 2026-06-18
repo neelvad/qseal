@@ -61,6 +61,13 @@ The funnel also reprioritizes earlier ideas with data:
   typing are now justified for QED**, where for SQLSolver they barely
   mattered (1 parse error in 400).
 
+2026-06-18 follow-up: schema attribution now considers only sources selected
+by the current scope when resolving unqualified columns. This fixes a concrete
+false ambiguity where a later CTE body read one base table, but sqlglot exposed
+earlier CTE definitions in `scope.sources`; explicit CTE projection fixtures now
+attribute cleanly. The broader schema-extraction backlog remains for genuinely
+ambiguous multi-source scopes and richer CTE lineage.
+
 ## Conclusion
 
 Integrate QED as a third prover backend (cascade: builtin -> SQLSolver ->

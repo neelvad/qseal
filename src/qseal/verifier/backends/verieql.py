@@ -248,11 +248,12 @@ def _attribute_column(
     constraints: ConstraintCatalog,
 ) -> str | None:
     if column.table:
-        source = scope.sources.get(column.table)
+        selected = _selected_sources(scope)
+        source = selected.get(column.table, scope.sources.get(column.table))
         if source is None:
             return f"Could not resolve relation {column.table!r} for column {column.name!r}."
     else:
-        sources = list(scope.sources.values())
+        sources = list(_selected_sources(scope).values())
         if len(sources) == 1:
             source = sources[0]
         else:
@@ -279,6 +280,20 @@ def _attribute_column(
             source = candidates[0]
 
     return _attribute_to_source(column.name, source, schema)
+
+
+def _selected_sources(scope: Scope) -> dict[str, exp.Table | Scope]:
+    """Relation sources actually selected by this scope.
+
+    sqlglot keeps previously defined CTEs in ``scope.sources`` so later CTE
+    bodies can resolve them if referenced. For unqualified column ownership,
+    those dormant CTEs must not compete with the tables the current SELECT
+    actually reads from.
+    """
+    return {
+        name: source
+        for name, (_, source) in scope.selected_sources.items()
+    }
 
 
 def _may_define(
