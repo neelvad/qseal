@@ -93,9 +93,6 @@ reasons, and literal accepted values.
 report with a stable `<!-- qseal-scan -->` marker. You can post or update that
 comment using your own workflow logic, `gh`, or a small script.
 
-The repository contains `scripts/action_entrypoint.py`, but treat it as a thin
-example wrapper around the CLI until an Action release is explicitly published.
-
 ## Compiled dbt SQL
 
 For Jinja-heavy projects, compile first and scan compiled SQL:
