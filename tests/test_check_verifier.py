@@ -114,6 +114,26 @@ def test_check_proves_accepted_values_case_simplification() -> None:
     assert result.rule_name == "simplify_accepted_values_case"
 
 
+def test_check_proves_unique_group_by_collapse() -> None:
+    original = parse_select(
+        "SELECT user_id, MAX(email) AS email FROM users GROUP BY user_id"
+    )
+    rewritten = parse_select("SELECT user_id, email AS email FROM users")
+    constraints = ConstraintCatalog(
+        tables={
+            "users": TableConstraints(
+                columns={"user_id": ColumnConstraint(nullable=False)},
+                unique=[("user_id",)],
+            )
+        }
+    )
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "collapse_unique_group_by"
+
+
 def test_check_proves_distinct_removal_with_matching_where_predicates() -> None:
     original = parse_select("SELECT DISTINCT user_id FROM users WHERE status = 'active'")
     rewritten = parse_select("SELECT user_id FROM users WHERE status = 'active'")

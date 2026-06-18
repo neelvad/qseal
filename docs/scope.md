@@ -120,6 +120,14 @@ premises prove a branch unreachable or prove the first reachable branch always
 selected. The first version supports direct table queries without joins,
 `GROUP BY`, `HAVING`, or `QUALIFY`.
 
+### `collapse_unique_group_by`
+
+Removes `GROUP BY` when the grouping columns contain a trusted non-null unique
+key, and rewrites `MAX(col)`, `MIN(col)`, or `ANY_VALUE(col)` projections to the
+direct column value. The first version supports direct table queries with no
+joins, `HAVING`, or `QUALIFY`; it intentionally does not rewrite `COUNT`,
+`SUM`, or arbitrary aggregate expressions yet.
+
 ### `predicate_pushdown`
 
 Pushes an outer filter into a simple projection subquery when the filtered

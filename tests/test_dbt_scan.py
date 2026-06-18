@@ -197,6 +197,40 @@ models:
     assert suggestion.rewritten_sql == "SELECT 'ok' AS status_group\nFROM orders;"
 
 
+def test_scan_dbt_project_collapses_unique_group_by(
+    tmp_path: Path,
+) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "users.sql").write_text(
+        "SELECT user_id, MAX(email) AS email FROM users GROUP BY user_id"
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: users
+    columns:
+      - name: user_id
+        tests:
+          - unique
+          - not_null
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.proven_finding_count() == 1
+    suggestion = result.results[0].suggestions[0]
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rule_name == "collapse_unique_group_by"
+    assert required_guarding_tests(suggestion) == (
+        "dbt test: unique on users.user_id",
+        "dbt test: not_null on users.user_id",
+    )
+    assert suggestion.rewritten_sql == "SELECT user_id, email AS email\nFROM users;"
+
+
 def test_scan_dbt_project_merges_accepted_values_and_not_null(
     tmp_path: Path,
 ) -> None:

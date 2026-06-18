@@ -7,6 +7,7 @@ from qseal.rewrites.accepted_values_filter import RemoveRedundantAcceptedValuesF
 from qseal.rewrites.base import RewriteMatch, VerificationStatus
 from qseal.rewrites.count_distinct import RemoveRedundantCountDistinct
 from qseal.rewrites.distinct import RemoveRedundantDistinct
+from qseal.rewrites.group_by_unique import CollapseUniqueGroupBy
 from qseal.rewrites.join_distinct_exists import RewriteJoinDistinctToExists
 from qseal.rewrites.join_elimination import RemoveForeignKeyInnerJoin, RemoveUnusedLeftJoin
 from qseal.rewrites.not_null_filter import RemoveRedundantNotNullFilter
@@ -60,6 +61,15 @@ from qseal.rewrites.registry import apply_rewrite_match, available_rewrite_match
                 },
             )}),
             "projection:0",
+        ),
+        (
+            CollapseUniqueGroupBy(),
+            "SELECT user_id, MAX(email) AS email FROM users GROUP BY user_id",
+            ConstraintCatalog(tables={"users": TableConstraints(
+                columns={"user_id": {"nullable": False}},
+                unique=[("user_id",)],
+            )}),
+            "query:group_by",
         ),
         (
             RemoveUnusedLeftJoin(),

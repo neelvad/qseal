@@ -8,6 +8,7 @@ from qseal.rewrites.accepted_values_filter import RemoveRedundantAcceptedValuesF
 from qseal.rewrites.base import RewriteMatch, RewriteSuggestion, VerificationStatus
 from qseal.rewrites.count_distinct import RemoveRedundantCountDistinct
 from qseal.rewrites.distinct import RemoveRedundantDistinct
+from qseal.rewrites.group_by_unique import CollapseUniqueGroupBy
 from qseal.rewrites.join_distinct_exists import RewriteJoinDistinctToExists
 from qseal.rewrites.join_elimination import RemoveForeignKeyInnerJoin, RemoveUnusedLeftJoin
 from qseal.rewrites.not_null_filter import RemoveRedundantNotNullFilter
@@ -45,6 +46,7 @@ DEFAULT_RULES: tuple[RewriteRule, ...] = (
     SimplifyAcceptedValuesCase(),
     RemoveRedundantDistinct(),
     RemoveRedundantCountDistinct(),
+    CollapseUniqueGroupBy(),
     PredicatePushdown(),
 )
 

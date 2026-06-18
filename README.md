@@ -149,6 +149,18 @@ The same premise can simplify searched projection `CASE` expressions when a
 branch is unreachable or the first reachable branch is always selected
 (`simplify_accepted_values_case`).
 
+### Unique GROUP BY collapse
+
+```sql
+SELECT user_id, MAX(email) AS email
+FROM dim_users
+GROUP BY user_id;
+```
+
+With `dim_users.user_id` trusted unique and non-null, each group has at most one
+row, so supported single-row aggregates such as `MAX`, `MIN`, and `ANY_VALUE`
+can collapse to the direct column value (`collapse_unique_group_by`).
+
 ### Unused LEFT JOIN elimination
 
 ```sql

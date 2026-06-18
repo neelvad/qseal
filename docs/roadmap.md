@@ -30,6 +30,7 @@ unbounded list of optimizer rewrites.
   - `COUNT(DISTINCT col)` to `COUNT(col)`
   - redundant accepted-values `IN (...)` filters
   - accepted-values CASE projection simplification
+  - narrow `GROUP BY` collapse over trusted non-null unique keys
   - predicate pushdown through simple projection subqueries
 - FK semantics keep premises explicit: relationships prove parent existence for
   non-null child values; child `not_null` and parent `unique` remain separate
@@ -50,8 +51,8 @@ unbounded list of optimizer rewrites.
      expression rewrites.
 
 2. **Broader Aggregates Over Unique Keys**
-   - Defer full `GROUP BY pk` collapse until aggregate expression semantics and
-     NULL behavior are covered carefully.
+   - Extend beyond the current safe `MAX`/`MIN`/`ANY_VALUE` single-row aggregate
+     collapse once expression semantics and type behavior are covered carefully.
 
 ## Warehouse Growth Axis
 

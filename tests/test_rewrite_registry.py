@@ -30,6 +30,7 @@ def test_registry_returns_rules_in_default_order() -> None:
         "simplify_accepted_values_case",
         "remove_redundant_distinct",
         "remove_redundant_count_distinct",
+        "collapse_unique_group_by",
         "predicate_pushdown",
     ]
 
@@ -63,5 +64,6 @@ def test_rule_names_returns_cli_choices() -> None:
         "simplify_accepted_values_case",
         "remove_redundant_distinct",
         "remove_redundant_count_distinct",
+        "collapse_unique_group_by",
         "predicate_pushdown",
     )
