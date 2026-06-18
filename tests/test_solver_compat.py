@@ -148,6 +148,27 @@ def test_sqlsolver_backend_schema_includes_unconstrained_fixture_tables(tmp_path
     assert "CREATE TABLE dim_users" in captured
 
 
+def test_sqlsolver_backend_schema_includes_foreign_key_premises(tmp_path: Path) -> None:
+    capture = tmp_path / "capture"
+    command = _fake_sqlsolver(tmp_path, "[EQ]", capture_path=capture)
+    constraints = load_constraint_catalog(FIXTURE / "schema.yml", "auto")
+    backend = SqlSolverBackend(solver_command=str(command))
+
+    result = backend.verify(
+        (FIXTURE / "fk_inner_join" / "original.sql").read_text(),
+        (FIXTURE / "fk_inner_join" / "rewritten.sql").read_text(),
+        constraints,
+    )
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    captured = capture.read_text()
+    assert "CREATE TABLE fact_orders" in captured
+    assert "user_id INT NOT NULL" in captured
+    assert "FOREIGN KEY (user_id) REFERENCES dim_users (user_id)" in captured
+    assert "CREATE TABLE dim_users" in captured
+    assert "user_id INT PRIMARY KEY" in captured
+
+
 def test_sqlsolver_backend_unqualifies_relations_to_match_schema(tmp_path: Path) -> None:
     capture = tmp_path / "capture"
     command = _fake_sqlsolver(tmp_path, "[EQ]", capture_path=capture)
@@ -204,6 +225,16 @@ def test_sqlsolver_schema_encodes_constraint_premises_soundly() -> None:
     assert "nickname INT PRIMARY KEY" not in schema
     assert "nickname INT NOT NULL" not in schema
     assert "nickname INT" in schema
+
+
+def test_sqlsolver_schema_encodes_foreign_keys() -> None:
+    constraints = load_constraint_catalog(FIXTURE / "schema.yml", "auto")
+
+    schema = _schema_sql(constraints, table_names={"fact_orders", "dim_users"})
+
+    assert "CREATE TABLE fact_orders" in schema
+    assert "FOREIGN KEY (user_id) REFERENCES dim_users (user_id)" in schema
+    assert "CREATE TABLE dim_users" in schema
 
 
 def test_sqlsolver_command_wrapper_reports_missing_jar() -> None:

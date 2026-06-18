@@ -395,6 +395,14 @@ def _build_constraints(
         table = constraints.table(table_name)
         if table is None:
             continue
+        for foreign_key in table.foreign_keys:
+            if foreign_key.ref_table in schema:
+                return [], (
+                    "Trusted foreign key "
+                    f"{table_name}.{foreign_key.columns} -> "
+                    f"{foreign_key.ref_table}.{foreign_key.ref_columns} "
+                    "cannot be encoded by the VeriEQL refuter yet."
+                )
 
         primary_columns: set[str] = set()
         for key in table.unique:

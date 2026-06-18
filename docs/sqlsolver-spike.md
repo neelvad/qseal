@@ -85,6 +85,7 @@ apt-get install -y openjdk-17-jdk ca-certificates curl
 CASE_NAME=all /qseal/scripts/run_sqlsolver_fixture.sh
 CASE_NAME=unsafe_distinct /qseal/scripts/run_sqlsolver_fixture.sh
 CASE_NAME=unused_left_join /qseal/scripts/run_sqlsolver_fixture.sh
+CASE_NAME=fk_inner_join /qseal/scripts/run_sqlsolver_fixture.sh
 ```
 
 The helper flattens each fixture query to one line because SQLSolver's CLI
@@ -122,6 +123,12 @@ unsafe_distinct: NEQ
 unused_left_join: EQ
 join_distinct_exists: EQ
 ```
+
+`fk_inner_join` was added after the first smoke pass to exercise FK-backed
+inner-join elimination. It emits a `FOREIGN KEY` DDL premise through both the
+direct SQLSolver fixture runner and QuerySeal's `sqlsolver` backend; rerun it
+inside the x86 SQLSolver container before treating that prover path as
+validated for FK rules.
 
 If `uname -m` prints `aarch64` while `file /sqlsolver/lib/libz3java.so` prints
 `x86-64`, restart Colima with `--arch x86_64`.

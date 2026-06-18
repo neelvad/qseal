@@ -1,6 +1,14 @@
 version: 2
 
 models:
+  - name: stg_orders
+    columns:
+      - name: user_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_users')
+              field: user_id
   - name: dim_users
     columns:
       - name: user_id

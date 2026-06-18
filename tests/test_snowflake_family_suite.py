@@ -93,19 +93,29 @@ def test_builds_snowflake_dbt_demo_case_with_trusted_assumptions() -> None:
         materialized_limit=25,
     )
 
-    assert len(cases) == 1
-    case = cases[0]
-    assert case.case_id == "materialized-1k-dbt_left_join"
-    assert case.rewrite_family == "dbt_left_join"
-    assert case.evidence_scope == "bounded_materialized_output"
-    assert "qseal_dbt_stg_orders" in case.setup_sql
-    assert "qseal_dbt_dim_users" in case.original_sql
-    assert "LEFT JOIN qseal_dbt_dim_users" in case.original_sql
-    assert "LEFT JOIN" not in case.rewritten_sql
-    assert "LIMIT 25" in case.original_sql
-    assert case.trusted_assumptions == (
+    assert len(cases) == 2
+    left_join = next(case for case in cases if case.rewrite_family == "dbt_left_join")
+    fk_inner_join = next(
+        case for case in cases if case.rewrite_family == "dbt_fk_inner_join"
+    )
+    assert left_join.case_id == "materialized-1k-dbt_left_join"
+    assert left_join.evidence_scope == "bounded_materialized_output"
+    assert "qseal_dbt_stg_orders" in left_join.setup_sql
+    assert "qseal_dbt_dim_users" in left_join.original_sql
+    assert "LEFT JOIN qseal_dbt_dim_users" in left_join.original_sql
+    assert "LEFT JOIN" not in left_join.rewritten_sql
+    assert "LIMIT 25" in left_join.original_sql
+    assert left_join.trusted_assumptions == (
         "dbt test: unique on dim_users.user_id",
         "dbt test: not_null on dim_users.user_id",
+    )
+    assert fk_inner_join.case_id == "materialized-1k-dbt_fk_inner_join"
+    assert "INNER JOIN qseal_dbt_dim_users" in fk_inner_join.original_sql
+    assert "INNER JOIN" not in fk_inner_join.rewritten_sql
+    assert fk_inner_join.trusted_assumptions == (
+        "dbt test: relationships from stg_orders.user_id to dim_users.user_id",
+        "dbt test: not_null on stg_orders.user_id",
+        "dbt test: unique on dim_users.user_id",
     )
 
 
@@ -129,9 +139,9 @@ def test_runs_snowflake_dbt_demo_suite_with_fake_connector(tmp_path) -> None:
     )
 
     assert report.suite_id == "snowflake-dbt-demo-v1"
-    assert report.result_count == 1
-    assert report.completed_count == 1
-    assert len(connections) == 1
+    assert report.result_count == 2
+    assert report.completed_count == 2
+    assert len(connections) == 2
     assert connections[0].closed
 
     case_dir = tmp_path / "run-001" / "1k" / "materialized" / "dbt_left_join"
@@ -139,12 +149,20 @@ def test_runs_snowflake_dbt_demo_suite_with_fake_connector(tmp_path) -> None:
     assert (case_dir / "original.sql").exists()
     assert (case_dir / "rewritten.sql").exists()
     assert "LEFT JOIN qseal_dbt_dim_users" in (case_dir / "original.sql").read_text()
+    fk_case_dir = tmp_path / "run-001" / "1k" / "materialized" / "dbt_fk_inner_join"
+    assert (fk_case_dir / "setup.sql").exists()
+    assert "INNER JOIN qseal_dbt_dim_users" in (fk_case_dir / "original.sql").read_text()
 
     suite_payload = json.loads(render_snowflake_family_suite_json(report))
     assert suite_payload["suite_id"] == "snowflake-dbt-demo-v1"
     assert suite_payload["results"][0]["spec"]["trusted_assumptions"] == [
         "dbt test: unique on dim_users.user_id",
         "dbt test: not_null on dim_users.user_id",
+    ]
+    assert suite_payload["results"][1]["spec"]["trusted_assumptions"] == [
+        "dbt test: relationships from stg_orders.user_id to dim_users.user_id",
+        "dbt test: not_null on stg_orders.user_id",
+        "dbt test: unique on dim_users.user_id",
     ]
     text = render_snowflake_family_suite_report(report).plain
     assert "trusted assumption: dbt test: unique on dim_users.user_id" in text
@@ -159,7 +177,7 @@ def test_snowflake_dbt_demo_cli_is_registered() -> None:
     result = CliRunner().invoke(main, ["benchmark-suite", "snowflake-dbt-demo", "--help"])
 
     assert result.exit_code == 0
-    assert "unused LEFT JOIN demo benchmark" in result.output
+    assert "dbt join-elimination demo benchmark" in result.output
     assert "--mode [aggregate|materialized]" in result.output
 
 

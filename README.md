@@ -216,12 +216,12 @@ uv run qseal benchmark examples/product_demo/original.sql \
   --setup examples/product_demo/setup.sql
 ```
 
-The dbt scan finds both a guarded `DISTINCT` removal and a guarded unused
-`LEFT JOIN` removal. The latter is the deterministic proof side of the
-Snowflake Tier-3 dbt demo below.
+The dbt scan finds a guarded `DISTINCT` removal plus guarded `LEFT JOIN` and
+FK-backed `INNER JOIN` removals. The join findings are the deterministic proof
+side of the Snowflake Tier-3 dbt demo below.
 
 With Snowflake credentials configured, the product-shaped Tier-3 demo benchmarks
-a dbt-like unused `LEFT JOIN` rewrite on Snowflake:
+dbt-like join-elimination rewrites on Snowflake:
 
 ```bash
 uv run qseal benchmark-suite snowflake-dbt-demo snowflake-dbt-demo-run

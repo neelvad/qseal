@@ -16,8 +16,8 @@ def test_product_demo_dbt_scan_finds_guarded_rewrites() -> None:
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["summary"]["model_count"] == 2
-    assert payload["summary"]["proven_finding_count"] == 2
+    assert payload["summary"]["model_count"] == 3
+    assert payload["summary"]["proven_finding_count"] == 3
 
     by_rule = {
         suggestion["rule_name"]: suggestion
@@ -33,6 +33,15 @@ def test_product_demo_dbt_scan_finds_guarded_rewrites() -> None:
     assert "LEFT JOIN dim_users" in left_join["original_sql"]
     assert "LEFT JOIN" not in left_join["rewritten_sql"]
 
+    fk_inner_join = by_rule["remove_foreign_key_inner_join"]
+    assert fk_inner_join["required_tests"] == [
+        "dbt test: relationships from stg_orders.user_id to dim_users.user_id",
+        "dbt test: not_null on stg_orders.user_id",
+        "dbt test: unique on dim_users.user_id",
+    ]
+    assert "INNER JOIN dim_users" in fk_inner_join["original_sql"]
+    assert "INNER JOIN" not in fk_inner_join["rewritten_sql"]
+
 
 def test_product_demo_dbt_scan_text_is_review_grouped() -> None:
     result = CliRunner().invoke(
@@ -41,16 +50,20 @@ def test_product_demo_dbt_scan_text_is_review_grouped() -> None:
     )
 
     assert result.exit_code == 0, result.output
-    assert "Safe and apply-ready (2)" in result.output
+    assert "Safe and apply-ready (3)" in result.output
     assert "Safe, manual review needed (0)" in result.output
     assert "Rejected, unsupported, or informational (0)" in result.output
     assert "Required tests:" in result.output
     assert "remove_unused_left_join" in result.output
+    assert "remove_foreign_key_inner_join" in result.output
     assert "dbt_project/models/fct_orders.sql" in result.output
+    assert "dbt_project/models/fct_orders_fk.sql" in result.output
+    assert "dbt test: relationships from stg_orders.user_id to dim_users.user_id" in result.output
     assert "Recommendation: review generated diff" in result.output
     assert "Diff:" in result.output
     assert "-SELECT DISTINCT user_id" in result.output
     assert "-LEFT JOIN dim_users AS dim_users" in result.output
+    assert "-INNER JOIN dim_users AS dim_users" in result.output
 
 
 def test_product_demo_candidate_evidence_benchmarks_only_proven_candidate() -> None:

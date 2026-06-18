@@ -13,16 +13,19 @@ This fixture is a compact end-to-end demo of the product claim:
 uv run qseal dbt scan examples/product_demo/dbt_project --format text
 ```
 
-Expected result: two proven findings in "Safe and apply-ready":
+Expected result: three proven findings in "Safe and apply-ready":
 
 - `remove_redundant_distinct` on `models/dim_users.sql`, guarded by `unique`
   and `not_null` tests on `dim_users.user_id`
 - `remove_unused_left_join` on `models/fct_orders.sql`, guarded by `unique` on
   `dim_users.user_id`
+- `remove_foreign_key_inner_join` on `models/fct_orders_fk.sql`, guarded by a
+  `relationships` test from `stg_orders.user_id` to `dim_users.user_id`,
+  `not_null` on `stg_orders.user_id`, and `unique` on `dim_users.user_id`
 
-The second finding is the local deterministic version of the Snowflake Tier-3
-dbt demo case: an order model left-joins `dim_users` but projects only order
-columns, so the trusted uniqueness test makes the join removable.
+The join findings are the local deterministic versions of the Snowflake Tier-3
+dbt demo cases: order models join `dim_users` but project only order columns,
+so trusted dbt tests make the joins removable.
 
 ## 2. Gate Candidate SQL And Attach Evidence
 
@@ -76,8 +79,8 @@ uv run qseal benchmark-suite snowflake-dbt-demo snowflake-dbt-demo-run \
   --repetitions 3
 ```
 
-This produces target-engine evidence for the same rewrite family surfaced by
-the `fct_orders.sql` scan finding.
+This produces target-engine evidence for the same join-elimination families
+surfaced by the `fct_orders.sql` and `fct_orders_fk.sql` scan findings.
 
 ## Honest Claim
 

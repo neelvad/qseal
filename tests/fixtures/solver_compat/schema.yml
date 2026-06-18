@@ -14,8 +14,13 @@ tables:
       - [user_id]
   fact_orders:
     columns:
-      user_id: {}
+      user_id:
+        nullable: false
       revenue: {}
+    foreign_keys:
+      - columns: [user_id]
+        ref_table: dim_users
+        ref_columns: [user_id]
   orders:
     columns:
       user_id: {}

@@ -149,7 +149,7 @@ per-case `benchmark.json`, and a top-level
 `IS NOT NULL`, unused `LEFT JOIN`, `JOIN DISTINCT` to `EXISTS`, and predicate
 pushdown.
 
-For the product-shaped Tier 3 demo, use the dbt-like unused `LEFT JOIN` case:
+For the product-shaped Tier 3 demo, use the dbt-like join-elimination cases:
 
 ```bash
 uv run qseal benchmark-suite snowflake-dbt-demo snowflake-dbt-demo-run \
@@ -160,18 +160,31 @@ uv run qseal benchmark-suite snowflake-dbt-demo snowflake-dbt-demo-run \
   --repetitions 3
 ```
 
-That case creates a `stg_orders`-style table, a `dim_users`-style table with
-trusted `unique` and `not_null` tests on `dim_users.user_id`, and compares a
-model that left-joins `dim_users` while projecting only order columns against
-the verified rewrite with the join removed. The default materialized mode is the
-stronger demo shape because Snowflake must return bounded rows rather than only
-answering an aggregate count.
+That suite creates a `stg_orders`-style table, a `dim_users`-style table, and
+benchmarks two verified rewrites while projecting only order columns:
+
+- unused `LEFT JOIN` removal, guarded by `unique` on `dim_users.user_id`
+- FK-backed `INNER JOIN` removal, guarded by a `relationships` test from
+  `stg_orders.user_id` to `dim_users.user_id`, `not_null` on
+  `stg_orders.user_id`, and `unique` on `dim_users.user_id`
+
+The default materialized mode is the stronger demo shape because Snowflake must
+return bounded rows rather than only answering an aggregate count.
 
 The first 2026-06-17 materialized demo run at 1M users and 2M orders classified
 the rewrite as positive: wall-clock speedup was 1.200x, Snowflake query-history
 execution speedup was 1.316x, and bytes scanned fell from 21.6 MB to 12.0 MB.
 The artifact also records the query tag, measured query IDs, generated SQL,
 trusted dbt assumptions, row-count check, and plan counts.
+
+A 2026-06-18 two-case materialized run at 100k users and 200k orders confirmed
+the scan-drop signal for both join shapes. The unused `LEFT JOIN` case
+classified positive: wall-clock speedup 1.051x, Snowflake execution speedup
+1.128x, bytes scanned 4.86 MB -> 4.01 MB, and TableScans 2 -> 1. The
+FK-backed `INNER JOIN` case classified neutral because wall speedup was only
+1.026x, but Snowflake execution speedup was 1.186x with the same bytes-scanned
+and TableScan drops. Treat that as strong work-elimination evidence, not yet a
+durable latency claim.
 
 Two small 2026-06-17 runs at 1M users and 2M orders where applicable showed
 why the suite records evidence scope. Aggregate queries can expose optimizer

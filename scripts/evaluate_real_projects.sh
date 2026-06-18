@@ -10,6 +10,7 @@ DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-$HOME/.dbt}"
 DUCKDB_DBT_COMMAND="${DUCKDB_DBT_COMMAND:-uvx --from dbt-duckdb dbt}"
 PROJECT_FILTER="${PROJECT_FILTER:-}"
 REFRESH="${REFRESH:-0}"
+QSEAL_DBT_SCAN_ARGS="${QSEAL_DBT_SCAN_ARGS:-}"
 
 PROJECT_SPECS=(
   "dbt-labs-jaffle-shop|https://github.com/dbt-labs/jaffle-shop.git|.|default"
@@ -34,6 +35,8 @@ Environment overrides:
   DBT_PROFILES_DIR=$HOME/.dbt
   DUCKDB_DBT_COMMAND="uvx --from dbt-duckdb dbt"
   PROJECT_FILTER=duckdb       Only run projects whose name contains this value.
+  QSEAL_DBT_SCAN_ARGS="--rule remove_redundant_distinct"
+                            Extra qseal dbt scan args for raw and compiled scans.
 
 Outputs:
   REPORT_ROOT/<project>/raw-report.json
@@ -62,6 +65,16 @@ qseal() {
     uv run --project "$QSEAL_DIR" qseal "$@"
 }
 
+qseal_dbt_scan() {
+  if [[ -n "$QSEAL_DBT_SCAN_ARGS" ]]; then
+    # shellcheck disable=SC2086
+    qseal dbt scan "$@" $QSEAL_DBT_SCAN_ARGS
+    return
+  fi
+
+  qseal dbt scan "$@"
+}
+
 clone_project() {
   local name="$1"
   local url="$2"
@@ -86,7 +99,7 @@ run_raw_scan() {
 
   mkdir -p "$report_dir"
   echo "Raw scan: $scan_dir"
-  qseal dbt scan "$scan_dir" \
+  qseal_dbt_scan "$scan_dir" \
     --all \
     --report-file "$report_dir/raw-report.json" \
     --write-patches "$report_dir/raw-patches" \
@@ -137,7 +150,7 @@ run_compiled_scan() {
     return
   }
 
-  qseal dbt scan "$scan_dir" \
+  qseal_dbt_scan "$scan_dir" \
     --use-compiled \
     --all \
     --report-file "$report_dir/compiled-report.json" \

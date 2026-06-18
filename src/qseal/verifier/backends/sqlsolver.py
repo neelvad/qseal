@@ -8,7 +8,7 @@ import sqlglot
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
 
-from qseal.constraints.model import ConstraintCatalog
+from qseal.constraints.model import ConstraintCatalog, ForeignKeyConstraint
 from qseal.dialects import DEFAULT_DIALECT, SqlDialect
 from qseal.rewrites.base import VerificationStatus
 from qseal.verifier.backends.external_contract import ExternalSolverRequest
@@ -219,11 +219,25 @@ def _schema_sql(
     Project-wide catalogs can hold thousands of tables; emitting them all
     makes the solver parse a huge schema for every pair.
     """
+    extra_columns: dict[str, set[str]] = {}
+    foreign_keys_by_table: dict[str, list[ForeignKeyConstraint]] = {}
+    for table_name, table in constraints.tables.items():
+        if table_names is not None and table_name not in table_names:
+            continue
+        for foreign_key in table.foreign_keys:
+            if table_names is not None and foreign_key.ref_table not in table_names:
+                continue
+            extra_columns.setdefault(table_name, set()).update(foreign_key.columns)
+            extra_columns.setdefault(foreign_key.ref_table, set()).update(
+                foreign_key.ref_columns
+            )
+            foreign_keys_by_table.setdefault(table_name, []).append(foreign_key)
+
     statements = []
     for table_name, table in constraints.tables.items():
         if table_names is not None and table_name not in table_names:
             continue
-        columns = set(table.columns)
+        columns = set(table.columns) | extra_columns.get(table_name, set())
         for unique_key in table.unique:
             columns.update(unique_key)
         if not columns:
@@ -241,6 +255,13 @@ def _schema_sql(
             else:
                 suffix = ""
             column_defs.append(f"{column} INT{suffix}")
+        for foreign_key in foreign_keys_by_table.get(table_name, []):
+            column_defs.append(
+                "FOREIGN KEY "
+                f"({', '.join(foreign_key.columns)}) "
+                f"REFERENCES {foreign_key.ref_table} "
+                f"({', '.join(foreign_key.ref_columns)})"
+            )
         statements.append(f"CREATE TABLE {table_name} ( {', '.join(column_defs)} );")
     return "\n".join(statements) + "\n"
 

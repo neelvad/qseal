@@ -50,8 +50,9 @@ CREATE TABLE dim_users (
 );
 
 CREATE TABLE fact_orders (
-  user_id INT,
-  revenue INT
+  user_id INT NOT NULL,
+  revenue INT,
+  FOREIGN KEY (user_id) REFERENCES dim_users (user_id)
 );
 
 CREATE TABLE orders (

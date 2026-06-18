@@ -46,6 +46,32 @@ def render_suggestions_json(
     )
 
 
+def render_rewrite_chain_json(
+    chain,
+    *,
+    dialect: str = DEFAULT_DIALECT,
+) -> str:
+    return _dumps(
+        {
+            "schema_version": 1,
+            "artifact_type": "rewrite_chain",
+            "dialect": dialect,
+            "status": chain.status,
+            "reason": chain.reason,
+            "step_count": chain.step_count,
+            "original_sql": chain.original_sql,
+            "final_sql": chain.final_sql,
+            "steps": [
+                {
+                    "step_index": step.step_index,
+                    "suggestion": _suggestion_payload(step.suggestion),
+                }
+                for step in chain.steps
+            ],
+        }
+    )
+
+
 def render_verification_json(result: VerificationResult) -> str:
     payload = result.model_dump(mode="json")
     payload["schema_version"] = 1

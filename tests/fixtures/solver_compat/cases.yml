@@ -15,6 +15,10 @@ cases:
     original: unused_left_join/original.sql
     rewritten: unused_left_join/rewritten.sql
     expected_builtin_status: PROVEN_EQUIVALENT
+  - name: fk_inner_join
+    original: fk_inner_join/original.sql
+    rewritten: fk_inner_join/rewritten.sql
+    expected_builtin_status: PROVEN_EQUIVALENT
   - name: join_distinct_exists
     original: join_distinct_exists/original.sql
     rewritten: join_distinct_exists/rewritten.sql

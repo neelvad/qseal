@@ -234,6 +234,11 @@ def _append_indented_diff(output: Text, diff: str, *, max_lines: int) -> None:
         output.append(f"      ... {len(lines) - max_lines} more diff lines\n")
 
 
+def _indent_sql(sql: str, *, spaces: int) -> str:
+    prefix = " " * spaces
+    return "\n".join(f"{prefix}{line}" for line in sql.strip().splitlines())
+
+
 def _format_counts(counts: dict[str, int]) -> str:
     if not counts:
         return "none"
@@ -305,6 +310,42 @@ def render_suggestions_report(suggestions: list[RewriteSuggestion]) -> Text:
             output.append("\n")
         output.append(render_suggestion_report(suggestion))
 
+    return output
+
+
+def render_rewrite_chain_report(chain) -> Text:
+    output = Text()
+    output.append("Rewrite chain\n", style="bold")
+    output.append(f"Status: {chain.status}\n")
+    output.append(f"Steps: {chain.step_count}\n")
+    if chain.reason:
+        output.append(f"Reason: {chain.reason}\n")
+    output.append("\n")
+
+    for step in chain.steps:
+        suggestion = step.suggestion
+        output.append(
+            f"Step {step.step_index}: {suggestion.rule_name} "
+            f"({suggestion.status.value})\n",
+            style="bold",
+        )
+        if suggestion.fragment_location:
+            output.append(f"  Fragment: {suggestion.fragment_location}\n")
+        tests = required_guarding_tests(suggestion)
+        if tests:
+            output.append("  Required tests:\n")
+            for test in tests:
+                output.append(f"    - {test}\n")
+        if suggestion.reason:
+            output.append(f"  Reason: {suggestion.reason}\n")
+        if suggestion.rewritten_sql:
+            output.append("  Rewritten SQL:\n")
+            output.append(_indent_sql(suggestion.rewritten_sql, spaces=4))
+            output.append("\n")
+
+    output.append("Final SQL:\n", style="bold")
+    output.append(_indent_sql(chain.final_sql, spaces=2))
+    output.append("\n")
     return output
 
 

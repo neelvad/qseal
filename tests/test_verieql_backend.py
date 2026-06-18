@@ -1,7 +1,11 @@
 import json
 from pathlib import Path
 
-from qseal.constraints.model import ConstraintCatalog, TableConstraints
+from qseal.constraints.model import (
+    ConstraintCatalog,
+    ForeignKeyConstraint,
+    TableConstraints,
+)
 from qseal.rewrites.base import VerificationStatus
 from qseal.verifier.backends.verieql import VeriEqlBackend, _build_request
 
@@ -132,6 +136,40 @@ def test_build_request_abstains_on_ambiguous_unqualified_columns() -> None:
     assert "ambiguous" in request
 
 
+def test_build_request_abstains_on_foreign_key_premise() -> None:
+    request = _build_request(
+        (
+            "SELECT o.user_id FROM orders o "
+            "INNER JOIN users u ON o.user_id = u.user_id"
+        ),
+        "SELECT o.user_id FROM orders o",
+        ConstraintCatalog(
+            tables={
+                "orders": TableConstraints(
+                    columns={"user_id": {"nullable": False}},
+                    foreign_keys=[
+                        ForeignKeyConstraint(
+                            columns=("user_id",),
+                            ref_table="users",
+                            ref_columns=("user_id",),
+                        )
+                    ],
+                ),
+                "users": TableConstraints(
+                    columns={"user_id": {"nullable": False}},
+                    unique=[("user_id",)],
+                ),
+            }
+        ),
+        "snowflake",
+        2,
+    )
+
+    assert isinstance(request, str)
+    assert "foreign key" in request
+    assert "VeriEQL" in request
+
+
 def _write_scan_project(tmp_path: Path) -> Path:
     project = tmp_path / "project"
     models = project / "models"
@@ -147,6 +185,40 @@ models:
         tests:
           - unique
           - not_null
+"""
+    )
+    return project
+
+
+def _write_fk_scan_project(tmp_path: Path) -> Path:
+    project = tmp_path / "project"
+    models = project / "models"
+    models.mkdir(parents=True)
+    (models / "fct_orders.sql").write_text(
+        """
+SELECT orders.user_id
+FROM stg_orders AS orders
+INNER JOIN dim_users AS dim_users
+  ON orders.user_id = dim_users.user_id
+"""
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: stg_orders
+    columns:
+      - name: user_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_users')
+              field: user_id
+  - name: dim_users
+    columns:
+      - name: user_id
+        tests:
+          - unique
 """
     )
     return project
@@ -177,6 +249,38 @@ def test_dbt_crosscheck_passes_when_findings_survive(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     assert "Proven findings cross-checked: 1" in result.output
+    assert "Refuted: 0" in result.output
+
+
+def test_dbt_crosscheck_abstains_on_fk_findings_until_verieql_encodes_fk(
+    tmp_path: Path,
+) -> None:
+    from click.testing import CliRunner
+
+    from qseal.cli import main
+
+    project = _write_fk_scan_project(tmp_path)
+    fake = tmp_path / "fake-python"
+    fake.write_text('#!/bin/sh\necho \'{"result": "refuted", "bound": 2}\'\n')
+    fake.chmod(0o755)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "dbt",
+            "crosscheck",
+            str(project),
+            "--verieql-dir",
+            str(tmp_path),
+            "--verieql-python",
+            str(fake),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Proven findings cross-checked: 1" in result.output
+    assert "UNSUPPORTED" in result.output
+    assert "remove_foreign_key_inner_join" in result.output
     assert "Refuted: 0" in result.output
 
 

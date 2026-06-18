@@ -536,6 +536,46 @@ def _dbt_demo_definitions(scale_rows: int) -> tuple[dict[str, object], ...]:
                 "The uniqueness premise prevents the LEFT JOIN from duplicating order rows.",
             ),
         },
+        {
+            "id": "dbt_fk_inner_join",
+            "description": (
+                "dbt-like model rewrite: remove an FK-backed INNER JOIN to dim_users "
+                "under trusted dbt relationship and uniqueness tests."
+            ),
+            "setup_sql": _dbt_left_join_demo_setup(
+                user_rows=scale_rows,
+                order_rows=orders,
+            ),
+            "original_sql": (
+                "SELECT\n"
+                "  orders.order_id,\n"
+                "  orders.user_id,\n"
+                "  orders.order_total_cents,\n"
+                "  orders.order_status\n"
+                "FROM qseal_dbt_stg_orders AS orders\n"
+                "INNER JOIN qseal_dbt_dim_users AS dim_users\n"
+                "  ON orders.user_id = dim_users.user_id"
+            ),
+            "rewritten_sql": (
+                "SELECT\n"
+                "  orders.order_id,\n"
+                "  orders.user_id,\n"
+                "  orders.order_total_cents,\n"
+                "  orders.order_status\n"
+                "FROM qseal_dbt_stg_orders AS orders"
+            ),
+            "trusted_assumptions": (
+                "dbt test: relationships from stg_orders.user_id to dim_users.user_id",
+                "dbt test: not_null on stg_orders.user_id",
+                "dbt test: unique on dim_users.user_id",
+            ),
+            "review_notes": (
+                "The model projects only columns from stg_orders; dim_users columns are unused.",
+                "The relationship and non-null premises prevent the INNER JOIN "
+                "from filtering order rows.",
+                "The uniqueness premise prevents the INNER JOIN from duplicating order rows.",
+            ),
+        },
     )
 
 

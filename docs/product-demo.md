@@ -37,19 +37,23 @@ requires no external solver or Snowflake credentials.
 uv run qseal dbt scan examples/product_demo/dbt_project --format text
 ```
 
-This finds two proven rewrites in the bundled product-demo project:
+This finds three proven rewrites in the bundled product-demo project:
 
 - `remove_redundant_distinct` on `dim_users.sql`, guarded by `unique` and
   `not_null` tests on `dim_users.user_id`
 - `remove_unused_left_join` on `fct_orders.sql`, guarded by `unique` on
   `dim_users.user_id`
+- `remove_foreign_key_inner_join` on `fct_orders_fk.sql`, guarded by a
+  `relationships` test from `stg_orders.user_id` to `dim_users.user_id`,
+  `not_null` on `stg_orders.user_id`, and `unique` on `dim_users.user_id`
 
 The important product behavior is not just that rewrites are found. The output
 groups rewrites into review sections such as "Safe and apply-ready" and "Safe,
 manual review needed", then names the ongoing tests that make each proof valid.
-The `fct_orders.sql` finding is the deterministic proof side of the Snowflake
-dbt-demo benchmark: the local scan proves the rewrite is safe, while Tier 3
-measures whether the same rewrite family is worth applying on Snowflake.
+The `fct_orders.sql` and `fct_orders_fk.sql` findings are the deterministic
+proof side of the Snowflake dbt-demo benchmark: the local scan proves the
+rewrites are safe, while Tier 3 measures whether the same rewrite families are
+worth applying on Snowflake.
 
 CI shape:
 
@@ -143,14 +147,15 @@ uv run qseal benchmark-suite snowflake-dbt-demo snowflake-dbt-demo-run \
 ```
 
 The demo creates `stg_orders` and `dim_users`-style tables, records the trusted
-dbt assumptions (`unique` and `not_null` on `dim_users.user_id`), and benchmarks
-the verified rewrite that removes an unused `LEFT JOIN` from an order model.
-Materialized mode is the default because it is closer to a model-review query
-than an aggregate-only count.
+dbt assumptions (`unique` on `dim_users.user_id`, `not_null` on
+`stg_orders.user_id`, and a `relationships` test from `stg_orders.user_id` to
+`dim_users.user_id`), and benchmarks verified rewrites that remove unused
+joins from order models. Materialized mode is the default because it is closer
+to a model-review query than an aggregate-only count.
 
-The first 2026-06-17 materialized run classified the case as positive: 1.200x
-wall-clock speedup, 1.316x Snowflake query-history execution speedup, and bytes
-scanned down from 21.6 MB to 12.0 MB.
+The first 2026-06-17 materialized left-join run classified the case as
+positive: 1.200x wall-clock speedup, 1.316x Snowflake query-history execution
+speedup, and bytes scanned down from 21.6 MB to 12.0 MB.
 
 Use the broader repeatable Snowflake family suite when the question is how other
 rewrite families behave:

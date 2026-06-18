@@ -31,6 +31,7 @@ RUN_COMPILED=1 scripts/evaluate_real_projects.sh
 DBT_PROFILES_DIR="$HOME/.dbt" RUN_COMPILED=1 scripts/evaluate_real_projects.sh
 DUCKDB_DBT_COMMAND="uvx --from dbt-duckdb dbt" RUN_COMPILED=1 scripts/evaluate_real_projects.sh
 PROJECT_FILTER=duckdb RUN_COMPILED=1 scripts/evaluate_real_projects.sh
+QSEAL_DBT_SCAN_ARGS="--rule remove_redundant_distinct" scripts/evaluate_real_projects.sh
 ```
 
 `RUN_COMPILED=1` requires a working `dbt` command and project profiles. If dbt
@@ -40,6 +41,9 @@ raw scan report.
 DuckDB projects use a generated temporary `profiles.yml` under the report
 directory and default to `uvx --from dbt-duckdb dbt`, so they can compile
 without cloud credentials or a global dbt-duckdb installation.
+
+Use `QSEAL_DBT_SCAN_ARGS` to compare rule subsets against the default rule set
+without checking out an older QuerySeal revision.
 
 Compare one or more completed run directories:
 
@@ -158,6 +162,23 @@ Implications:
   repositories with defensive `DISTINCT` / `IS NOT NULL` habits.
 - The next coverage lever is compiled SQL for macro-heavy projects, which
   requires warehouse profiles (or dbt-duckdb-compatible packages).
+
+2026-06-18 before/after expansion check:
+
+- Baseline command used the pre-expansion rule subset through
+  `QSEAL_DBT_SCAN_ARGS`.
+- Expanded command used the default rule set, including relationships/FK,
+  accepted-values, count-distinct, and group-by rewrites.
+- Raw scan over the seven configured public projects: 340 models, 305 visible
+  results, 0 proven findings in both runs.
+- Compiled scan completed for `dbt-labs-jaffle_shop_duckdb` and
+  `kestra-io/dbt-demo` after setting `UV_CACHE_DIR` and `UV_TOOL_DIR` under
+  `/tmp`; those 10 compiled models produced 0 proven findings in both runs.
+
+Conclusion: the new premise-driven rules work in targeted fixtures and the
+product demo, but this public corpus still does not contain matching dbt
+premises/query shapes. Real design-partner projects remain the needed yield
+test.
 
 ## 2026-06-10 Run: GitLab Analytics (Production-Scale Corpus)
 

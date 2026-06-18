@@ -76,6 +76,7 @@ from qseal.report.json import (
     render_dbt_scan_json,
     render_duckdb_benchmark_json,
     render_duckdb_fixture_json,
+    render_rewrite_chain_json,
     render_snowflake_benchmark_json,
     render_snowflake_family_suite_json,
     render_suggestion_json,
@@ -91,6 +92,7 @@ from qseal.report.text import (
     render_dbt_scan_report,
     render_duckdb_benchmark_report,
     render_duckdb_fixture_report,
+    render_rewrite_chain_report,
     render_snowflake_benchmark_report,
     render_snowflake_family_suite_report,
     render_suggestion_report,
@@ -98,6 +100,7 @@ from qseal.report.text import (
     render_verification_report,
 )
 from qseal.rewrites.base import RewriteSuggestion, VerificationStatus
+from qseal.rewrites.chain import suggest_rewrite_chain
 from qseal.rewrites.distinct import RemoveRedundantDistinct
 from qseal.rewrites.registry import (
     first_applicable_suggestion,
@@ -2159,7 +2162,7 @@ def snowflake_dbt_demo_benchmark_suite(
     report_file: Path | None,
     allow_existing: bool,
 ) -> None:
-    """Run the Snowflake Tier-3 dbt-like unused LEFT JOIN demo benchmark."""
+    """Run the Snowflake Tier-3 dbt join-elimination demo benchmark."""
     if output_dir.exists() and any(output_dir.iterdir()) and not allow_existing:
         raise click.ClickException(
             f"Output directory is not empty: {output_dir}. "
@@ -2390,6 +2393,19 @@ def dbt_scan(
     help="Show every applicable rewrite result instead of only the first.",
 )
 @click.option(
+    "--chain",
+    "show_chain",
+    is_flag=True,
+    help="Repeatedly apply verified rewrites until a fixed point is reached.",
+)
+@click.option(
+    "--max-steps",
+    type=click.IntRange(min=1),
+    default=8,
+    show_default=True,
+    help="Maximum verified rewrite steps when --chain is enabled.",
+)
+@click.option(
     "--rule",
     "selected_rules",
     multiple=True,
@@ -2416,6 +2432,8 @@ def suggest(
     schema_path: Path,
     schema_format: str,
     show_all: bool,
+    show_chain: bool,
+    max_steps: int,
     selected_rules: tuple[str, ...],
     output_format: str,
     dialect: str,
@@ -2423,14 +2441,31 @@ def suggest(
     """Suggest verified-safe rewrites for one SQL query."""
     raw_sql = query_path.read_text()
     constraints = _load_constraints(schema_path, schema_format)
+    rules = select_rules(selected_rules)
+    if show_chain:
+        if show_all:
+            raise click.ClickException("--chain cannot be combined with --all.")
+        chain = suggest_rewrite_chain(
+            raw_sql,
+            constraints,
+            rules=rules,
+            dialect=dialect,
+            max_steps=max_steps,
+        )
+        if output_format == "json":
+            click.echo(render_rewrite_chain_json(chain, dialect=dialect))
+        else:
+            console.print(render_rewrite_chain_report(chain))
+        return
+
     try:
         query = parse_select(raw_sql, dialect=dialect)
-        suggestions = suggest_rewrites(query, constraints, rules=select_rules(selected_rules))
+        suggestions = suggest_rewrites(query, constraints, rules=rules)
     except UnsupportedSqlError as error:
         suggestions = suggest_subtree_rewrites(
             raw_sql,
             constraints,
-            rules=select_rules(selected_rules),
+            rules=rules,
             dialect=dialect,
         ) or [
             RewriteSuggestion(
