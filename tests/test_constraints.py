@@ -25,6 +25,35 @@ tables:
     assert users.has_unique_key(("user_id",))
 
 
+def test_load_constraints_with_composite_foreign_key(tmp_path: Path) -> None:
+    schema = tmp_path / "schema.yml"
+    schema.write_text(
+        """
+tables:
+  fact_orders:
+    columns:
+      tenant_id:
+        nullable: false
+      user_id:
+        nullable: false
+    foreign_keys:
+      - columns: [tenant_id, user_id]
+        ref_table: dim_users
+        ref_columns: [tenant_id, user_id]
+"""
+    )
+
+    constraints = load_constraints(schema)
+
+    fact_orders = constraints.table("fact_orders")
+    assert fact_orders is not None
+    assert fact_orders.has_foreign_key(
+        ("tenant_id", "user_id"),
+        ref_table="dim_users",
+        ref_columns=("tenant_id", "user_id"),
+    )
+
+
 def test_finds_contained_composite_unique_key() -> None:
     table = TableConstraints(
         columns={

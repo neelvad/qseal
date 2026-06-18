@@ -25,6 +25,28 @@ def test_removes_unused_left_join_when_right_key_is_unique() -> None:
     assert suggestion.rewritten_sql == "SELECT f.user_id, f.revenue\nFROM fact_orders f;"
 
 
+def test_removes_unused_left_join_when_right_composite_key_is_unique() -> None:
+    query = parse_select(
+        """
+        SELECT f.order_id, f.revenue
+        FROM fact_orders f
+        LEFT JOIN dim_users u
+          ON f.tenant_id = u.tenant_id AND f.user_id = u.user_id
+        """
+    )
+    constraints = ConstraintCatalog(
+        tables={"dim_users": TableConstraints(unique=[("tenant_id", "user_id")])}
+    )
+
+    suggestion = RemoveUnusedLeftJoin().apply(query, constraints)
+
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rewritten_sql == "SELECT f.order_id, f.revenue\nFROM fact_orders f;"
+    assert suggestion.assumptions == (
+        "dim_users.(tenant_id, user_id) is a trusted unique key.",
+    )
+
+
 def test_removes_unused_left_join_from_qualified_relations() -> None:
     query = parse_select(
         """
@@ -175,6 +197,48 @@ def test_removes_inner_join_when_child_has_non_null_fk_to_unique_parent() -> Non
         "fact_orders.user_id has a trusted relationship to dim_users.user_id.",
         "fact_orders.(user_id) is trusted non-null.",
         "dim_users.user_id is a trusted unique key.",
+    )
+
+
+def test_removes_inner_join_when_child_has_composite_fk_to_unique_parent() -> None:
+    query = parse_select(
+        """
+        SELECT f.order_id, f.tenant_id, f.user_id
+        FROM fact_orders f
+        INNER JOIN dim_users u
+          ON f.tenant_id = u.tenant_id AND f.user_id = u.user_id
+        """
+    )
+    constraints = ConstraintCatalog(
+        tables={
+            "fact_orders": TableConstraints(
+                columns={
+                    "tenant_id": ColumnConstraint(nullable=False),
+                    "user_id": ColumnConstraint(nullable=False),
+                },
+                foreign_keys=[
+                    ForeignKeyConstraint(
+                        columns=("tenant_id", "user_id"),
+                        ref_table="dim_users",
+                        ref_columns=("tenant_id", "user_id"),
+                    )
+                ],
+            ),
+            "dim_users": TableConstraints(unique=[("tenant_id", "user_id")]),
+        }
+    )
+
+    suggestion = RemoveForeignKeyInnerJoin().apply(query, constraints)
+
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rewritten_sql == (
+        "SELECT f.order_id, f.tenant_id, f.user_id\nFROM fact_orders f;"
+    )
+    assert suggestion.assumptions == (
+        "fact_orders.(tenant_id, user_id) has a trusted relationship to "
+        "dim_users.(tenant_id, user_id).",
+        "fact_orders.(tenant_id, user_id) is trusted non-null.",
+        "dim_users.(tenant_id, user_id) is a trusted unique key.",
     )
 
 

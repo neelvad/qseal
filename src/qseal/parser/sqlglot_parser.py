@@ -585,23 +585,33 @@ def _join(
         }
 
     condition = node.args.get("on")
-    if not isinstance(condition, exp.EQ):
-        raise UnsupportedSqlError("JOIN conditions must be column equality predicates.")
-    condition_sides_are_columns = isinstance(condition.this, exp.Column) and isinstance(
-        condition.expression,
-        exp.Column,
-    )
-    if not condition_sides_are_columns:
-        raise UnsupportedSqlError("JOIN conditions must compare two columns.")
+    conditions = _join_conditions(condition)
 
     return Join(
         join_type=join_type,
         **target,
-        condition=JoinCondition(
-            left=ColumnRef(table=condition.this.table or None, name=condition.this.name),
+        condition=conditions[0],
+        extra_conditions=tuple(conditions[1:]),
+    )
+
+
+def _join_conditions(node: exp.Expression | None) -> tuple[JoinCondition, ...]:
+    if isinstance(node, exp.And):
+        return (*_join_conditions(node.this), *_join_conditions(node.expression))
+    if not isinstance(node, exp.EQ):
+        raise UnsupportedSqlError("JOIN conditions must be column equality predicates.")
+    condition_sides_are_columns = isinstance(node.this, exp.Column) and isinstance(
+        node.expression,
+        exp.Column,
+    )
+    if not condition_sides_are_columns:
+        raise UnsupportedSqlError("JOIN conditions must compare two columns.")
+    return (
+        JoinCondition(
+            left=ColumnRef(table=node.this.table or None, name=node.this.name),
             right=ColumnRef(
-                table=condition.expression.table or None,
-                name=condition.expression.name,
+                table=node.expression.table or None,
+                name=node.expression.name,
             ),
         ),
     )

@@ -247,8 +247,8 @@ Currently supported:
 - direct tables, simple subquery sources, non-recursive CTE pass-throughs
 - proven rewrites inside individual CTE bodies of larger `WITH` queries (even
   when the outer query is itself outside the subset)
-- `WHERE` `AND` predicates, simple `EXISTS`, `INNER`/`LEFT JOIN ... ON a=b`,
-  opaque `QUALIFY` (treated conservatively)
+- `WHERE` `AND` predicates, simple `EXISTS`, `INNER`/`LEFT JOIN` with one or
+  more `AND`ed column equalities, opaque `QUALIFY` (treated conservatively)
 - `GROUP BY` / aggregate / window projections (parsed; rewritten only where a
   rule or prover applies)
 - trusted constraints from QuerySeal YAML or dbt `schema.yml`; dbt project scans

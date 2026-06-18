@@ -101,9 +101,18 @@ def _merge_columns(
             (left_constraint is not None and left_constraint.nullable is False)
             or (right_constraint is not None and right_constraint.nullable is False)
         ):
-            columns[column_name] = ColumnConstraint(nullable=False)
-            continue
-        columns[column_name] = right_constraint or left_constraint or ColumnConstraint()
+            nullable = False
+        else:
+            nullable = (right_constraint or left_constraint or ColumnConstraint()).nullable
+        accepted_values = ()
+        if left_constraint is not None:
+            accepted_values = left_constraint.accepted_values
+        if right_constraint is not None and right_constraint.accepted_values:
+            accepted_values = right_constraint.accepted_values
+        columns[column_name] = ColumnConstraint(
+            nullable=nullable,
+            accepted_values=accepted_values,
+        )
     return columns
 
 

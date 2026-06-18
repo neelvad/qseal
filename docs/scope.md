@@ -124,7 +124,8 @@ Removes an unused `LEFT JOIN` when:
 
 - the joined relation is not projected
 - the joined relation is not filtered outside the join condition
-- the joined table's join key is trusted unique
+- the joined table's join key is trusted unique, including supported composite
+  keys
 
 This avoids the common failure mode where a supposedly unused join duplicates
 rows because the right side is not actually unique.
@@ -139,10 +140,12 @@ Removes an unused `INNER JOIN` from a child table to a parent table when:
 - the child join key is trusted non-null
 - the parent join key is trusted unique
 
-This is the dbt-test-backed version of RELY-style join elimination. The
-relationships test proves matching parent existence for non-null child values;
-the child `not_null` test prevents the join from filtering NULL child rows; and
-the parent `unique` test prevents fanout.
+Single-column FK premises can come from dbt `relationships` tests. Composite FK
+premises require an explicit QuerySeal YAML `foreign_keys` entry; multiple
+independent dbt column relationships are not treated as a composite row-level FK.
+The relationship premise proves matching parent existence for non-null child
+values; the child `not_null` premise prevents the join from filtering NULL child
+rows; and the parent `unique` premise prevents fanout.
 
 ### `remove_redundant_not_null_filter`
 
@@ -171,7 +174,8 @@ subset is meant to be small enough to audit.
 The current parser models direct table sources, one simple subquery source,
 direct column projections, star projections, simple aliased scalar projections,
 simple `WHERE` predicates joined by `AND`, simple `EXISTS` predicates,
-`INNER JOIN`, and `LEFT JOIN`.
+`INNER JOIN`, and `LEFT JOIN`. Join conditions may be one column equality or an
+`AND` conjunction of column equalities.
 
 It also resolves narrow non-recursive CTE shapes that commonly appear in dbt
 models:

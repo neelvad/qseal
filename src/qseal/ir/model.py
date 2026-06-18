@@ -159,14 +159,19 @@ class Join(BaseModel):
     # constraints sharing the CTE's name must not be applied to it.
     table_is_cte: bool = False
     condition: JoinCondition
+    extra_conditions: tuple[JoinCondition, ...] = ()
 
     def relation_name(self) -> str:
         return self.alias or self.table
 
+    def conditions(self) -> tuple[JoinCondition, ...]:
+        return (self.condition, *self.extra_conditions)
+
     def to_sql(self) -> str:
         table_sql = self.table_sql or self.table
         alias = f" {self.alias}" if self.alias else ""
-        return f"{self.join_type} JOIN {table_sql}{alias} ON {self.condition.to_sql()}"
+        conditions = " AND ".join(condition.to_sql() for condition in self.conditions())
+        return f"{self.join_type} JOIN {table_sql}{alias} ON {conditions}"
 
 
 class SelectQuery(BaseModel):

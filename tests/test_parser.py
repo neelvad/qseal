@@ -379,6 +379,27 @@ def test_parse_simple_left_join() -> None:
     assert query.joins[0].condition.to_sql() == "f.user_id = u.user_id"
 
 
+def test_parse_composite_left_join_condition() -> None:
+    query = parse_select(
+        """
+        SELECT f.order_id
+        FROM fact_orders f
+        LEFT JOIN dim_users u
+          ON f.tenant_id = u.tenant_id AND f.user_id = u.user_id
+        """
+    )
+
+    join = query.joins[0]
+    assert [condition.to_sql() for condition in join.conditions()] == [
+        "f.tenant_id = u.tenant_id",
+        "f.user_id = u.user_id",
+    ]
+    assert join.to_sql() == (
+        "LEFT JOIN dim_users u ON f.tenant_id = u.tenant_id "
+        "AND f.user_id = u.user_id"
+    )
+
+
 def test_parse_simple_inner_join() -> None:
     query = parse_select(
         """

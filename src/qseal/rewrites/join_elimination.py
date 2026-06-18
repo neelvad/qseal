@@ -87,22 +87,23 @@ class RemoveUnusedLeftJoin:
                 reason="The joined relation is referenced outside the join condition.",
             )
 
-        right_key = _right_join_key(join)
+        left_relation = query.table_alias or query.table
+        right_key = _right_join_keys(join, left_relation)
         if right_key is None:
             return RewriteSuggestion(
                 rule_name=self.rule_name,
                 status=VerificationStatus.UNKNOWN,
                 original_sql=query.raw_sql,
-                reason="Could not identify the joined table key in the join condition.",
+                reason="Could not identify the joined table key columns in the join condition.",
             )
 
         table = None if join.table_is_cte else constraints.table(join.table)
-        if table is None or not table.has_unique_key((right_key,)):
+        if table is None or not table.has_unique_key(right_key):
             return RewriteSuggestion(
                 rule_name=self.rule_name,
                 status=VerificationStatus.UNKNOWN,
                 original_sql=query.raw_sql,
-                reason=f"{join.table}.{right_key} is not known to be unique.",
+                reason=f"{_qualified_columns(join.table, right_key)} is not known to be unique.",
             )
 
         rewritten = query.model_copy(update={"joins": ()})
@@ -111,7 +112,7 @@ class RemoveUnusedLeftJoin:
             status=VerificationStatus.PROVEN_EQUIVALENT,
             original_sql=query.raw_sql,
             rewritten_sql=rewritten.to_sql(),
-            assumptions=(f"{join.table}.{right_key} is a trusted unique key.",),
+            assumptions=(f"{_qualified_columns(join.table, right_key)} is a trusted unique key.",),
             reason="The unused LEFT JOIN cannot filter rows and cannot duplicate rows.",
         )
 
@@ -219,9 +220,9 @@ class RemoveForeignKeyInnerJoin:
         if (
             child_constraints is None
             or not child_constraints.has_foreign_key(
-                (child_key,),
+                child_key,
                 ref_table=parent_table,
-                ref_columns=(parent_key,),
+                ref_columns=parent_key,
             )
         ):
             return RewriteSuggestion(
@@ -229,25 +230,25 @@ class RemoveForeignKeyInnerJoin:
                 status=VerificationStatus.NOT_APPLICABLE,
                 original_sql=query.raw_sql,
                 reason=(
-                    f"{child_table}.{child_key} is not known to reference "
-                    f"{parent_table}.{parent_key}."
+                    f"{_qualified_columns(child_table, child_key)} is not known to reference "
+                    f"{_qualified_columns(parent_table, parent_key)}."
                 ),
             )
 
-        if not child_constraints.is_non_null(child_key):
+        if not all(child_constraints.is_non_null(column) for column in child_key):
             return RewriteSuggestion(
                 rule_name=self.rule_name,
                 status=VerificationStatus.UNKNOWN,
                 original_sql=query.raw_sql,
-                reason=f"{child_table}.{child_key} is not trusted non-null.",
+                reason=f"{_qualified_columns(child_table, child_key)} is not trusted non-null.",
             )
 
-        if parent_constraints is None or not parent_constraints.has_unique_key((parent_key,)):
+        if parent_constraints is None or not parent_constraints.has_unique_key(parent_key):
             return RewriteSuggestion(
                 rule_name=self.rule_name,
                 status=VerificationStatus.UNKNOWN,
                 original_sql=query.raw_sql,
-                reason=f"{parent_table}.{parent_key} is not known to be unique.",
+                reason=f"{_qualified_columns(parent_table, parent_key)} is not known to be unique.",
             )
 
         rewritten = query.model_copy(update={"joins": ()})
@@ -257,10 +258,10 @@ class RemoveForeignKeyInnerJoin:
             original_sql=query.raw_sql,
             rewritten_sql=rewritten.to_sql(),
             assumptions=(
-                f"{child_table}.{child_key} has a trusted relationship to "
-                f"{parent_table}.{parent_key}.",
-                f"{child_table}.({child_key}) is trusted non-null.",
-                f"{parent_table}.{parent_key} is a trusted unique key.",
+                f"{_qualified_columns(child_table, child_key)} has a trusted relationship to "
+                f"{_qualified_columns(parent_table, parent_key)}.",
+                f"{child_table}.({', '.join(child_key)}) is trusted non-null.",
+                f"{_qualified_columns(parent_table, parent_key)} is a trusted unique key.",
             ),
             reason=(
                 "The trusted non-null foreign key guarantees each child row "
@@ -321,18 +322,30 @@ def _predicate_may_reference_relation(predicate, relation: str) -> bool:
 def _foreign_key_join_key(
     query: SelectQuery,
     join: Join,
-) -> tuple[str, str, str, str] | None:
+) -> tuple[str, tuple[str, ...], str, tuple[str, ...]] | None:
     if query.table is None:
         return None
     child_relation = query.table_alias or query.table
     parent_relation = join.relation_name()
-    left = join.condition.left
-    right = join.condition.right
-    if left.table == child_relation and right.table == parent_relation:
-        return query.table, left.name, join.table, right.name
-    if right.table == child_relation and left.table == parent_relation:
-        return query.table, right.name, join.table, left.name
-    return None
+    child_keys = []
+    parent_keys = []
+    for condition in join.conditions():
+        left = condition.left
+        right = condition.right
+        if left.table == child_relation and right.table == parent_relation:
+            child_keys.append(left.name)
+            parent_keys.append(right.name)
+            continue
+        if right.table == child_relation and left.table == parent_relation:
+            child_keys.append(right.name)
+            parent_keys.append(left.name)
+            continue
+        return None
+    if not child_keys or len(set(child_keys)) != len(child_keys):
+        return None
+    if len(set(parent_keys)) != len(parent_keys):
+        return None
+    return query.table, tuple(child_keys), join.table, tuple(parent_keys)
 
 
 def _predicate_uses_joined_relation(predicate, joined_name: str) -> bool:
@@ -341,10 +354,25 @@ def _predicate_uses_joined_relation(predicate, joined_name: str) -> bool:
     return predicate.left.table == joined_name
 
 
-def _right_join_key(join: Join) -> str | None:
+def _qualified_columns(table: str, columns: tuple[str, ...]) -> str:
+    if len(columns) == 1:
+        return f"{table}.{columns[0]}"
+    return f"{table}.({', '.join(columns)})"
+
+
+def _right_join_keys(join: Join, left_relation: str | None) -> tuple[str, ...] | None:
+    if left_relation is None:
+        return None
     joined_name = join.relation_name()
-    if join.condition.right.table == joined_name:
-        return join.condition.right.name
-    if join.condition.left.table == joined_name:
-        return join.condition.left.name
-    return None
+    keys = []
+    for condition in join.conditions():
+        if condition.right.table == joined_name and condition.left.table == left_relation:
+            keys.append(condition.right.name)
+            continue
+        if condition.left.table == joined_name and condition.right.table == left_relation:
+            keys.append(condition.left.name)
+            continue
+        return None
+    if not keys or len(set(keys)) != len(keys):
+        return None
+    return tuple(keys)

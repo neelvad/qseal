@@ -23,8 +23,9 @@ unbounded list of optimizer rewrites.
 - Conservative deterministic rewrite rules for:
   - redundant `DISTINCT`
   - redundant `IS NOT NULL`
-  - unused `LEFT JOIN`
-  - FK-backed `INNER JOIN` elimination
+  - unused `LEFT JOIN`, including composite join keys
+  - FK-backed `INNER JOIN` elimination, including explicit composite FK
+    premises
   - `JOIN DISTINCT` to `EXISTS`
   - `COUNT(DISTINCT col)` to `COUNT(col)`
   - redundant accepted-values `IN (...)` filters
@@ -43,16 +44,11 @@ unbounded list of optimizer rewrites.
 
 ## Near-Term Product Roadmap
 
-1. **Composite Join Premises**
-   - Extend FK premises and join elimination to composite relationships.
-   - Teach the join IR to represent conjunctions such as
-     `child.k1 = parent.k1 AND child.k2 = parent.k2`.
-
-2. **Broader Accepted Values / Enum Domains**
+1. **Broader Accepted Values / Enum Domains**
    - Treat NULL behavior explicitly before using accepted-values premises for
      CASE-branch or broader predicate rewrites.
 
-3. **Broader Aggregates Over Unique Keys**
+2. **Broader Aggregates Over Unique Keys**
    - Defer full `GROUP BY pk` collapse until aggregate expression semantics and
      NULL behavior are covered carefully.
 

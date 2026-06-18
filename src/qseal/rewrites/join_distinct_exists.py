@@ -81,6 +81,14 @@ class RewriteJoinDistinctToExists:
                 reason="JOIN to EXISTS rewrite only applies to INNER JOIN.",
             )
 
+        if join.extra_conditions:
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.NOT_APPLICABLE,
+                original_sql=query.raw_sql,
+                reason="JOIN to EXISTS rewrite with composite join keys is not supported yet.",
+            )
+
         if query.references_cte_relation():
             return RewriteSuggestion(
                 rule_name=self.rule_name,

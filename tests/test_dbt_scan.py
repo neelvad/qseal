@@ -153,6 +153,48 @@ models:
     assert suggestion.rewritten_sql == "SELECT order_id\nFROM orders;"
 
 
+def test_scan_dbt_project_merges_accepted_values_and_not_null(
+    tmp_path: Path,
+) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "orders.sql").write_text(
+        "SELECT order_id FROM orders WHERE status IN ('placed', 'shipped')"
+    )
+    (models / "not_null.yml").write_text(
+        """
+version: 2
+models:
+  - name: orders
+    columns:
+      - name: status
+        tests:
+          - not_null
+"""
+    )
+    (models / "accepted_values.yml").write_text(
+        """
+version: 2
+models:
+  - name: orders
+    columns:
+      - name: status
+        tests:
+          - accepted_values:
+              values:
+                - placed
+                - shipped
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.proven_finding_count() == 1
+    assert result.results[0].suggestions[0].rule_name == (
+        "remove_redundant_accepted_values_filter"
+    )
+
+
 def test_scan_dbt_project_uses_relationships_for_inner_join_elimination(
     tmp_path: Path,
 ) -> None:
@@ -197,6 +239,44 @@ models:
         "dbt test: unique on dim_users.user_id",
     )
     assert "INNER JOIN" not in suggestion.rewritten_sql
+
+
+def test_scan_dbt_project_uses_composite_unique_key_for_left_join_elimination(
+    tmp_path: Path,
+) -> None:
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "fct_orders.sql").write_text(
+        """
+SELECT orders.order_id, orders.user_id
+FROM fact_orders AS orders
+LEFT JOIN dim_users AS users
+  ON orders.tenant_id = users.tenant_id AND orders.user_id = users.user_id
+"""
+    )
+    (models / "schema.yml").write_text(
+        """
+version: 2
+models:
+  - name: dim_users
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - tenant_id
+            - user_id
+"""
+    )
+
+    result = scan_dbt_project(tmp_path, rules=DEFAULT_RULES)
+
+    assert result.proven_finding_count() == 1
+    suggestion = result.results[0].suggestions[0]
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rule_name == "remove_unused_left_join"
+    assert required_guarding_tests(suggestion) == (
+        "dbt test: unique combination on dim_users(tenant_id, user_id)",
+    )
+    assert "LEFT JOIN" not in suggestion.rewritten_sql
 
 
 def test_scan_dbt_project_merges_source_relationship_premises(
