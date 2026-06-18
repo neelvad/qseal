@@ -197,15 +197,18 @@ models:
 
 - `SELECT * FROM cte_name` can forward to the referenced CTE body.
 - `FROM cte_name` and `JOIN cte_name` can forward through a CTE body only when
-  that CTE is a `SELECT *` pass-through over one direct table or another
-  pass-through CTE. The resolved base table keeps the CTE name as its alias so
-  qualified column references stay bound.
+  that CTE is a `SELECT *` pass-through or a direct-column projection
+  pass-through over one direct table or another pass-through CTE. The resolved
+  base table keeps the CTE name as its alias so qualified column references
+  stay bound. Projection pass-throughs are intentionally limited to columns
+  that keep their original names; aliased columns require explicit lineage and
+  remain opaque.
 
 Complex CTEs remain unsupported when their alias is referenced as a source.
 That includes aggregating CTEs, filtering CTEs, joining CTEs, recursive CTEs,
-and CTEs that project expressions. A reference to such a CTE is never treated
-as the trusted base table sharing its name, so dbt model constraints cannot
-leak into same-named CTEs.
+CTEs that project expressions, and CTEs that rename columns. A reference to
+such a CTE is never treated as the trusted base table sharing its name, so dbt
+model constraints cannot leak into same-named CTEs.
 
 ## Fragment (Subtree) Rewrites
 

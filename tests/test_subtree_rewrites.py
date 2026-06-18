@@ -190,6 +190,39 @@ def test_passthrough_cte_join_target_resolves_to_base_table_constraints() -> Non
     assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
 
 
+def test_subtree_rewrite_splices_cte_using_projection_passthrough_join() -> None:
+    sql = """
+    with orders as (
+        select order_id, user_id, revenue from fact_orders
+    ),
+    dim_keys as (
+        select user_id from dim_users
+    ),
+    final as (
+        select orders.order_id, orders.revenue
+        from orders
+        left join dim_keys on orders.user_id = dim_keys.user_id
+    )
+    select * from final
+    """
+    constraints = ConstraintCatalog(
+        tables={"dim_users": TableConstraints(unique=[("user_id",)])}
+    )
+
+    suggestions = suggest_subtree_rewrites(sql, constraints)
+
+    assert len(suggestions) == 1
+    suggestion = suggestions[0]
+    assert suggestion.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert suggestion.rule_name == "remove_unused_left_join"
+    assert suggestion.fragment_location == "cte:final"
+    assert "WITH orders AS" in suggestion.rewritten_sql
+    assert "dim_keys AS" in suggestion.rewritten_sql
+    assert "LEFT JOIN" not in suggestion.rewritten_sql.upper()
+    assert "FROM fact_orders AS orders" in suggestion.rewritten_sql
+    assert "FROM fact_orders orders" in suggestion.fragment_rewritten_sql
+
+
 def test_fragment_pair_uses_resolved_base_tables() -> None:
     # The raw CTE body says FROM source, but the proof is over the resolved
     # IR. The fragment pair must reference base tables so a refuter can

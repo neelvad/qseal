@@ -298,9 +298,12 @@ def _passthrough_cte_source(
         raise UnsupportedSqlError(f"Recursive CTE reference is not supported: {cte_name}.")
 
     cte = ctes[cte_name]
-    if not _select_is_star_passthrough(cte):
+    if not _select_is_star_passthrough(cte) and not _select_is_identity_projection_passthrough(
+        cte
+    ):
         raise UnsupportedSqlError(
-            "CTE references in FROM are only supported for SELECT * pass-through CTEs."
+            "CTE references in FROM are only supported for SELECT * or "
+            "direct-column projection pass-through CTEs."
         )
 
     from_expr = cte.args.get("from_")
@@ -350,6 +353,12 @@ def _select_is_projection_passthrough(parsed: exp.Select) -> bool:
         _projection_reference_name(projection) is not None
         for projection in parsed.expressions
     )
+
+
+def _select_is_identity_projection_passthrough(parsed: exp.Select) -> bool:
+    if not _select_is_simple_projection(parsed):
+        return False
+    return all(isinstance(projection, exp.Column) for projection in parsed.expressions)
 
 
 def _select_is_simple_projection(parsed: exp.Select) -> bool:

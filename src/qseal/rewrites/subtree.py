@@ -28,6 +28,7 @@ def suggest_subtree_rewrites(
         return []
 
     suggestions = []
+    seen_proof_pairs: set[tuple[str, str, str]] = set()
     for fragment in fragments:
         if fragment.query is None:
             continue
@@ -42,6 +43,14 @@ def suggest_subtree_rewrites(
                 suggestion.rewritten_sql,
                 dialect,
             )
+            proof_key = (
+                suggestion.rule_name,
+                fragment.query.to_sql(),
+                suggestion.rewritten_sql,
+            )
+            if proof_key in seen_proof_pairs:
+                continue
+            seen_proof_pairs.add(proof_key)
             reason = suggestion.reason or "Fragment rewrite is proven equivalent."
             suggestions.append(
                 RewriteSuggestion(

@@ -277,6 +277,45 @@ def test_parses_cte_projection_passthrough_with_outer_alias() -> None:
     ]
 
 
+def test_parses_direct_projection_cte_relation_as_base_table_source() -> None:
+    query = parse_select(
+        """
+        WITH dim_keys AS (
+          SELECT user_id FROM dim_users
+        )
+        SELECT orders.order_id
+        FROM fact_orders AS orders
+        LEFT JOIN dim_keys AS keys
+          ON orders.user_id = keys.user_id
+        """
+    )
+
+    join = query.joins[0]
+    assert join.table == "dim_users"
+    assert join.alias == "keys"
+    assert join.table_is_cte is False
+    assert join.condition.to_sql() == "orders.user_id = keys.user_id"
+
+
+def test_keeps_aliased_projection_cte_relation_opaque() -> None:
+    query = parse_select(
+        """
+        WITH dim_keys AS (
+          SELECT id AS user_id FROM dim_users
+        )
+        SELECT orders.order_id
+        FROM fact_orders AS orders
+        LEFT JOIN dim_keys AS keys
+          ON orders.user_id = keys.user_id
+        """
+    )
+
+    join = query.joins[0]
+    assert join.table == "dim_keys"
+    assert join.alias == "keys"
+    assert join.table_is_cte is True
+
+
 def test_parses_simple_cte_relations_in_from_and_join() -> None:
     query = parse_select(
         """
