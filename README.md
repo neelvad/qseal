@@ -1,6 +1,6 @@
 # QuerySeal
 
-QuerySeal is a CLI tool for verified-safe SQL rewrite suggestions over a
+QuerySeal is a CLI tool for verified-safe SQL cleanup suggestions over a
 constrained dbt/Snowflake/DuckDB SQL subset.
 
 The public-v0 product surface is the **dbt scanner and candidate verifier**:
@@ -16,6 +16,15 @@ QuerySeal is intentionally not a general SQL optimizer, not a full SQL
 equivalence prover, and not a warehouse savings guarantee. A proven rewrite
 means: for the supported SQL subset, the rewritten query returns the same rows
 as the original under the declared assumptions.
+
+## Who This Is For Today
+
+- **dbt teams** that want conservative cleanup suggestions in CI, with each
+  finding tied to the dbt tests that make it safe.
+- **SQL/LLM researchers** that need a sound candidate-verification gate for
+  machine-generated SQL over a supported fragment.
+- **Rewrite-policy researchers** that want a small verified-action-space gym
+  for search, ranking, and offline policy experiments.
 
 ## Why This Exists
 
@@ -64,7 +73,7 @@ Optional external solver integrations require user-supplied toolchains:
 
 ## Quick Demos
 
-Suggest a rewrite for one query:
+Suggest a cleanup for one query:
 
 ```bash
 uv run qseal suggest examples/dbt/distinct.sql \
@@ -86,9 +95,9 @@ uv run qseal dbt scan examples/product_demo/dbt_project --format text
 
 ## dbt Scanner
 
-The dbt scanner is an advisory workflow for data projects. It scans dbt model
-SQL, reads nearby `schema.yml` / `.yaml` tests, and reports proven-safe rewrite
-opportunities. It can emit text, JSON, markdown, diffs, patch files, and
+The dbt scanner is an advisory cleanup workflow for data projects. It scans dbt
+model SQL, reads nearby `schema.yml` / `.yaml` tests, and reports proven-safe
+cleanup suggestions. It can emit text, JSON, markdown, diffs, patch files, and
 redacted intake artifacts.
 
 Recommended first command for a private project:

@@ -8,9 +8,9 @@ candidate `.sql` files and CI needs one answer:
 - which safe candidates have benchmark evidence,
 - which candidates must not be applied.
 
-This is separate from `qseal dbt scan`. The scanner finds deterministic
-rewrite opportunities directly in a dbt project. Candidate evidence evaluates a
-provided set of candidate files and benchmarks only the candidates that verify.
+This is separate from `qseal dbt scan`. The scanner finds deterministic cleanup
+suggestions directly in a dbt project. Candidate evidence evaluates a provided
+set of candidate files and benchmarks only the candidates that verify.
 
 ## Recommended Command
 

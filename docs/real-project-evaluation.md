@@ -146,7 +146,7 @@ Review:
 QuerySeal scans only compiled SQL files that map back to existing source models
 under `models/`. Compiled dbt test SQL under paths such as
 `target/compiled/<project>/models/schema.yml/...` and package-only compiled SQL
-are ignored so real-project summaries reflect model optimization opportunities.
+are ignored so real-project summaries reflect model cleanup suggestions.
 
 ## Candidate Pipeline Smoke
 

@@ -78,7 +78,7 @@ cannot be combined with `--write-patches`, `--apply-patches`, or `--diff`.
 
 ## Finding-Gated Scan
 
-This workflow fails when QuerySeal finds at least one proven rewrite opportunity.
+This workflow fails when QuerySeal finds at least one proven cleanup suggestion.
 `UNKNOWN` and `UNSUPPORTED` results do not fail this policy.
 
 ```yaml

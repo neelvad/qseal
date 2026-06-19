@@ -3,12 +3,12 @@
 QuerySeal is not a general SQL optimizer. The product wedge is narrower:
 
 > Data teams already maintain dbt tests that encode facts Snowflake cannot
-> safely assume. QuerySeal turns those tests into verified-safe rewrite
-> suggestions, then attaches evidence about whether the rewrite is worth
+> safely assume. QuerySeal turns those tests into verified-safe cleanup
+> suggestions, then attaches evidence about whether the change is worth
 > applying.
 
 The durable claim is semantic safety under declared assumptions. Performance is
-measured separately and used for ranking or suppression.
+measured separately and used for review, ranking, or suppression.
 
 The runnable fixture for this page lives at `examples/product_demo/`.
 
@@ -16,8 +16,8 @@ The runnable fixture for this page lives at `examples/product_demo/`.
 
 The demo should leave a reviewer with four concrete takeaways:
 
-1. QuerySeal finds rewrites from existing dbt contracts.
-2. Every accepted rewrite carries the tests that must keep passing.
+1. QuerySeal finds cleanup suggestions from existing dbt contracts.
+2. Every accepted suggestion carries the tests that must keep passing.
 3. Untrusted candidates are gated by verification before they can be used.
 4. Snowflake performance evidence is target-engine evidence, not a generic
    promise that every rewrite saves money.
@@ -47,9 +47,10 @@ This finds three proven rewrites in the bundled product-demo project:
   `relationships` test from `stg_orders.user_id` to `dim_users.user_id`,
   `not_null` on `stg_orders.user_id`, and `unique` on `dim_users.user_id`
 
-The important product behavior is not just that rewrites are found. The output
-groups rewrites into review sections such as "Safe and apply-ready" and "Safe,
-manual review needed", then names the ongoing tests that make each proof valid.
+The important product behavior is not just that suggestions are found. The
+output groups them into review sections such as "Safe and apply-ready" and
+"Safe, manual review needed", then names the ongoing tests that make each proof
+valid.
 The `fct_orders.sql` and `fct_orders_fk.sql` findings are the deterministic
 proof side of the Snowflake dbt-demo benchmark: the local scan proves the
 rewrites are safe, while Tier 3 measures whether the same rewrite families are
@@ -208,7 +209,7 @@ The crisp narrative:
 2. "QuerySeal uses those facts only as explicit assumptions and proves the
    rewrite is row-equivalent under those assumptions."
 3. "The review output tells you which tests must keep passing."
-4. "Then we measure whether applying the safe rewrite is worth it on the target
+4. "Then we measure whether applying the safe cleanup is worth it on the target
    engine."
 
 The crisp non-claim:

@@ -4,13 +4,13 @@ QuerySeal is not trying to become a general SQL optimizer. The useful wedge is
 smaller and sharper:
 
 1. dbt tests declare trusted premises.
-2. QuerySeal proves a conservative rewrite under those premises.
+2. QuerySeal proves a conservative cleanup rewrite under those premises.
 3. CI shows the required tests, patch/diff, and evidence artifacts.
-4. Tier 3 benchmarks measure whether the safe rewrite matters on the target
+4. Tier 3 benchmarks measure whether the safe cleanup matters on the target
    warehouse.
 
 The roadmap is therefore organized around **premise vocabulary**, not around an
-unbounded list of optimizer rewrites.
+unbounded optimizer-style rewrite catalog.
 
 ## Completed Foundation
 
@@ -58,11 +58,11 @@ unbounded list of optimizer rewrites.
 
 ## Warehouse Growth Axis
 
-QuerySeal's positioning should stay close to "CI-verified RELY-style
-optimization":
+QuerySeal's positioning should stay close to "CI-verified trusted-premise
+cleanup":
 
 - Databricks, BigQuery, Oracle, and other warehouses expose trusted or
-  informational constraints that optimizers may use.
+  informational constraints that can affect planning when trusted.
 - QuerySeal should treat dbt tests as the continuously rechecked source of those
   premises at PR/CI time.
 - Cross-warehouse work should focus on premises that warehouses cannot safely
