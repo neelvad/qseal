@@ -28,7 +28,7 @@ def check_equivalence(
         if suggestion.rewritten_sql is None:
             continue
         expected = _parse_expected(suggestion.rewritten_sql, rewritten)
-        if _same_normalized_query(expected, rewritten):
+        if expected is not None and _same_normalized_query(expected, rewritten):
             return VerificationResult(
                 status=VerificationStatus.PROVEN_EQUIVALENT,
                 original_sql=original.raw_sql,
@@ -47,7 +47,7 @@ def check_equivalence(
         and not_null_filter.rewritten_sql is not None
     ):
         expected = _parse_expected(not_null_filter.rewritten_sql, rewritten)
-        if _same_normalized_query(expected, rewritten):
+        if expected is not None and _same_normalized_query(expected, rewritten):
             return VerificationResult(
                 status=VerificationStatus.PROVEN_EQUIVALENT,
                 original_sql=original.raw_sql,
@@ -63,7 +63,7 @@ def check_equivalence(
         and join_elimination.rewritten_sql is not None
     ):
         expected = _parse_expected(join_elimination.rewritten_sql, rewritten)
-        if _same_normalized_query(expected, rewritten):
+        if expected is not None and _same_normalized_query(expected, rewritten):
             return VerificationResult(
                 status=VerificationStatus.PROVEN_EQUIVALENT,
                 original_sql=original.raw_sql,
@@ -79,7 +79,7 @@ def check_equivalence(
         and join_distinct_to_exists.rewritten_sql is not None
     ):
         expected = _parse_expected(join_distinct_to_exists.rewritten_sql, rewritten)
-        if _same_normalized_query(expected, rewritten):
+        if expected is not None and _same_normalized_query(expected, rewritten):
             return VerificationResult(
                 status=VerificationStatus.PROVEN_EQUIVALENT,
                 original_sql=original.raw_sql,
@@ -96,7 +96,7 @@ def check_equivalence(
     ):
         expected = _parse_expected(pushdown.rewritten_sql, rewritten)
 
-        if _same_normalized_query(expected, rewritten):
+        if expected is not None and _same_normalized_query(expected, rewritten):
             return VerificationResult(
                 status=VerificationStatus.PROVEN_EQUIVALENT,
                 original_sql=original.raw_sql,
@@ -127,13 +127,21 @@ def _same_normalized_query(left: SelectQuery, right: SelectQuery) -> bool:
     )
 
 
-def _parse_expected(sql: str, fallback: SelectQuery) -> SelectQuery:
+def _parse_expected(sql: str, reference: SelectQuery) -> SelectQuery | None:
+    # ``reference`` supplies only the dialect for re-parsing. On failure we must
+    # return ``None`` -- never ``reference`` (the candidate). Returning the
+    # candidate would make ``_same_normalized_query`` compare it against itself
+    # and report a spurious PROVEN_EQUIVALENT: any rule whose rendered SQL fails
+    # to parse (e.g. a quoted identifier like "user-id" that to_sql could not
+    # round trip) would then "prove" an arbitrary candidate equivalent. A parse
+    # failure means the rewrite is unverifiable here, which must not certify
+    # equivalence. Callers must guard on ``expected is not None``.
     try:
         from qseal.parser.sqlglot_parser import parse_select
 
-        return parse_select(sql, dialect=fallback.dialect)
+        return parse_select(sql, dialect=reference.dialect)
     except Exception:
-        return fallback
+        return None
 
 
 def _is_distinct_removal(original: SelectQuery, rewritten: SelectQuery) -> bool:

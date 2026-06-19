@@ -1,8 +1,23 @@
 from __future__ import annotations
 
+import re
+
 from pydantic import BaseModel, ConfigDict
 
 from qseal.dialects import DEFAULT_DIALECT, SqlDialect
+
+# A bare (unquoted) SQL identifier. Anything outside this shape -- hyphens,
+# spaces, leading digits, reserved words rendered verbatim -- must be quoted, or
+# the rendered SQL is invalid or, worse, parses to a *different* query (``user-id``
+# becomes ``user - id``). Snowflake and DuckDB, QuerySeal's target dialects, both
+# use ANSI double quotes for identifiers.
+_SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
+
+
+def _quote_identifier(name: str) -> str:
+    if _SAFE_IDENTIFIER.match(name):
+        return name
+    return '"' + name.replace('"', '""') + '"'
 
 
 class ColumnRef(BaseModel):
@@ -30,8 +45,9 @@ class ColumnRef(BaseModel):
                 return f"{self.expression_sql} AS {self.alias}"
             return self.expression_sql
         if self.is_star:
-            return f"{self.table}.*" if self.table else "*"
-        column = f"{self.table}.{self.name}" if self.table else self.name
+            return f"{_quote_identifier(self.table)}.*" if self.table else "*"
+        name = _quote_identifier(self.name)
+        column = f"{_quote_identifier(self.table)}.{name}" if self.table else name
         if self.alias:
             return f"{column} AS {self.alias}"
         return column

@@ -423,3 +423,45 @@ def test_check_proves_distinct_removal_with_matching_qualify() -> None:
 
     assert result.status == VerificationStatus.PROVEN_EQUIVALENT
     assert result.rule_name == "remove_redundant_distinct"
+
+
+def test_check_does_not_prove_unrelated_candidate_via_unparseable_render() -> None:
+    # Regression: a quoted identifier (``"user-id"``) the renderer cannot round
+    # trip must never let the verifier certify an arbitrary candidate. Previously
+    # the rule rendered ``SELECT user-id ...`` (invalid), _parse_expected fell back
+    # to the candidate, and comparing the candidate against itself reported a
+    # spurious PROVEN_EQUIVALENT.
+    original = parse_select('SELECT DISTINCT "user-id" FROM users')
+    unrelated = parse_select("SELECT other FROM users")
+    constraints = ConstraintCatalog(
+        tables={
+            "users": TableConstraints(
+                columns={"user-id": ColumnConstraint(nullable=False)},
+                unique=[("user-id",)],
+            )
+        }
+    )
+
+    result = check_equivalence(original, unrelated, constraints)
+
+    assert result.status != VerificationStatus.PROVEN_EQUIVALENT
+
+
+def test_check_proves_quoted_identifier_distinct_removal() -> None:
+    # Completeness: the genuine quoted-identifier rewrite still verifies, because
+    # to_sql now quotes identifiers that are not safe bare identifiers.
+    original = parse_select('SELECT DISTINCT "user-id" FROM users')
+    rewritten = parse_select('SELECT "user-id" FROM users')
+    constraints = ConstraintCatalog(
+        tables={
+            "users": TableConstraints(
+                columns={"user-id": ColumnConstraint(nullable=False)},
+                unique=[("user-id",)],
+            )
+        }
+    )
+
+    result = check_equivalence(original, rewritten, constraints)
+
+    assert result.status == VerificationStatus.PROVEN_EQUIVALENT
+    assert result.rule_name == "remove_redundant_distinct"
