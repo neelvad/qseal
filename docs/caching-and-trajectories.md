@@ -8,7 +8,7 @@ solver and benchmark work.
 from pathlib import Path
 
 from qseal.cache import JsonFileCache
-from qseal.environment import (
+from qseal.research.environment import (
     CachedPerformanceEvaluator,
     CachedVerifier,
     JsonlTrajectoryRecorder,

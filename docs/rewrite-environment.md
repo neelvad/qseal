@@ -5,7 +5,7 @@ reinforcement-learning experiments. It has no dependency on Gymnasium, Ray,
 PyTorch, or another training framework.
 
 ```python
-from qseal.environment import EnvironmentTask, RewriteEnvironment
+from qseal.research.environment import EnvironmentTask, RewriteEnvironment
 
 environment = RewriteEnvironment()
 observation = environment.reset(

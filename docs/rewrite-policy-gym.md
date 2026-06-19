@@ -6,6 +6,12 @@ the action space is finite and every transition is checked before it can advance
 
 This is a research surface, not a production optimizer.
 
+The implementation lives under `qseal.research.*`. Historical imports such as
+`qseal.environment` and `qseal.corpus` remain as thin compatibility wrappers,
+but new research code should import from `qseal.research.environment`,
+`qseal.research.search`, `qseal.research.corpus`, and
+`qseal.research.policy`.
+
 ## Environment Model
 
 An episode starts from a SQL query and a trusted constraint catalog. At each

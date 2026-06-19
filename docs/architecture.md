@@ -16,6 +16,8 @@ SQL text
 
 ## Main Packages
 
+Product surface:
+
 - `parser`: converts a constrained Snowflake or DuckDB SQL subset into the
   internal IR.
 - `ir`: stores normalized query, predicate, and join objects.
@@ -24,16 +26,24 @@ SQL text
 - `verifier`: proves supported original/rewritten query pairs.
 - `benchmark`: measures verified query pairs reproducibly in DuckDB.
 - `fixtures`: generates seeded DuckDB databases and reproducibility manifests.
-- `environment`: exposes framework-neutral rewrite episodes through `reset()`
-  and `step()`.
-- `search`: explores environment actions with fixed-order, seeded random,
-  greedy, beam, and bounded exhaustive baselines.
-- `corpus`: validates and loads versioned rewrite tasks and materializes their
-  named DuckDB fixture profiles; its runner compares search strategies and
-  emits versioned experiment artifacts.
-- `corpora`: stores task corpus data shipped in the Python package.
 - `cache`: provides canonical content hashes and atomic filesystem storage.
 - `report`: renders human-readable CLI output.
+
+Experimental research surface:
+
+- `research.environment`: exposes framework-neutral rewrite episodes through
+  `reset()` and `step()`.
+- `research.search`: explores environment actions with fixed-order, seeded
+  random, greedy, beam, and bounded exhaustive baselines.
+- `research.corpus`: validates and loads versioned rewrite tasks and
+  materializes their named DuckDB fixture profiles; its runner compares search
+  strategies and emits versioned experiment artifacts.
+- `research.corpora`: stores task corpus data shipped in the Python package.
+- `research.policy`: trains and evaluates simple rewrite-action rankers.
+
+The older `qseal.environment`, `qseal.search`, `qseal.corpus`,
+`qseal.corpora`, and `qseal.policy` import paths are compatibility wrappers for
+the research namespace.
 
 ## Rewrite Registry
 

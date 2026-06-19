@@ -7,8 +7,8 @@ depending on the repository checkout location:
 ```python
 from pathlib import Path
 
-from qseal.corpora import bundled_corpus_path
-from qseal.corpus import load_task_corpus, materialize_corpus_fixtures
+from qseal.research.corpora import bundled_corpus_path
+from qseal.research.corpus import load_task_corpus, materialize_corpus_fixtures
 
 corpus = load_task_corpus(bundled_corpus_path())
 materialize_corpus_fixtures(corpus, Path("qseal-corpus-data"))

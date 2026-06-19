@@ -17,6 +17,25 @@ from qseal.corpora import bundled_corpus_path
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+def test_root_help_hides_experimental_research_commands() -> None:
+    result = CliRunner().invoke(main, ["--help"])
+
+    assert result.exit_code == 0
+    assert "dbt" in result.output
+    assert "candidates" in result.output
+    assert "corpus" not in result.output
+    assert "policy" not in result.output
+    assert "llm" not in result.output
+    assert "refute" not in result.output
+
+
+def test_research_namespace_and_compatibility_imports() -> None:
+    from qseal.environment import RewriteEnvironment as CompatRewriteEnvironment
+    from qseal.research.environment import RewriteEnvironment
+
+    assert CompatRewriteEnvironment is RewriteEnvironment
+
+
 def test_suggest_cli(tmp_path) -> None:
     query = tmp_path / "query.sql"
     schema = tmp_path / "schema.yml"

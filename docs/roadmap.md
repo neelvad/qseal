@@ -42,8 +42,8 @@ unbounded list of optimizer rewrites.
 - Local dbt yield-pack fixture covering all default scanner rule families and
   the composed chain-reporting path.
 - Snowflake Tier 3 family suite and dbt-like unused-join demo suite.
-- DuckDB rewrite-policy research harness with structured actions, search
-  baselines, policy models, corpus runs, and stability reports.
+- Experimental `qseal.research.*` rewrite-policy harness with structured
+  actions, search baselines, policy models, corpus runs, and stability reports.
 - External verifier adapters/spikes for SQLSolver, QED, and VeriEQL.
 
 ## Near-Term Product Roadmap

@@ -8,8 +8,8 @@ from qseal.cli.types import (
     RewardModelChoice,
     SearchStrategyChoice,
 )
-from qseal.corpora import bundled_corpus_path
-from qseal.corpus import (
+from qseal.research.corpora import bundled_corpus_path
+from qseal.research.corpus import (
     CorpusRunConfig,
     aggregate_corpus_runs,
     export_corpus_trajectories,
@@ -26,15 +26,15 @@ from qseal.corpus import (
     write_corpus_aggregate,
     write_corpus_summary,
 )
-from qseal.policy import (
+from qseal.research.policy import (
     load_policy_model,
 )
 
 console = Console()
 
-@click.group(name="corpus")
+@click.group(name="corpus", hidden=True)
 def corpus_group() -> None:
-    """Run reproducible rewrite-search tasks."""
+    """Experimental: run reproducible rewrite-search tasks."""
 
 
 @corpus_group.command(name="run")

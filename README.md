@@ -1,14 +1,16 @@
 # QuerySeal
 
-QuerySeal is a research-grade CLI for verified SQL rewrite experiments.
+QuerySeal is a CLI tool for verified-safe SQL rewrite suggestions over a
+constrained dbt/Snowflake/DuckDB SQL subset.
 
-It has two public-v0 surfaces:
+The public-v0 product surface is the **dbt scanner and candidate verifier**:
+find small, premise-backed rewrites that are safe under trusted dbt tests or
+QuerySeal YAML constraints, then emit reviewable evidence for CI.
 
-- **dbt scanner:** find small, premise-backed SQL rewrites that are safe under
-  trusted dbt tests or QuerySeal YAML constraints.
-- **rewrite-policy gym:** run search, ranking, and policy-learning experiments
-  over a finite SQL rewrite action space where every transition is verified and
-  rewards come from repeatable DuckDB benchmarks.
+The repository also contains an explicitly experimental rewrite-policy research
+harness under `qseal.research.*`. That code is useful for controlled DuckDB
+search/ranking experiments, but it is not the primary product surface and is
+not production query optimization.
 
 QuerySeal is intentionally not a general SQL optimizer, not a full SQL
 equivalence prover, and not a warehouse savings guarantee. A proven rewrite
@@ -44,14 +46,14 @@ uv sync
 uv run qseal --help
 ```
 
-After the package is published, the intended quick paths are:
+From PyPI:
 
 ```bash
 uvx qseal --help
 pipx install qseal
 ```
 
-The default scanner, corpus runner, and DuckDB benchmark tools are pure Python.
+The default scanner and DuckDB benchmark tools are pure Python.
 Optional external solver integrations require user-supplied toolchains:
 
 - **SQLSolver**: optional independent equivalence prover; Apache 2.0 upstream.
@@ -82,18 +84,7 @@ Scan the product demo project for advisory findings:
 uv run qseal dbt scan examples/product_demo/dbt_project --format text
 ```
 
-Run a tiny rewrite-policy corpus experiment:
-
-```bash
-uv run qseal corpus run /tmp/qseal-corpus-smoke \
-  --task redundant-distinct-users \
-  --strategy fixed_order \
-  --strategy greedy \
-  --warmups 0 \
-  --repetitions 1
-```
-
-## Mode A: dbt Scanner
+## dbt Scanner
 
 The dbt scanner is an advisory workflow for data projects. It scans dbt model
 SQL, reads nearby `schema.yml` / `.yaml` tests, and reports proven-safe rewrite
@@ -124,14 +115,34 @@ examples, but the project should not be treated as a published Marketplace
 Action yet. See [docs/github-actions.md](docs/github-actions.md) and
 [docs/ci.md](docs/ci.md).
 
-## Mode B: Rewrite-Policy Gym
+## Candidate Verification
+
+If another tool, human, or model generates candidate SQL files, keep generation
+outside the trusted path and gate candidates with QuerySeal:
+
+```bash
+uv run qseal candidates evidence original.sql \
+  --candidates-dir generated-candidates \
+  --schema schema.yml \
+  --fail-on unproven \
+  --report-file qseal-candidate-evidence.json
+```
+
+Only `PROVEN_EQUIVALENT` candidates should be considered for review. See
+[docs/candidate-evidence-ci.md](docs/candidate-evidence-ci.md).
+
+## Experimental Research Surface
 
 The policy/research side exposes QuerySeal's rewrite rules as a finite action
 space. An environment step proposes one rewrite action, verifies semantic
 safety, optionally benchmarks the transition on DuckDB, and records the reward.
 
-This is for experiments in search, ranking, RL-style policy learning, and
-verified action selection. It is not production query optimization.
+This code lives under `qseal.research.*` and is for experiments in search,
+ranking, RL-style policy learning, and verified action selection. It is not
+production query optimization. The corresponding CLI groups are hidden from
+root help, but remain available as `qseal corpus ...`, `qseal policy ...`, and
+`qseal llm ...`; the direct VeriEQL refuter remains available as
+`qseal refute ...`.
 
 Useful commands:
 
@@ -202,30 +213,14 @@ Out of scope includes full SQL equivalence, arbitrary subqueries, join
 reordering, recursive CTEs, UDFs, semi-structured `VARIANT` / `FLATTEN`, and any
 rewrite that QuerySeal cannot verify. Full detail: [docs/scope.md](docs/scope.md).
 
-## Candidate Verification
-
-If another tool, human, or model generates candidate SQL files, keep generation
-outside the trusted path and gate candidates with QuerySeal:
-
-```bash
-uv run qseal candidates evidence original.sql \
-  --candidates-dir generated-candidates \
-  --schema schema.yml \
-  --fail-on unproven \
-  --report-file qseal-candidate-evidence.json
-```
-
-Only `PROVEN_EQUIVALENT` candidates should be considered for review. See
-[docs/candidate-evidence-ci.md](docs/candidate-evidence-ci.md).
-
 ## Documentation
+
+Product docs:
 
 - [Scope](docs/scope.md): supported SQL, assumptions, and non-goals.
 - [Artifacts](docs/artifacts.md): JSON report contracts.
 - [GitHub workflow examples](docs/github-actions.md): CLI-based CI examples.
 - [Candidate evidence](docs/candidate-evidence-ci.md): verify generated SQL.
-- [Rewrite-policy gym](docs/rewrite-policy-gym.md): corpus, search, and policy
-  experiments.
 - [Performance evidence](docs/performance-evidence.md): benchmark tiers and
   evidence limits.
 - [Product demo](docs/product-demo.md): product-shaped demo narrative.
@@ -233,9 +228,18 @@ Only `PROVEN_EQUIVALENT` candidates should be considered for review. See
 - Solver notes: [SQLSolver](docs/sqlsolver-spike.md),
   [QED](docs/qed-spike.md), [VeriEQL](docs/verieql-spike.md).
 
+Experimental research docs:
+
+- [Rewrite-policy gym](docs/rewrite-policy-gym.md): corpus, search, and policy
+  experiments.
+- [Rewrite environment](docs/rewrite-environment.md): environment API.
+- [Search baselines](docs/search-baselines.md): fixed/random/greedy/beam
+  strategies.
+- [Task corpus](docs/task-corpus.md): bundled DuckDB corpus.
+
 ## Public v0 Status
 
-This is an alpha research/prototype release. The useful public artifact is a
-reproducible verified-rewrite workbench, not a mature optimizer. If you try it
-on a real dbt project, start with `qseal dbt intake` and share the redacted
-artifact before sharing source SQL.
+This is an alpha release. The useful public artifact is a reproducible
+verified-rewrite CI workbench, not a mature optimizer. If you try it on a real
+dbt project, start with `qseal dbt intake` and share the redacted artifact
+before sharing source SQL.

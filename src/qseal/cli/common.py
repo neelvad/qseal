@@ -4,14 +4,14 @@ import click
 from rich.console import Console
 
 from qseal.constraints.loader import load_constraint_catalog
-from qseal.policy import (
-    PolicyDataFilter,
-)
 from qseal.report.json import (
     render_verification_json,
 )
 from qseal.report.text import (
     render_verification_report,
+)
+from qseal.research.policy import (
+    PolicyDataFilter,
 )
 from qseal.rewrites.base import RewriteSuggestion, VerificationStatus
 from qseal.verifier.backends import get_verifier_backend

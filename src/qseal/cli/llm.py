@@ -23,9 +23,9 @@ from qseal.verifier.backends.verieql import VeriEqlBackend
 
 console = Console()
 
-@click.group(name="llm")
+@click.group(name="llm", hidden=True)
 def llm_group() -> None:
-    """LLM-generated candidate pipeline: generate, verify, benchmark, explain."""
+    """Experimental: LLM-generated candidate pipeline."""
 
 
 @llm_group.command(name="generate")

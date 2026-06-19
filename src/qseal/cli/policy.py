@@ -13,13 +13,13 @@ from qseal.cli.types import (
     PolicyLabelGroupChoice,
     RewardModelChoice,
 )
-from qseal.corpora import bundled_corpus_path
-from qseal.corpus import (
+from qseal.research.corpora import bundled_corpus_path
+from qseal.research.corpus import (
     CorpusRunConfig,
     load_task_corpus,
     run_task_corpus,
 )
-from qseal.policy import (
+from qseal.research.policy import (
     PolicyDataFilter,
     PolicyHoldoutEvaluation,
     compare_policy_holdouts,
@@ -42,9 +42,9 @@ from qseal.policy import (
 
 console = Console()
 
-@click.group(name="policy")
+@click.group(name="policy", hidden=True)
 def policy_group() -> None:
-    """Train and evaluate simple rewrite action policies."""
+    """Experimental: train and evaluate rewrite action policies."""
 
 
 @policy_group.command(name="train-baseline")

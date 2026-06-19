@@ -18,8 +18,8 @@ These are library APIs rather than CLI commands. Each search accepts an
 `EnvironmentTask` and a factory that creates a fresh `RewriteEnvironment`:
 
 ```python
-from qseal.environment import EnvironmentTask, RewriteEnvironment
-from qseal.search import beam_search
+from qseal.research.environment import EnvironmentTask, RewriteEnvironment
+from qseal.research.search import beam_search
 
 task = EnvironmentTask(task_id="example", sql="SELECT DISTINCT user_id FROM users")
 

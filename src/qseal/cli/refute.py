@@ -24,7 +24,7 @@ from qseal.verifier.backends.verieql import VeriEqlBackend
 
 console = Console()
 
-@click.command(name="refute")
+@click.command(name="refute", hidden=True)
 @click.argument("original_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.argument("rewritten_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option(
