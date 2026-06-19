@@ -13,7 +13,9 @@ a benchmark claim that can be reproduced from this repository alone.
 
 ```bash
 export ANTHROPIC_API_KEY=...
+export QSEAL_LLM_MODEL=...
 uv run qseal llm generate PROJECT --out BUNDLES_DIR --limit 5
+uv run qseal llm generate PROJECT --out BUNDLES_DIR --model MODEL_ID --limit 5
 uv run qseal llm generate PROJECT --out BUNDLES_DIR --use-batches
 uv run qseal llm generate PROJECT --out BUNDLES_DIR --dry-run
 ```
@@ -38,10 +40,11 @@ while VeriEQL runs natively on macOS:
 ```bash
 # Phase A (macOS): parse -> identity -> builtin -> VeriEQL refute/cross-check
 uv run qseal llm verify BUNDLES_DIR \
-  --verieql-dir ~/workspace/qseal-eval/VeriEQL --report-file report-a.json
+  --verieql-dir /path/to/VeriEQL --report-file report-a.json
 
 # Phase B (container): parse -> identity -> builtin -> SQLSolver
-scripts/run_llm_verification_sqlsolver.sh BUNDLES_DIR PROJECT report-b.json
+SQLSOLVER_DIR=/path/to/SQLSolver \
+  scripts/run_llm_verification_sqlsolver.sh BUNDLES_DIR report-b.json
 
 # Merge: best verdict per candidate; proven-vs-refuted conflicts alarm
 uv run qseal llm merge report-a.json report-b.json --report-file final.json

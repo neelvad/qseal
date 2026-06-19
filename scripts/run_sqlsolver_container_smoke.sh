@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 QSEAL_DIR="${QSEAL_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-SQLSOLVER_DIR="${SQLSOLVER_DIR:-$HOME/workspace/qseal-eval/SQLSolver}"
+SQLSOLVER_DIR="${SQLSOLVER_DIR:-}"
 COLIMA_PROFILE="${COLIMA_PROFILE:-sqlsolver-x86}"
 COLIMA_CPUS="${COLIMA_CPUS:-2}"
 COLIMA_MEMORY="${COLIMA_MEMORY:-4}"
@@ -38,6 +38,12 @@ fi
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker CLI is required. Install Docker or Colima's Docker runtime first." >&2
+  exit 2
+fi
+
+if [[ -z "$SQLSOLVER_DIR" ]]; then
+  echo "SQLSOLVER_DIR is required." >&2
+  echo "Set SQLSOLVER_DIR=/path/to/SQLSolver and rerun this script." >&2
   exit 2
 fi
 

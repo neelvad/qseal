@@ -11,7 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 QSEAL_DIR="${QSEAL_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-SQLSOLVER_DIR="${SQLSOLVER_DIR:-$HOME/workspace/qseal-eval/SQLSolver}"
+SQLSOLVER_DIR="${SQLSOLVER_DIR:-}"
 COLIMA_PROFILE="${COLIMA_PROFILE:-sqlsolver-x86}"
 COLIMA_CPUS="${COLIMA_CPUS:-2}"
 COLIMA_MEMORY="${COLIMA_MEMORY:-4}"
@@ -23,6 +23,18 @@ colima_started=0
 
 BUNDLES_DIR="${1:?usage: run_llm_verification_sqlsolver.sh BUNDLES_DIR REPORT_FILE}"
 REPORT_FILE="${2:?REPORT_FILE is required}"
+
+if [[ -z "$SQLSOLVER_DIR" ]]; then
+  echo "SQLSOLVER_DIR is required." >&2
+  echo "Set SQLSOLVER_DIR=/path/to/SQLSolver and rerun this script." >&2
+  exit 2
+fi
+
+if [[ ! -d "$SQLSOLVER_DIR" ]]; then
+  echo "SQLSolver directory not found: $SQLSOLVER_DIR" >&2
+  echo "Set SQLSOLVER_DIR=/path/to/SQLSolver and rerun this script." >&2
+  exit 2
+fi
 
 cleanup() {
   if [[ "$STOP_COLIMA" == "1" && "$colima_started" == "1" ]]; then

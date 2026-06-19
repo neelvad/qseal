@@ -6,12 +6,12 @@ macOS directly.
 The shortest host-side smoke test is:
 
 ```bash
-scripts/run_sqlsolver_container_smoke.sh
+SQLSOLVER_DIR=/path/to/SQLSolver scripts/run_sqlsolver_container_smoke.sh
 ```
 
-By default it expects SQLSolver at `~/workspace/qseal-eval/SQLSolver`, starts
-the `sqlsolver-x86` Colima profile, builds a cached smoke-test image if needed,
-builds the SQLSolver jar if needed, and runs all QuerySeal SQLSolver
+Set `SQLSOLVER_DIR` to a local SQLSolver checkout before running it. The script
+starts the `sqlsolver-x86` Colima profile, builds a cached smoke-test image if
+needed, builds the SQLSolver jar if needed, and runs all QuerySeal SQLSolver
 compatibility cases plus a product-like `candidates run --verifier sqlsolver`
 smoke test.
 It also stops the Colima profile when the run exits. Set `STOP_COLIMA=0` if you
@@ -39,6 +39,7 @@ To check an arbitrary SQL pair, place the SQL and schema files inside the
 QuerySeal repository and run:
 
 ```bash
+SQLSOLVER_DIR=/path/to/SQLSolver \
 RUN_FIXTURE_SMOKE=0 \
 RUN_CANDIDATE_SMOKE=0 \
 PAIR_ORIGINAL_PATH=qseal-runs/manual/original.sql \
@@ -67,8 +68,8 @@ Run an Ubuntu shell with SQLSolver and QuerySeal mounted:
 
 ```bash
 docker run --rm -it \
-  -v ~/workspace/qseal-eval/SQLSolver:/sqlsolver \
-  -v ~/workspace/qseal:/qseal \
+  -v /path/to/SQLSolver:/sqlsolver \
+  -v /path/to/qseal:/qseal \
   -w /sqlsolver \
   ubuntu:22.04 \
   bash

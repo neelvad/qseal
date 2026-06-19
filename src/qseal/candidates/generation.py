@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -25,7 +26,7 @@ from qseal.dbt.scan import _load_project_constraints
 from qseal.parser.fragments import parse_select_fragments
 from qseal.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 
-MODEL_ID = "claude-opus-4-8"
+MODEL_ENV_VAR = "QSEAL_LLM_MODEL"
 MAX_TOKENS = 16000
 
 OUTPUT_SCHEMA = {
@@ -148,6 +149,7 @@ def generate_candidates(
     out_dir: Path,
     *,
     dialect: str = "snowflake",
+    model_id: str | None = None,
     limit: int | None = None,
     max_candidates: int = 3,
     use_batches: bool = False,
@@ -172,13 +174,19 @@ def generate_candidates(
     if dry_run:
         for request in requests:
             log(f"=== {request['name']}\n{request['user_message']}\n")
-        return {"models": len(requests), "bundles": 0, "candidates": 0, "errors": 0,
-                "dry_run": True}
+        return {
+            "models": len(requests),
+            "bundles": 0,
+            "candidates": 0,
+            "errors": 0,
+            "dry_run": True,
+        }
 
+    model_id = _resolve_model_id(model_id)
     responses = (
-        run_batched(system_prompt, requests, log)
+        run_batched(system_prompt, requests, log, model_id)
         if use_batches
-        else run_direct(system_prompt, requests, log)
+        else run_direct(system_prompt, requests, log, model_id)
     )
 
     prompt_hash = hashlib.sha256(system_prompt.encode()).hexdigest()[:16]
@@ -190,8 +198,12 @@ def generate_candidates(
             summary["errors"] += 1
             continue
         written = write_bundle(
-            out_dir / request["name"], request, response,
-            prompt_hash=prompt_hash, generated_at=generated_at,
+            out_dir / request["name"],
+            request,
+            response,
+            prompt_hash=prompt_hash,
+            generated_at=generated_at,
+            model_id=model_id,
         )
         summary["bundles"] += 1
         summary["candidates"] += written
@@ -205,7 +217,7 @@ def generate_candidates(
             {
                 "artifact_type": "llm_candidate_run",
                 "schema_version": 1,
-                "generator_model": MODEL_ID,
+                "generator_model": model_id,
                 "prompt_hash": prompt_hash,
                 "generated_at": generated_at,
                 "dialect": dialect,
@@ -215,6 +227,16 @@ def generate_candidates(
         )
     )
     return summary
+
+
+def _resolve_model_id(model_id: str | None) -> str:
+    resolved = model_id or os.environ.get(MODEL_ENV_VAR)
+    if not resolved:
+        raise ValueError(
+            f"LLM generation requires --model or {MODEL_ENV_VAR}; "
+            "dry-run mode does not call the model."
+        )
+    return resolved
 
 
 def select_targets(model_paths, constraints: ConstraintCatalog, dialect: str) -> list[dict]:
@@ -284,9 +306,9 @@ def premises_for(sql: str, constraints: ConstraintCatalog, dialect: str) -> list
     return premises
 
 
-def request_params(system_prompt: str, request: dict) -> dict:
+def request_params(system_prompt: str, request: dict, model_id: str) -> dict:
     return {
-        "model": MODEL_ID,
+        "model": model_id,
         "max_tokens": MAX_TOKENS,
         "thinking": {"type": "adaptive"},
         "system": [
@@ -302,14 +324,21 @@ def _parse_response_text(message) -> dict:
     return json.loads(text)
 
 
-def run_direct(system_prompt: str, requests: list[dict], log: Logger) -> dict[str, dict]:
+def run_direct(
+    system_prompt: str,
+    requests: list[dict],
+    log: Logger,
+    model_id: str,
+) -> dict[str, dict]:
     import anthropic
 
     client = anthropic.Anthropic()
     responses = {}
     for request in requests:
         try:
-            message = client.messages.create(**request_params(system_prompt, request))
+            message = client.messages.create(
+                **request_params(system_prompt, request, model_id)
+            )
             responses[request["name"]] = {
                 "payload": _parse_response_text(message),
                 "usage": message.usage.to_dict(),
@@ -320,13 +349,21 @@ def run_direct(system_prompt: str, requests: list[dict], log: Logger) -> dict[st
     return responses
 
 
-def run_batched(system_prompt: str, requests: list[dict], log: Logger) -> dict[str, dict]:
+def run_batched(
+    system_prompt: str,
+    requests: list[dict],
+    log: Logger,
+    model_id: str,
+) -> dict[str, dict]:
     import anthropic
 
     client = anthropic.Anthropic()
     batch = client.messages.batches.create(
         requests=[
-            {"custom_id": request["name"], "params": request_params(system_prompt, request)}
+            {
+                "custom_id": request["name"],
+                "params": request_params(system_prompt, request, model_id),
+            }
             for request in requests
         ]
     )
@@ -358,6 +395,7 @@ def write_bundle(
     response: dict,
     prompt_hash: str,
     generated_at: str,
+    model_id: str,
 ) -> int:
     candidates = response["payload"].get("candidates") or []
     bundle_dir.mkdir(parents=True, exist_ok=True)
@@ -388,7 +426,7 @@ def write_bundle(
                 "original_path": "original.sql",
                 "model_path": request["path"],
                 "generator": {
-                    "model": MODEL_ID,
+                    "model": model_id,
                     "prompt_hash": prompt_hash,
                     "generated_at": generated_at,
                     "usage": response.get("usage", {}),

@@ -1,3 +1,9 @@
+"""Generic external verifier extension point.
+
+This backend is intentionally not implemented yet. Use the dedicated SQLSolver
+backend for executable external proof today.
+"""
+
 from qseal.constraints.model import ConstraintCatalog
 from qseal.dialects import DEFAULT_DIALECT, SqlDialect
 from qseal.rewrites.base import VerificationStatus

@@ -206,6 +206,15 @@ def llm_group() -> None:
     help="Directory where candidate bundles are written.",
 )
 @click.option("--dialect", type=DialectChoice, default=DEFAULT_DIALECT, show_default=True)
+@click.option(
+    "--model",
+    "model_id",
+    envvar="QSEAL_LLM_MODEL",
+    help=(
+        "Anthropic model id for actual generation. Can also be set with "
+        "QSEAL_LLM_MODEL. Required unless --dry-run is used."
+    ),
+)
 @click.option("--limit", type=click.IntRange(min=1), help="Only process the first N targets.")
 @click.option("--max-candidates", type=click.IntRange(min=1), default=3, show_default=True)
 @click.option(
@@ -218,16 +227,23 @@ def llm_generate(
     project_path: Path,
     out_dir: Path,
     dialect: str,
+    model_id: str | None,
     limit: int | None,
     max_candidates: int,
     use_batches: bool,
     dry_run: bool,
 ) -> None:
     """Generate premise-targeted LLM rewrite candidates for a dbt project."""
+    if not dry_run and not model_id:
+        raise click.ClickException(
+            "LLM generation requires --model or QSEAL_LLM_MODEL. "
+            "Use --dry-run to inspect prompts without a model."
+        )
     summary = generate_candidates(
         project_path,
         out_dir,
         dialect=dialect,
+        model_id=model_id,
         limit=limit,
         max_candidates=max_candidates,
         use_batches=use_batches,
@@ -1897,7 +1913,11 @@ def benchmark(
     report_file: Path | None,
     query_tag: str | None,
 ) -> None:
-    """Benchmark an original and rewritten query."""
+    """Benchmark an original and rewritten query.
+
+    Snowflake mode requires snowflake-connector-python and QSEAL_SNOWFLAKE_*
+    credentials.
+    """
     if engine == "snowflake":
         result = benchmark_snowflake_query_pair(
             original_path.read_text(),
@@ -2040,7 +2060,10 @@ def snowflake_family_benchmark_suite(
     report_file: Path | None,
     allow_existing: bool,
 ) -> None:
-    """Run the repeatable Snowflake Tier-3 rewrite-family benchmark suite."""
+    """Run the repeatable Snowflake Tier-3 rewrite-family benchmark suite.
+
+    Requires snowflake-connector-python and QSEAL_SNOWFLAKE_* credentials.
+    """
     if output_dir.exists() and any(output_dir.iterdir()) and not allow_existing:
         raise click.ClickException(
             f"Output directory is not empty: {output_dir}. "
@@ -2165,7 +2188,10 @@ def snowflake_dbt_demo_benchmark_suite(
     report_file: Path | None,
     allow_existing: bool,
 ) -> None:
-    """Run the Snowflake Tier-3 dbt join-elimination demo benchmark."""
+    """Run the Snowflake Tier-3 dbt join-elimination demo benchmark.
+
+    Requires snowflake-connector-python and QSEAL_SNOWFLAKE_* credentials.
+    """
     if output_dir.exists() and any(output_dir.iterdir()) and not allow_existing:
         raise click.ClickException(
             f"Output directory is not empty: {output_dir}. "

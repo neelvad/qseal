@@ -4,6 +4,7 @@ from pathlib import Path
 from qseal.candidates.generation import (
     build_requests,
     generate_candidates,
+    request_params,
     write_bundle,
 )
 
@@ -71,7 +72,12 @@ def test_write_bundle_conforms_to_candidate_contract(tmp_path: Path) -> None:
     }
 
     count = write_bundle(
-        tmp_path / "m", request, response, prompt_hash="abc", generated_at="2026-01-01"
+        tmp_path / "m",
+        request,
+        response,
+        prompt_hash="abc",
+        generated_at="2026-01-01",
+        model_id="test-model",
     )
 
     assert count == 1
@@ -79,8 +85,19 @@ def test_write_bundle_conforms_to_candidate_contract(tmp_path: Path) -> None:
     assert metadata["artifact_type"] == "candidate_bundle"
     assert metadata["original_path"] == "original.sql"
     assert metadata["candidates"][0]["path"] == "001_llm.sql"
+    assert metadata["generator"]["model"] == "test-model"
     assert metadata["generator"]["prompt_hash"] == "abc"
     assert (tmp_path / "m" / "001_llm.sql").read_text().strip() == "SELECT x FROM t"
+
+
+def test_request_params_uses_configured_model() -> None:
+    params = request_params(
+        "system",
+        {"name": "m", "user_message": "user"},
+        model_id="configured-model",
+    )
+
+    assert params["model"] == "configured-model"
 
 
 def test_generate_via_cli_dry_run(tmp_path: Path) -> None:
@@ -95,3 +112,19 @@ def test_generate_via_cli_dry_run(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     assert '"dry_run": true' in result.output
+
+
+def test_generate_via_cli_requires_model_for_api_run(tmp_path: Path) -> None:
+    from click.testing import CliRunner
+
+    from qseal.cli import main
+
+    project = _write_project(tmp_path)
+    result = CliRunner().invoke(
+        main,
+        ["llm", "generate", str(project), "--out", str(tmp_path / "out")],
+        env={"QSEAL_LLM_MODEL": ""},
+    )
+
+    assert result.exit_code != 0
+    assert "requires --model or QSEAL_LLM_MODEL" in result.output

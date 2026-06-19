@@ -13,6 +13,12 @@ def main() -> int:
     parser.add_argument("project_path", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--dialect", default="snowflake")
+    parser.add_argument(
+        "--model",
+        dest="model_id",
+        default=None,
+        help="Anthropic model id. Can also be set with QSEAL_LLM_MODEL.",
+    )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--max-candidates", type=int, default=3)
     parser.add_argument("--use-batches", action="store_true")
@@ -23,6 +29,7 @@ def main() -> int:
         args.project_path,
         args.out,
         dialect=args.dialect,
+        model_id=args.model_id,
         limit=args.limit,
         max_candidates=args.max_candidates,
         use_batches=args.use_batches,

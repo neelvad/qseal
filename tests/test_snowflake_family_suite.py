@@ -178,6 +178,7 @@ def test_snowflake_dbt_demo_cli_is_registered() -> None:
 
     assert result.exit_code == 0
     assert "dbt join-elimination demo benchmark" in result.output
+    assert "QSEAL_SNOWFLAKE_* credentials" in result.output
     assert "--mode [aggregate|materialized]" in result.output
 
 

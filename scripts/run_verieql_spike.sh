@@ -6,7 +6,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERIEQL_DIR="${VERIEQL_DIR:-$HOME/workspace/qseal-eval/VeriEQL}"
+VERIEQL_DIR="${VERIEQL_DIR:-}"
+
+if [[ -z "$VERIEQL_DIR" ]]; then
+  echo "VERIEQL_DIR is required." >&2
+  echo "Clone https://github.com/VeriEQL/VeriEQL and set VERIEQL_DIR." >&2
+  exit 2
+fi
 
 if [[ ! -d "$VERIEQL_DIR" ]]; then
   echo "VeriEQL checkout not found: $VERIEQL_DIR" >&2
