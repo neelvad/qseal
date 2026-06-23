@@ -1,7 +1,64 @@
 # SQLSolver Spike
 
-SQLSolver ships Linux native Z3 libraries, so run it in Ubuntu rather than
-macOS directly.
+SQLSolver links Z3 through JNI. Its bundled native libraries
+(`lib/libz3java.so`, `lib/libz3.so`) are Linux x86-64 ELF, which is why the
+original smoke path uses an x86 Colima container (below). On Apple Silicon
+you can instead build arm64 macOS Z3 Java bindings once and run SQLSolver
+natively, with no container and no emulation overhead.
+
+## Native arm64 macOS (Apple Silicon)
+
+Homebrew's `z3` formula ships the C/Python `libz3.dylib` but not the Java
+binding (`libz3java.dylib` + the `com.microsoft.z3` classes). So the native
+path builds Z3 4.13.0 — the release SQLSolver targets — from source with
+`--java`, then reuses SQLSolver's bundled `z3-4.13.0.jar` classes unchanged
+(same release, so the JNI version handshake passes).
+
+Build the bindings (needs a JDK with JNI headers, e.g. `openjdk@17`):
+
+```bash
+JAVA_HOME=$(/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home) \
+  scripts/build_z3_java_native.sh
+```
+
+`scripts/build_z3_java_native.sh` downloads Z3 4.13.0, patches three latent
+4.13.0 source typos that trip modern clang (one-token name fixes, no semantic
+change), and builds `libz3.dylib` + `libz3java.dylib` under
+`z3java-4.13.0/build/`.
+
+Run SQLSolver natively through the wrapper (the native counterpart of
+`sqlsolver_command.sh`, which sets `DYLD_LIBRARY_PATH` instead of
+`LD_LIBRARY_PATH`):
+
+```bash
+Z3_LIB_DIR=z3java-4.13.0/build \
+SQLSOLVER_DIR=/path/to/SQLSolver \
+JAVA_BIN=$(/opt/homebrew/opt/openjdk@17/bin/java) \
+  scripts/run_sqlsolver_native.sh -sql1=a.sql -sql2=b.sql -schema=s.sql -print
+```
+
+Observed native arm64 fixture results (matching the x86 container):
+
+```text
+redundant_distinct: EQ      (1057 ms)
+unsafe_distinct:    NEQ     (418 ms)
+unused_left_join:   EQ      (153 ms)
+join_distinct_exists: EQ    (156 ms)
+```
+
+With the BIRD verdict funnel:
+
+```bash
+Z3_LIB_DIR=z3java-4.13.0/build SQLSOLVER_DIR=/path/to/SQLSolver \
+  python scripts/probe_bird_verdict.py --pairs pairs.json --qed \
+    --sqlsolver-command scripts/run_sqlsolver_native.sh \
+    --verieql-dir /path/to/VeriEQL --report-file report.json
+```
+
+The rest of this document covers the x86 Colima container path, which remains
+the fallback for x86 hosts or CI without an arm64 Z3 build.
+
+## x86 Colima container
 
 The shortest host-side smoke test is:
 

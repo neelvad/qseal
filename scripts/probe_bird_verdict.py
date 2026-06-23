@@ -11,8 +11,9 @@ Cascade order, cheapest first, and the first decisive tier wins:
    rewrite-rule replays. Always runs (no external toolchain).
 2. QED (native Calcite parser + Rust prover) -- optional, enabled with --qed
    and configured via QSEAL_QED_PARSER_JAR / QSEAL_QED_PROVER / QSEAL_QED_JAVA.
-3. SQLSolver (x86 container / Modal) -- optional, enabled with
-   --sqlsolver-command CMD.
+3. SQLSolver (native arm64 macOS or x86 container / Modal) -- optional,
+   enabled with --sqlsolver-command CMD. On Apple Silicon use
+   scripts/run_sqlsolver_native.sh after scripts/build_z3_java_native.sh.
 4. VeriEQL refuter (external checkout, CC BY-NC-SA -- never bundled) --
    optional, enabled with --verieql-dir DIR. A counterexample is a sound
    refutation; the absence of one up to the bound is bounded evidence and
