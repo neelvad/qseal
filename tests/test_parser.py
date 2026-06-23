@@ -72,9 +72,12 @@ def test_parse_select_with_opaque_projection_expressions() -> None:
     ]
 
 
-def test_rejects_aggregate_projection_expression() -> None:
-    with pytest.raises(UnsupportedSqlError, match="simple aliased scalar"):
-        parse_select("SELECT SUM(price) AS total FROM orders")
+def test_parses_aggregate_projection_expression() -> None:
+    query = parse_select("SELECT SUM(price) AS total FROM orders")
+
+    assert query.projections[0].to_sql() == "SUM(price) AS total"
+    assert query.projections[0].is_aggregate is True
+    assert query.to_sql() == "SELECT SUM(price) AS total\nFROM orders;"
 
 
 def test_parse_count_distinct_projection_without_group_by() -> None:
@@ -210,14 +213,29 @@ def test_parse_select_with_exists_predicate() -> None:
     )
 
 
-def test_rejects_unsupported_where_expression() -> None:
-    with pytest.raises(UnsupportedSqlError, match="Only ANDed"):
-        parse_select("SELECT user_id FROM users WHERE user_id = 1 OR status = 'active'")
+def test_parses_unsupported_where_expression_as_opaque() -> None:
+    query = parse_select(
+        "SELECT user_id FROM users WHERE user_id = 1 OR status = 'active'"
+    )
+
+    assert len(query.predicates) == 1
+    assert query.predicates[0].to_sql() == "user_id = 1 OR status = 'active'"
+
+
+def test_parses_order_by() -> None:
+    query = parse_select("SELECT user_id FROM users ORDER BY user_id DESC, status")
+
+    assert [item.to_sql() for item in query.order_by] == [
+        "user_id DESC",
+        "status",
+    ]
+    assert query.order_by[0].descending is True
+    assert query.order_by[1].descending is False
 
 
 def test_rejects_unmodeled_clauses() -> None:
-    with pytest.raises(UnsupportedSqlError, match="ORDER BY"):
-        parse_select("SELECT user_id FROM users ORDER BY user_id")
+    with pytest.raises(UnsupportedSqlError, match="LIMIT"):
+        parse_select("SELECT user_id FROM users LIMIT 10")
 
 
 def test_parses_simple_cte_chain() -> None:
@@ -505,9 +523,11 @@ def test_parses_windowed_aggregate_projections_without_group_by() -> None:
     assert query.group_by == ()
 
 
-def test_rejects_bare_aggregate_projection_without_group_by() -> None:
-    with pytest.raises(UnsupportedSqlError):
-        parse_select("SELECT SUM(amount) AS total FROM users")
+def test_parses_bare_aggregate_projection_without_group_by() -> None:
+    query = parse_select("SELECT SUM(amount) AS total FROM users")
+
+    assert query.projections[0].to_sql() == "SUM(amount) AS total"
+    assert query.projections[0].is_aggregate is True
 
 
 def test_rejects_scalar_subquery_projection() -> None:

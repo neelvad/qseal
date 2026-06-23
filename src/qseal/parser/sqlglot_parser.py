@@ -11,6 +11,8 @@ from qseal.ir.model import (
     Join,
     JoinCondition,
     LiteralValue,
+    OpaquePredicate,
+    OrderByItem,
     Predicate,
     QualifyPredicate,
     SelectQuery,
@@ -48,11 +50,12 @@ def parse_select(sql: str, dialect: SqlDialect = DEFAULT_DIALECT) -> SelectQuery
         dialect=dialect,
     )
     projections = [
-        _projection_to_column(expr, allow_aggregate=bool(group_by), dialect=dialect)
+        _projection_to_column(expr, allow_aggregate=True, dialect=dialect)
         for expr in parsed.expressions
     ]
     predicates = _where_predicates(parsed.args.get("where"), dialect, ctes)
     qualify = _qualify_predicates(parsed.args.get("qualify"), dialect)
+    order_by = _order_by_items(parsed.args.get("order"), dialect)
 
     return SelectQuery(
         **source,
@@ -62,6 +65,7 @@ def parse_select(sql: str, dialect: SqlDialect = DEFAULT_DIALECT) -> SelectQuery
         group_by=tuple(group_by),
         having=tuple(having),
         qualify=tuple(qualify),
+        order_by=tuple(order_by),
         distinct=parsed.args.get("distinct") is not None,
         raw_sql=sql.strip(),
         dialect=dialect,
@@ -117,11 +121,12 @@ def _parse_select_expression(
         dialect=dialect,
     )
     projections = [
-        _projection_to_column(expr, allow_aggregate=bool(group_by), dialect=dialect)
+        _projection_to_column(expr, allow_aggregate=True, dialect=dialect)
         for expr in parsed.expressions
     ]
     predicates = _where_predicates(parsed.args.get("where"), dialect, ctes)
     qualify = _qualify_predicates(parsed.args.get("qualify"), dialect)
+    order_by = _order_by_items(parsed.args.get("order"), dialect)
 
     return SelectQuery(
         **source,
@@ -131,6 +136,7 @@ def _parse_select_expression(
         group_by=tuple(group_by),
         having=tuple(having),
         qualify=tuple(qualify),
+        order_by=tuple(order_by),
         distinct=parsed.args.get("distinct") is not None,
         raw_sql=parsed.sql(dialect=dialect),
         dialect=dialect,
@@ -275,7 +281,7 @@ def _validate_opaque_cte_relation(
     for projection in cte.expressions:
         _projection_to_column(
             projection,
-            allow_aggregate=bool(group_by),
+            allow_aggregate=True,
             dialect=dialect,
         )
     for join in cte.args.get("joins") or []:
@@ -437,6 +443,7 @@ def _projection_to_column(
             expression_sql=node.this.sql(dialect=dialect),
             referenced_tables=referenced_tables,
             references_unqualified_columns=references_unqualified,
+            is_aggregate=_contains_aggregate(node.this),
         )
     if _is_count_projection(node):
         referenced_tables, references_unqualified = _expression_column_references(node)
@@ -446,6 +453,17 @@ def _projection_to_column(
             expression_sql=expression_sql,
             referenced_tables=referenced_tables,
             references_unqualified_columns=references_unqualified,
+            is_aggregate=True,
+        )
+    if _is_supported_opaque_projection(node, allow_aggregate=allow_aggregate):
+        referenced_tables, references_unqualified = _expression_column_references(node)
+        expression_sql = node.sql(dialect=dialect)
+        return ColumnRef(
+            name=expression_sql,
+            expression_sql=expression_sql,
+            referenced_tables=referenced_tables,
+            references_unqualified_columns=references_unqualified,
+            is_aggregate=_contains_aggregate(node),
         )
     raise UnsupportedSqlError(
         "Only direct columns, stars, and simple aliased scalar projections are supported."
@@ -661,7 +679,6 @@ def _join_type(node: exp.Join) -> str | None:
 
 def _reject_unsupported_clauses(parsed: exp.Select) -> None:
     unsupported = {
-        "order": "ORDER BY",
         "limit": "LIMIT",
     }
     for arg_name, clause_name in unsupported.items():
@@ -669,11 +686,28 @@ def _reject_unsupported_clauses(parsed: exp.Select) -> None:
             raise UnsupportedSqlError(f"{clause_name} is not supported yet.")
 
 
+def _order_by_items(order: exp.Order | None, dialect: SqlDialect) -> list[OrderByItem]:
+    if order is None:
+        return []
+    items = []
+    for ordered in order.expressions:
+        if not isinstance(ordered, exp.Ordered):
+            raise UnsupportedSqlError("ORDER BY only supports expression keys.")
+        descending = ordered.args.get("desc") is True
+        items.append(
+            OrderByItem(
+                expression_sql=ordered.this.sql(dialect=dialect),
+                descending=descending,
+            )
+        )
+    return items
+
+
 def _where_predicates(
     where: exp.Where | None,
     dialect: SqlDialect = DEFAULT_DIALECT,
     ctes: dict[str, exp.Select] | None = None,
-) -> list[Predicate | InPredicate | ExistsPredicate]:
+) -> list[Predicate | InPredicate | ExistsPredicate | OpaquePredicate]:
     if where is None:
         return []
     return _predicate_expression(where.this, dialect, ctes or {})
@@ -683,26 +717,40 @@ def _predicate_expression(
     node: exp.Expression,
     dialect: SqlDialect = DEFAULT_DIALECT,
     ctes: dict[str, exp.Select] | None = None,
-) -> list[Predicate | InPredicate | ExistsPredicate]:
+) -> list[Predicate | InPredicate | ExistsPredicate | OpaquePredicate]:
     ctes = ctes or {}
     if isinstance(node, exp.And):
         return [
             *_predicate_expression(node.this, dialect, ctes),
             *_predicate_expression(node.expression, dialect, ctes),
         ]
-    if isinstance(node, exp.EQ | exp.GT | exp.GTE | exp.LT | exp.LTE):
-        return [_comparison(node)]
-    if isinstance(node, exp.In):
-        return [_in_predicate(node)]
-    if isinstance(node, exp.Not) and isinstance(node.this, exp.In):
-        return [_in_predicate(node.this, negated=True)]
-    if isinstance(node, exp.Is | exp.Not):
-        return [_null_predicate(node)]
-    if isinstance(node, exp.Exists):
-        return [_exists_predicate(node, dialect, ctes)]
-    raise UnsupportedSqlError(
-        "Only ANDed column/literal comparisons, IN predicates, NULL predicates, "
-        "and simple EXISTS predicates are supported."
+    try:
+        if isinstance(node, exp.EQ | exp.GT | exp.GTE | exp.LT | exp.LTE):
+            return [_comparison(node)]
+        if isinstance(node, exp.In):
+            return [_in_predicate(node)]
+        if isinstance(node, exp.Not) and isinstance(node.this, exp.In):
+            return [_in_predicate(node.this, negated=True)]
+        if isinstance(node, exp.Is | exp.Not):
+            return [_null_predicate(node)]
+        if isinstance(node, exp.Exists):
+            return [_exists_predicate(node, dialect, ctes)]
+    except UnsupportedSqlError:
+        pass
+    return [_opaque_predicate(node, dialect)]
+
+
+def _opaque_predicate(
+    node: exp.Expression,
+    dialect: SqlDialect = DEFAULT_DIALECT,
+) -> OpaquePredicate:
+    tables, references_unqualified = _expression_column_references(node)
+    may_reference_relation = bool(tables) or references_unqualified
+    return OpaquePredicate(
+        expression_sql=node.sql(dialect=dialect),
+        referenced_tables=tables,
+        references_unqualified_columns=references_unqualified,
+        may_reference_relation=may_reference_relation,
     )
 
 

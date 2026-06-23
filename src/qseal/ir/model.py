@@ -33,6 +33,11 @@ class ColumnRef(BaseModel):
     referenced_tables: tuple[str, ...] = ()
     references_unqualified_columns: bool = False
     is_star: bool = False
+    # True when the opaque expression contains a non-windowed aggregate. A
+    # whole-table aggregate (no GROUP BY) always yields one row, so DISTINCT
+    # over it is a no-op; the unique-key reasoning in distinct removal cannot
+    # account for that and must not refute it.
+    is_aggregate: bool = False
 
     def may_reference_relation(self, relation: str) -> bool:
         if self.expression_sql is None:
@@ -104,6 +109,30 @@ class InPredicate(BaseModel):
         return f"{self.left.to_sql()} {operator} ({values})"
 
 
+class OpaquePredicate(BaseModel):
+    """A WHERE predicate whose shape (OR, BETWEEN, LIKE, column-to-column,
+    column-to-subquery, ...) is not modeled by the structured ``Predicate``.
+
+    It is captured verbatim so the query parses and can be compared by
+    normalized IR identity. Rewrite rules that need structured predicates
+    (predicate pushdown, redundant non-null removal, accepted-value removal)
+    bail when any opaque predicate is present, so an opaque predicate only
+    ever passes through unchanged.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    expression_sql: str
+    referenced_tables: tuple[str, ...] = ()
+    references_unqualified_columns: bool = False
+
+    def to_sql(self) -> str:
+        return self.expression_sql
+
+    def may_reference_relation(self, relation: str) -> bool:
+        return self.references_unqualified_columns or relation in self.referenced_tables
+
+
 class HavingPredicate(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -125,6 +154,24 @@ class QualifyPredicate(BaseModel):
 
     def may_reference_relation(self, relation: str) -> bool:
         return self.references_unqualified_columns or relation in self.referenced_tables
+
+
+class OrderByItem(BaseModel):
+    """A single ORDER BY key, captured as an opaque expression plus direction.
+
+    ORDER BY changes row order, so it is part of result semantics and is
+    included in normalized IR identity: two queries that differ only in ORDER
+    BY are not considered equivalent (execution accuracy that sorts before
+    comparing would miss this).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    expression_sql: str
+    descending: bool = False
+
+    def to_sql(self) -> str:
+        return f"{self.expression_sql} DESC" if self.descending else self.expression_sql
 
 
 class JoinCondition(BaseModel):
@@ -203,10 +250,11 @@ class SelectQuery(BaseModel):
     alias: str | None = None
     joins: tuple[Join, ...] = ()
     projections: tuple[ColumnRef, ...]
-    predicates: tuple[Predicate | InPredicate | ExistsPredicate, ...] = ()
+    predicates: tuple[Predicate | InPredicate | OpaquePredicate | ExistsPredicate, ...] = ()
     group_by: tuple[ColumnRef, ...] = ()
     having: tuple[HavingPredicate, ...] = ()
     qualify: tuple[QualifyPredicate, ...] = ()
+    order_by: tuple[OrderByItem, ...] = ()
     distinct: bool
     raw_sql: str
     dialect: SqlDialect = DEFAULT_DIALECT
@@ -260,6 +308,9 @@ class SelectQuery(BaseModel):
         if self.qualify:
             qualify = " AND ".join(predicate.to_sql() for predicate in self.qualify)
             sql = f"{sql}\nQUALIFY {qualify}"
+        if self.order_by:
+            ordered = ", ".join(item.to_sql() for item in self.order_by)
+            sql = f"{sql}\nORDER BY {ordered}"
         return f"{sql};"
 
     def without_distinct_sql(self) -> str:

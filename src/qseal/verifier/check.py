@@ -181,6 +181,24 @@ def _check_distinct_removal(
             reason="DISTINCT removal checks are only supported for direct table queries.",
         )
 
+    if not original.group_by and any(
+        getattr(column, "is_aggregate", False) for column in original.projections
+    ):
+        # Whole-table aggregates (e.g. ``SELECT DISTINCT MAX(x) FROM t``) always
+        # collapse to one row, so DISTINCT is a no-op. The unique-key reasoning
+        # below cannot account for that and would otherwise return
+        # NOT_EQUIVALENT, which is a false refutation. Soundness guard.
+        return VerificationResult(
+            status=VerificationStatus.UNKNOWN,
+            original_sql=original.raw_sql,
+            rewritten_sql=rewritten.raw_sql,
+            rule_name="remove_redundant_distinct",
+            reason=(
+                "DISTINCT removal over a whole-table aggregate cannot be refuted; "
+                "the aggregate always yields one row."
+            ),
+        )
+
     table = constraints.table(table_name)
 
     unique_key = (
