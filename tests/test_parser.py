@@ -1,5 +1,6 @@
 import pytest
 
+from qseal.ir.model import ColumnRef
 from qseal.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 
 
@@ -251,6 +252,47 @@ def test_parses_limit_and_offset() -> None:
 def test_rejects_non_integer_limit() -> None:
     with pytest.raises(UnsupportedSqlError, match="LIMIT/OFFSET"):
         parse_select("SELECT user_id FROM users LIMIT ?")
+
+
+def test_promotes_comma_join_to_inner() -> None:
+    query = parse_select(
+        "SELECT a.x FROM a, b WHERE a.id = b.id AND a.x > 5", dialect="sqlite"
+    )
+    assert len(query.joins) == 1
+    join = query.joins[0]
+    assert join.join_type == "INNER"
+    assert join.table == "b"
+    assert join.condition.left == ColumnRef(table="a", name="id")
+    assert join.condition.right == ColumnRef(table="b", name="id")
+    # The single-table filter stays in WHERE; the join predicate is promoted.
+    assert len(query.predicates) == 1
+    assert query.predicates[0].left == ColumnRef(table="a", name="x")
+
+
+def test_promotes_three_table_comma_join() -> None:
+    query = parse_select(
+        "SELECT t.x FROM Laboratory t1, Laboratory t2, Patient "
+        "WHERE t1.ID = t2.ID AND t1.ID = Patient.ID AND Patient.Birthday = 1959",
+        dialect="sqlite",
+    )
+    assert [j.join_type for j in query.joins] == ["INNER", "INNER"]
+    assert [j.table for j in query.joins] == ["Laboratory", "Patient"]
+    # Only the single-table filter remains in WHERE.
+    assert len(query.predicates) == 1
+
+
+def test_rejects_genuine_cartesian_comma_join() -> None:
+    with pytest.raises(UnsupportedSqlError, match="cartesian"):
+        parse_select("SELECT a.x FROM a, b", dialect="sqlite")
+
+
+def test_keeps_or_spanned_join_predicate_in_where() -> None:
+    # a.id = b.id sits under an OR, so it cannot be soundly promoted; the
+    # comma join has no top-level connector and is rejected conservatively.
+    with pytest.raises(UnsupportedSqlError, match="cartesian"):
+        parse_select(
+            "SELECT a.x FROM a, b WHERE a.id = b.id OR a.x = 5", dialect="sqlite"
+        )
 
 
 def test_parses_simple_cte_chain() -> None:

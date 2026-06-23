@@ -40,6 +40,7 @@ def parse_select(sql: str, dialect: SqlDialect = DEFAULT_DIALECT) -> SelectQuery
         raise UnsupportedSqlError("SELECT statements must include a FROM table.")
 
     _reject_unsupported_clauses(parsed)
+    parsed = _promote_comma_joins(parsed)
 
     source = _source(from_expr.this, ctes, dialect)
     joins = [_join(join, ctes, dialect) for join in parsed.args.get("joins") or []]
@@ -114,6 +115,7 @@ def _parse_select_expression(
         raise UnsupportedSqlError("SELECT statements must include a FROM table.")
 
     _reject_unsupported_clauses(parsed)
+    parsed = _promote_comma_joins(parsed)
 
     source = _source(from_expr.this, ctes, dialect)
     joins = [_join(join, ctes, dialect) for join in parsed.args.get("joins") or []]
@@ -681,6 +683,122 @@ def _join_type(node: exp.Join) -> str | None:
     if node.side == "" and node.kind in ("", "INNER"):
         return "INNER"
     return None
+
+
+def _top_level_and_terms(node: exp.Expression | None) -> list[exp.Expression]:
+    if node is None:
+        return []
+    if isinstance(node, exp.And):
+        return [*_top_level_and_terms(node.this), *_top_level_and_terms(node.expression)]
+    return [node]
+
+
+def _table_alias_or_name(node: exp.Expression | None) -> str | None:
+    if isinstance(node, exp.Table):
+        return node.alias or node.name
+    return None
+
+
+def _col_col_equality(term: exp.Expression) -> tuple[str, str] | None:
+    """Return (left_table, right_table) for a column=column equality, else None.
+
+    Both columns must carry a table qualifier so the predicate can be attributed
+    to a join unambiguously. Unqualified column=column terms are left in WHERE.
+    """
+    if not isinstance(term, exp.EQ):
+        return None
+    left, right = term.this, term.expression
+    if not isinstance(left, exp.Column) or not isinstance(right, exp.Column):
+        return None
+    if not left.table or not right.table:
+        return None
+    return left.table, right.table
+
+
+def _promote_comma_joins(parsed: exp.Select) -> exp.Select:
+    """Rewrite comma-join (CROSS) tables into INNER joins using WHERE predicates.
+
+    SQL-89 comma joins (``FROM a, b WHERE a.id = b.id``) are semantically
+    INNER JOINs whose condition lives in WHERE. sqlglot parses them as CROSS
+    joins with no ON. This promotes top-level AND-separated column=column
+    equality predicates from WHERE into each CROSS join's ON condition,
+    converting it to INNER, and strips the promoted predicates from WHERE.
+
+    Conservative by design:
+    - Only top-level AND terms are eligible (predicates under OR stay in WHERE,
+      where promoting them would be unsound).
+    - Only column=column equalities with both table qualifiers are promoted;
+      unqualified or non-equality predicates stay in WHERE as filters.
+    - Each CROSS join must receive at least one connecting predicate; a genuine
+      cartesian product (no connector) is rejected because the IR does not
+      model CROSS joins soundly.
+    - Predicates are attributed to the join that introduces the later table in
+      FROM order; leftover cross-table predicates return to WHERE.
+    """
+    joins = list(parsed.args.get("joins") or [])
+    cross = [
+        j for j in joins if j.kind == "CROSS" and j.args.get("on") is None
+    ]
+    if not cross:
+        return parsed
+
+    where = parsed.args.get("where")
+    terms = _top_level_and_terms(where.this if where else None)
+    col_eqs: list[tuple[exp.Expression, str, str]] = []
+    rest: list[exp.Expression] = []
+    for term in terms:
+        pair = _col_col_equality(term)
+        if pair is None:
+            rest.append(term)
+        else:
+            col_eqs.append((term, pair[0], pair[1]))
+
+    source_node = parsed.args.get("from_").this
+    introduced = {_table_alias_or_name(source_node)}
+    new_joins: list[exp.Join] = []
+    used: set[int] = set()
+
+    for join in joins:
+        target = _table_alias_or_name(join.this)
+        if join in cross:
+            if target is None:
+                raise UnsupportedSqlError("Comma join targets must be direct tables.")
+            matched = [
+                tup
+                for tup in col_eqs
+                if (tup[1] == target and tup[2] in introduced)
+                or (tup[2] == target and tup[1] in introduced)
+            ]
+            if not matched:
+                raise UnsupportedSqlError(
+                    "Comma joins without a connecting column equality are not "
+                    "supported (genuine cartesian product)."
+                )
+            on = matched[0][0]
+            for tup in matched[1:]:
+                on = exp.And(this=on, expression=tup[0])
+            new_join = join.copy()
+            new_join.set("kind", "")
+            new_join.set("on", on)
+            new_joins.append(new_join)
+            for tup in matched:
+                used.add(id(tup[0]))
+        else:
+            new_joins.append(join)
+        if target is not None:
+            introduced.add(target)
+
+    parsed.set("joins", new_joins)
+
+    leftover = [tup[0] for tup in col_eqs if id(tup[0]) not in used] + rest
+    if leftover:
+        new_where = leftover[0]
+        for term in leftover[1:]:
+            new_where = exp.And(this=new_where, expression=term)
+        parsed.set("where", exp.Where(this=new_where))
+    else:
+        parsed.set("where", None)
+    return parsed
 
 
 def _reject_unsupported_clauses(parsed: exp.Select) -> None:
