@@ -56,6 +56,7 @@ def parse_select(sql: str, dialect: SqlDialect = DEFAULT_DIALECT) -> SelectQuery
     predicates = _where_predicates(parsed.args.get("where"), dialect, ctes)
     qualify = _qualify_predicates(parsed.args.get("qualify"), dialect)
     order_by = _order_by_items(parsed.args.get("order"), dialect)
+    limit, offset = _limit_offset(parsed.args.get("limit"), parsed.args.get("offset"))
 
     return SelectQuery(
         **source,
@@ -66,6 +67,8 @@ def parse_select(sql: str, dialect: SqlDialect = DEFAULT_DIALECT) -> SelectQuery
         having=tuple(having),
         qualify=tuple(qualify),
         order_by=tuple(order_by),
+        limit=limit,
+        offset=offset,
         distinct=parsed.args.get("distinct") is not None,
         raw_sql=sql.strip(),
         dialect=dialect,
@@ -127,6 +130,7 @@ def _parse_select_expression(
     predicates = _where_predicates(parsed.args.get("where"), dialect, ctes)
     qualify = _qualify_predicates(parsed.args.get("qualify"), dialect)
     order_by = _order_by_items(parsed.args.get("order"), dialect)
+    limit, offset = _limit_offset(parsed.args.get("limit"), parsed.args.get("offset"))
 
     return SelectQuery(
         **source,
@@ -137,6 +141,8 @@ def _parse_select_expression(
         having=tuple(having),
         qualify=tuple(qualify),
         order_by=tuple(order_by),
+        limit=limit,
+        offset=offset,
         distinct=parsed.args.get("distinct") is not None,
         raw_sql=parsed.sql(dialect=dialect),
         dialect=dialect,
@@ -678,9 +684,13 @@ def _join_type(node: exp.Join) -> str | None:
 
 
 def _reject_unsupported_clauses(parsed: exp.Select) -> None:
-    unsupported = {
-        "limit": "LIMIT",
-    }
+    """Reject clauses the IR cannot yet model soundly.
+
+    LIMIT/OFFSET are modeled (as integer limit/offset fields compared in
+    query equality), so they no longer reject parsing. Add future unsupported
+    clauses here as they are discovered.
+    """
+    unsupported: dict[str, str] = {}
     for arg_name, clause_name in unsupported.items():
         if parsed.args.get(arg_name) is not None:
             raise UnsupportedSqlError(f"{clause_name} is not supported yet.")
@@ -701,6 +711,30 @@ def _order_by_items(order: exp.Order | None, dialect: SqlDialect) -> list[OrderB
             )
         )
     return items
+
+
+def _int_literal(expr: exp.Expression | None) -> int | None:
+    if expr is None:
+        return None
+    if isinstance(expr, exp.Literal) and not expr.is_string and expr.this.isdigit():
+        return int(expr.this)
+    raise UnsupportedSqlError("Only integer LIMIT/OFFSET values are supported.")
+
+
+def _limit_offset(
+    limit_expr: exp.Limit | None, offset_expr: exp.Offset | None
+) -> tuple[int | None, int | None]:
+    """Extract integer LIMIT/OFFSET, modeled so query equality stays sound.
+
+    LIMIT/OFFSET constrain the returned row window, so two queries differing
+    only in their limit/offset are not equivalent. Modeling them as integer
+    fields keeps normalized-identity sound (same limit/offset compares equal;
+    different compares unequal). Non-integer bounds (parameters, columns) are
+    rejected because the IR cannot represent them soundly.
+    """
+    limit = _int_literal(limit_expr.expression if limit_expr is not None else None)
+    offset = _int_literal(offset_expr.expression if offset_expr is not None else None)
+    return limit, offset
 
 
 def _where_predicates(

@@ -233,9 +233,24 @@ def test_parses_order_by() -> None:
     assert query.order_by[1].descending is False
 
 
-def test_rejects_unmodeled_clauses() -> None:
-    with pytest.raises(UnsupportedSqlError, match="LIMIT"):
-        parse_select("SELECT user_id FROM users LIMIT 10")
+def test_parses_limit_and_offset() -> None:
+    query = parse_select("SELECT user_id FROM users LIMIT 10")
+    assert query.limit == 10
+    assert query.offset is None
+
+    query = parse_select("SELECT user_id FROM users LIMIT 10 OFFSET 5")
+    assert query.limit == 10
+    assert query.offset == 5
+
+    # MySQL-style `LIMIT offset, count` maps to count limit and offset.
+    query = parse_select("SELECT user_id FROM users LIMIT 5, 10")
+    assert query.limit == 10
+    assert query.offset == 5
+
+
+def test_rejects_non_integer_limit() -> None:
+    with pytest.raises(UnsupportedSqlError, match="LIMIT/OFFSET"):
+        parse_select("SELECT user_id FROM users LIMIT ?")
 
 
 def test_parses_simple_cte_chain() -> None:

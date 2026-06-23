@@ -255,6 +255,8 @@ class SelectQuery(BaseModel):
     having: tuple[HavingPredicate, ...] = ()
     qualify: tuple[QualifyPredicate, ...] = ()
     order_by: tuple[OrderByItem, ...] = ()
+    limit: int | None = None
+    offset: int | None = None
     distinct: bool
     raw_sql: str
     dialect: SqlDialect = DEFAULT_DIALECT
@@ -311,6 +313,10 @@ class SelectQuery(BaseModel):
         if self.order_by:
             ordered = ", ".join(item.to_sql() for item in self.order_by)
             sql = f"{sql}\nORDER BY {ordered}"
+        if self.limit is not None:
+            sql = f"{sql}\nLIMIT {self.limit}"
+        if self.offset is not None:
+            sql = f"{sql}\nOFFSET {self.offset}"
         return f"{sql};"
 
     def without_distinct_sql(self) -> str:
