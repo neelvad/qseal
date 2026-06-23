@@ -6,6 +6,7 @@ from qseal.dialects import DEFAULT_DIALECT, SqlDialect
 from qseal.ir.model import (
     ColumnRef,
     ExistsPredicate,
+    GroupByKey,
     HavingPredicate,
     InPredicate,
     Join,
@@ -44,7 +45,7 @@ def parse_select(sql: str, dialect: SqlDialect = DEFAULT_DIALECT) -> SelectQuery
 
     source = _source(from_expr.this, ctes, dialect)
     joins = [_join(join, ctes, dialect) for join in parsed.args.get("joins") or []]
-    group_by = _group_by_columns(parsed.args.get("group"))
+    group_by = _group_by_columns(parsed.args.get("group"), dialect)
     having = _having_predicates(
         parsed.args.get("having"),
         has_group_by=bool(group_by),
@@ -119,7 +120,7 @@ def _parse_select_expression(
 
     source = _source(from_expr.this, ctes, dialect)
     joins = [_join(join, ctes, dialect) for join in parsed.args.get("joins") or []]
-    group_by = _group_by_columns(parsed.args.get("group"))
+    group_by = _group_by_columns(parsed.args.get("group"), dialect)
     having = _having_predicates(
         parsed.args.get("having"),
         has_group_by=bool(group_by),
@@ -279,7 +280,7 @@ def _validate_opaque_cte_relation(
             dialect,
         )
 
-    group_by = _group_by_columns(cte.args.get("group"))
+    group_by = _group_by_columns(cte.args.get("group"), dialect)
     for projection in cte.expressions:
         _projection_to_column(
             projection,
@@ -517,18 +518,23 @@ def _expression_column_references(node: exp.Expression) -> tuple[tuple[str, ...]
     return tuple(tables), references_unqualified
 
 
-def _group_by_columns(group: exp.Group | None) -> list[ColumnRef]:
+def _group_by_columns(group: exp.Group | None, dialect: SqlDialect) -> list[GroupByKey]:
     if group is None:
         return []
     if group.args.get("all"):
         raise UnsupportedSqlError("GROUP BY ALL is not supported yet.")
 
-    columns = []
+    keys: list[GroupByKey] = []
     for expression in group.expressions:
-        if not isinstance(expression, exp.Column):
-            raise UnsupportedSqlError("GROUP BY only supports direct column references.")
-        columns.append(ColumnRef(table=expression.table or None, name=expression.name))
-    return columns
+        if isinstance(expression, exp.Column):
+            keys.append(
+                GroupByKey(
+                    column=ColumnRef(table=expression.table or None, name=expression.name)
+                )
+            )
+        else:
+            keys.append(GroupByKey(expression_sql=expression.sql(dialect=dialect)))
+    return keys
 
 
 def _having_predicates(

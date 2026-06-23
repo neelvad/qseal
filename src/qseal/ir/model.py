@@ -174,6 +174,26 @@ class OrderByItem(BaseModel):
         return f"{self.expression_sql} DESC" if self.descending else self.expression_sql
 
 
+class GroupByKey(BaseModel):
+    """A single GROUP BY key: either a direct column reference or an opaque
+    expression (e.g. ``SUBSTR(col, 1, 4)``). Expression keys are captured
+    verbatim so normalized IR identity compares them structurally; rewrite
+    rules that reason about grouped columns conservatively skip expression
+    keys.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    column: ColumnRef | None = None
+    expression_sql: str | None = None
+
+    def to_sql(self) -> str:
+        if self.column is not None:
+            return self.column.to_sql()
+        assert self.expression_sql is not None
+        return self.expression_sql
+
+
 class JoinCondition(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -251,7 +271,7 @@ class SelectQuery(BaseModel):
     joins: tuple[Join, ...] = ()
     projections: tuple[ColumnRef, ...]
     predicates: tuple[Predicate | InPredicate | OpaquePredicate | ExistsPredicate, ...] = ()
-    group_by: tuple[ColumnRef, ...] = ()
+    group_by: tuple[GroupByKey, ...] = ()
     having: tuple[HavingPredicate, ...] = ()
     qualify: tuple[QualifyPredicate, ...] = ()
     order_by: tuple[OrderByItem, ...] = ()
@@ -302,7 +322,7 @@ class SelectQuery(BaseModel):
             predicates = " AND ".join(predicate.to_sql() for predicate in self.predicates)
             sql = f"{sql}\nWHERE {predicates}"
         if self.group_by:
-            grouped = ", ".join(column.to_sql() for column in self.group_by)
+            grouped = ", ".join(key.to_sql() for key in self.group_by)
             sql = f"{sql}\nGROUP BY {grouped}"
         if self.having:
             having = " AND ".join(predicate.to_sql() for predicate in self.having)

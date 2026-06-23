@@ -293,7 +293,10 @@ def _may_use_relation(query: SelectQuery, relation: str) -> bool:
         _column_may_reference_relation(column, relation)
         for column in query.projections
     )
-    grouped = any(_column_may_reference_relation(column, relation) for column in query.group_by)
+    grouped = any(
+        key.column is None or _column_may_reference_relation(key.column, relation)
+        for key in query.group_by
+    )
     filtered = any(
         _predicate_may_reference_relation(predicate, relation)
         for predicate in query.predicates

@@ -137,6 +137,25 @@ def test_parse_group_by_with_aggregate_projection() -> None:
     )
 
 
+def test_parses_group_by_expression_key() -> None:
+    query = parse_select(
+        """
+        SELECT SUBSTR(T2.Date, 1, 4) AS year, COUNT(*) AS n
+        FROM movies AS T2
+        GROUP BY SUBSTR(T2.Date, 1, 4)
+        """,
+        dialect="sqlite",
+    )
+
+    assert [key.to_sql() for key in query.group_by] == ["SUBSTRING(T2.Date, 1, 4)"]
+    assert query.group_by[0].column is None
+    assert query.to_sql() == (
+        "SELECT SUBSTRING(T2.Date, 1, 4) AS year, COUNT(*) AS n\n"
+        "FROM movies T2\n"
+        "GROUP BY SUBSTRING(T2.Date, 1, 4);"
+    )
+
+
 def test_parse_group_by_with_having() -> None:
     query = parse_select(
         """

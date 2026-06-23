@@ -90,7 +90,16 @@ class CollapseUniqueGroupBy:
                 reason=f"No trusted constraints found for table {table_name}.",
             )
 
-        group_columns = tuple(column.name for column in query.group_by)
+        group_columns = tuple(
+            key.column.name for key in query.group_by if key.column is not None
+        )
+        if len(group_columns) != len(query.group_by):
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.NOT_APPLICABLE,
+                original_sql=query.raw_sql,
+                reason="Unique GROUP BY collapse only supports direct column keys.",
+            )
         unique_key = table.non_null_unique_key_contained_in(group_columns)
         if unique_key is None:
             if not table.has_unique_key(group_columns):
