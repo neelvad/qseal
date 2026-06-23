@@ -263,16 +263,10 @@ def _validate_opaque_cte_relation(
     cte = ctes[cte_name]
     if cte.args.get("with_") is not None:
         raise UnsupportedSqlError("Nested WITH clauses are not supported yet.")
-    if cte.args.get("distinct") is not None:
-        raise UnsupportedSqlError("CTE relation references with DISTINCT are not supported yet.")
-    for arg_name, clause_name in (
-        ("order", "ORDER BY"),
-        ("limit", "LIMIT"),
-    ):
-        if cte.args.get(arg_name) is not None:
-            raise UnsupportedSqlError(
-                f"CTE relation references with {clause_name} are not supported yet."
-            )
+    # DISTINCT/ORDER BY/LIMIT inside an opaque CTE body do not enter the outer
+    # query's IR: the CTE is referenced as a named relation and rewrite rules
+    # conservatively abstain on opaque relations, so these clauses are safe to
+    # accept (the formal provers see the full raw SQL regardless).
 
     from_expr = cte.args.get("from_")
     if from_expr is None or not isinstance(from_expr.this, exp.Table):

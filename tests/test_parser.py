@@ -475,6 +475,33 @@ def test_parses_grouped_cte_relation_with_join() -> None:
     ]
 
 
+def test_accepts_opaque_cte_with_distinct_order_by_limit() -> None:
+    query = parse_select(
+        """
+        WITH ranked AS (
+          SELECT format, COUNT(*) AS n
+          FROM legalities
+          WHERE status = 'Banned'
+          GROUP BY format
+          ORDER BY n DESC
+          LIMIT 1
+        ),
+        deduped AS (
+          SELECT DISTINCT card_id
+          FROM legalities
+        )
+        SELECT ranked.format
+        FROM ranked
+        INNER JOIN deduped
+          ON ranked.format = deduped.card_id
+        """
+    )
+
+    assert query.table == "ranked"
+    assert query.joins[0].table == "deduped"
+    assert query.joins[0].table_is_cte is True
+
+
 def test_parse_simple_left_join() -> None:
     query = parse_select(
         """

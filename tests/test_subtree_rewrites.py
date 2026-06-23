@@ -42,10 +42,11 @@ def test_parse_select_fragments_enumerates_ctes_and_outer_query() -> None:
         "query",
     ]
     assert fragments[0].query is not None
-    # The later fragments reference the opaque DISTINCT CTE, which stays
-    # outside the supported subset and is recorded as an error.
-    assert fragments[1].query is None
-    assert fragments[1].error is not None
+    # The DISTINCT CTE is accepted as an opaque named relation; the later
+    # fragment that references it parses too, since rewrite rules conservatively
+    # abstain on opaque relations.
+    assert fragments[1].query is not None
+    assert fragments[1].error is None
 
 
 def test_parse_select_fragments_returns_nothing_without_with_clause() -> None:
