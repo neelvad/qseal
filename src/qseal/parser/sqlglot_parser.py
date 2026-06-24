@@ -36,14 +36,14 @@ def parse_select(sql: str, dialect: SqlDialect = DEFAULT_DIALECT) -> SelectQuery
     ctes = _cte_map(parsed.args.get("with_"))
     parsed = _resolve_top_level_cte_select(parsed, ctes)
 
-    from_expr = parsed.args.get("from_")
-    if from_expr is None or from_expr.this is None:
-        raise UnsupportedSqlError("SELECT statements must include a FROM table.")
-
     _reject_unsupported_clauses(parsed)
-    parsed = _promote_comma_joins(parsed)
 
-    source = _source(from_expr.this, ctes, dialect)
+    from_expr = parsed.args.get("from_")
+    has_from = from_expr is not None and from_expr.this is not None
+    source: dict[str, object] = {}
+    if has_from:
+        parsed = _promote_comma_joins(parsed)
+        source = _source(from_expr.this, ctes, dialect)
     joins = [_join(join, ctes, dialect) for join in parsed.args.get("joins") or []]
     group_by = _group_by_columns(parsed.args.get("group"), dialect)
     having = _having_predicates(
@@ -111,14 +111,14 @@ def _parse_select_expression(
         raise UnsupportedSqlError("Nested WITH clauses are not supported yet.")
 
     parsed = _resolve_top_level_cte_select(parsed, ctes)
-    from_expr = parsed.args.get("from_")
-    if from_expr is None or from_expr.this is None:
-        raise UnsupportedSqlError("SELECT statements must include a FROM table.")
-
     _reject_unsupported_clauses(parsed)
-    parsed = _promote_comma_joins(parsed)
 
-    source = _source(from_expr.this, ctes, dialect)
+    from_expr = parsed.args.get("from_")
+    has_from = from_expr is not None and from_expr.this is not None
+    source: dict[str, object] = {}
+    if has_from:
+        parsed = _promote_comma_joins(parsed)
+        source = _source(from_expr.this, ctes, dialect)
     joins = [_join(join, ctes, dialect) for join in parsed.args.get("joins") or []]
     group_by = _group_by_columns(parsed.args.get("group"), dialect)
     having = _having_predicates(

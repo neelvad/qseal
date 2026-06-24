@@ -316,12 +316,16 @@ class SelectQuery(BaseModel):
             subquery_sql = self.subquery.to_sql().removesuffix(";")
             alias = f" {self.alias}" if self.alias else ""
             return f"({subquery_sql}){alias}"
-        raise ValueError("SelectQuery must have either a table or subquery source.")
+        return ""
 
     def to_sql(self) -> str:
         distinct = " DISTINCT" if self.distinct else ""
         projected = ", ".join(column.to_sql() for column in self.projections)
-        sql = f"SELECT{distinct} {projected}\nFROM {self.source_sql()}"
+        source = self.source_sql()
+        if source:
+            sql = f"SELECT{distinct} {projected}\nFROM {source}"
+        else:
+            sql = f"SELECT{distinct} {projected}"
         if self.joins:
             joins = "\n".join(join.to_sql() for join in self.joins)
             sql = f"{sql}\n{joins}"

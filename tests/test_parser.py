@@ -707,3 +707,23 @@ def test_accepts_arithmetic_subquery_projection() -> None:
     assert pct.expression_sql is not None
     assert pct.alias == "pct"
     assert pct.is_aggregate  # COUNT(*) is an aggregate
+
+
+def test_accepts_no_from_scalar_subquery() -> None:
+    sql = "SELECT (SELECT COUNT(*) FROM a) - (SELECT COUNT(*) FROM b) AS result"
+    query = parse_select(sql)
+    assert query.table is None
+    assert query.subquery is None
+    assert query.source_sql() == ""
+    assert "\nFROM" not in query.to_sql()  # no top-level FROM clause
+    assert len(query.projections) == 1
+    result = query.projections[0]
+    assert result.expression_sql is not None
+    assert result.alias == "result"
+
+
+def test_no_from_select_aliased_literal() -> None:
+    query = parse_select("SELECT 1 AS x")
+    assert query.table is None
+    assert query.source_sql() == ""
+    assert query.to_sql() == "SELECT 1 AS x;"
