@@ -34,20 +34,18 @@ generator provenance: model id, prompt hash, timestamp, token usage.
 
 ## Verify
 
-Verification is two-phase because SQLSolver needs the x86 Linux container
-while VeriEQL runs natively on macOS:
+Verification is a single native cascade: builtin rule replay -> QED ->
+SQLSolver (native arm64) -> VeriEQL refute/cross-check. See
+`docs/sqlsolver-spike.md` for the native SQLSolver setup.
 
 ```bash
-# Phase A (macOS): parse -> identity -> builtin -> VeriEQL refute/cross-check
-uv run qseal llm verify BUNDLES_DIR \
-  --verieql-dir /path/to/VeriEQL --report-file report-a.json
-
-# Phase B (container): parse -> identity -> builtin -> SQLSolver
+# Full cascade (macOS, native arm64 SQLSolver):
+Z3_LIB_DIR=/path/to/z3java-4.13.0/build \
 SQLSOLVER_DIR=/path/to/SQLSolver \
-  scripts/run_llm_verification_sqlsolver.sh BUNDLES_DIR report-b.json
-
-# Merge: best verdict per candidate; proven-vs-refuted conflicts alarm
-uv run qseal llm merge report-a.json report-b.json --report-file final.json
+JAVA_BIN=/opt/homebrew/opt/openjdk@17/bin/java \
+uv run qseal llm verify BUNDLES_DIR \
+  --qed --sqlsolver-command scripts/run_sqlsolver_native.sh \
+  --verieql-dir /path/to/VeriEQL --report-file report.json
 ```
 
 ## Buckets
