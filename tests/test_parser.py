@@ -183,6 +183,21 @@ def test_rejects_having_without_group_by() -> None:
         parse_select("SELECT COUNT(*) AS order_count FROM orders HAVING COUNT(*) > 1")
 
 
+def test_parses_opaque_having_expression() -> None:
+    query = parse_select(
+        """
+        SELECT league_id, AVG(time_seconds) AS avg_time
+        FROM matches
+        GROUP BY league_id
+        HAVING AVG(time_seconds) IS NOT NULL
+        """
+    )
+
+    assert [predicate.to_sql() for predicate in query.having] == [
+        "NOT AVG(time_seconds) IS NULL"
+    ]
+
+
 def test_rejects_group_by_all() -> None:
     with pytest.raises(UnsupportedSqlError, match="GROUP BY ALL"):
         parse_select("SELECT customer_id, COUNT(*) AS order_count FROM orders GROUP BY ALL")

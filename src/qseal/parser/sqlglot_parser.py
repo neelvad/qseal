@@ -558,27 +558,11 @@ def _having_expression(node: exp.Expression) -> list[exp.Expression]:
             *_having_expression(node.this),
             *_having_expression(node.expression),
         ]
-    if isinstance(node, exp.EQ | exp.NEQ | exp.GT | exp.GTE | exp.LT | exp.LTE):
-        _validate_having_comparison(node)
-        return [node]
-    raise UnsupportedSqlError(
-        "Only ANDed aggregate or column comparisons are supported in HAVING."
-    )
-
-
-def _validate_having_comparison(node: exp.Expression) -> None:
-    if not _is_supported_having_side(node.this):
-        raise UnsupportedSqlError(
-            "HAVING comparisons must compare an aggregate or column to a literal."
-        )
-    if not isinstance(node.expression, exp.Literal):
-        raise UnsupportedSqlError(
-            "HAVING comparisons must compare an aggregate or column to a literal."
-        )
-
-
-def _is_supported_having_side(node: exp.Expression) -> bool:
-    return isinstance(node, exp.AggFunc | exp.Column)
+    # HAVING predicates are captured as opaque expression strings; no rewrite
+    # rule interprets HAVING internals (they only check `if query.having` to
+    # abstain), so any top-level ANDed term is accepted verbatim. The formal
+    # provers see the full raw SQL.
+    return [node]
 
 
 def _qualify_predicates(
