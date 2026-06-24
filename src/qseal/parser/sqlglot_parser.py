@@ -17,6 +17,7 @@ from qseal.ir.model import (
     Predicate,
     QualifyPredicate,
     SelectQuery,
+    SetQuery,
 )
 
 
@@ -24,11 +25,17 @@ class UnsupportedSqlError(ValueError):
     pass
 
 
-def parse_select(sql: str, dialect: SqlDialect = DEFAULT_DIALECT) -> SelectQuery:
+ParsedQuery = SelectQuery | SetQuery
+
+
+def parse_select(sql: str, dialect: SqlDialect = DEFAULT_DIALECT) -> ParsedQuery:
     try:
         parsed = sqlglot.parse_one(sql, read=dialect)
     except SqlglotError as error:
         raise UnsupportedSqlError(f"Could not parse SQL: {error}") from error
+
+    if isinstance(parsed, exp.Union | exp.Intersect | exp.Except):
+        return _parse_set_query(parsed, dialect)
 
     if not isinstance(parsed, exp.Select):
         raise UnsupportedSqlError("Only SELECT statements are supported.")
@@ -150,6 +157,47 @@ def _parse_select_expression(
         raw_sql=parsed.sql(dialect=dialect),
         dialect=dialect,
     )
+
+
+def _parse_set_query(
+    node: exp.Union | exp.Intersect | exp.Except,
+    dialect: SqlDialect = DEFAULT_DIALECT,
+) -> SetQuery:
+    ctes = _cte_map(node.args.get("with_"))
+    if isinstance(node, exp.Union):
+        operator = "UNION ALL" if not node.args.get("distinct", True) else "UNION"
+    elif isinstance(node, exp.Intersect):
+        operator = "INTERSECT"
+    else:
+        operator = "EXCEPT"
+
+    left = _parse_set_operand(node.this, ctes, dialect)
+    right = _parse_set_operand(node.expression, ctes, dialect)
+    order_by = _order_by_items(node.args.get("order"), dialect)
+    limit, offset = _limit_offset(node.args.get("limit"), node.args.get("offset"))
+
+    return SetQuery(
+        operator=operator,
+        left=left,
+        right=right,
+        order_by=tuple(order_by),
+        limit=limit,
+        offset=offset,
+        raw_sql=node.sql(dialect=dialect),
+        dialect=dialect,
+    )
+
+
+def _parse_set_operand(
+    node: exp.Expression,
+    ctes: dict[str, exp.Select],
+    dialect: SqlDialect,
+) -> SelectQuery | SetQuery:
+    if isinstance(node, exp.Union | exp.Intersect | exp.Except):
+        return _parse_set_query(node, dialect)
+    if isinstance(node, exp.Select):
+        return _parse_select_expression(node, ctes, dialect)
+    raise UnsupportedSqlError("Unsupported operand in set operation.")
 
 
 def _cte_map(with_expr: exp.With | None) -> dict[str, exp.Select]:

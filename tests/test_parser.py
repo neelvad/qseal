@@ -1,6 +1,6 @@
 import pytest
 
-from qseal.ir.model import ColumnRef
+from qseal.ir.model import ColumnRef, SetQuery
 from qseal.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 
 
@@ -741,3 +741,76 @@ def test_no_from_select_aliased_literal() -> None:
     assert query.table is None
     assert query.source_sql() == ""
     assert query.to_sql() == "SELECT 1 AS x;"
+
+
+def test_accepts_except_query() -> None:
+    sql = (
+        "SELECT student_id FROM students "
+        "EXCEPT "
+        "SELECT student_id FROM club_members"
+    )
+    result = parse_select(sql)
+    assert isinstance(result, SetQuery)
+    assert result.operator == "EXCEPT"
+    assert result.left.table == "students"
+    assert result.right.table == "club_members"
+
+
+def test_accepts_union_query() -> None:
+    sql = (
+        "SELECT id FROM a "
+        "UNION "
+        "SELECT id FROM b"
+    )
+    result = parse_select(sql)
+    assert isinstance(result, SetQuery)
+    assert result.operator == "UNION"
+
+
+def test_accepts_union_all_query() -> None:
+    sql = (
+        "SELECT id FROM a "
+        "UNION ALL "
+        "SELECT id FROM b"
+    )
+    result = parse_select(sql)
+    assert isinstance(result, SetQuery)
+    assert result.operator == "UNION ALL"
+
+
+def test_accepts_intersect_query() -> None:
+    sql = (
+        "SELECT id FROM a "
+        "INTERSECT "
+        "SELECT id FROM b"
+    )
+    result = parse_select(sql)
+    assert isinstance(result, SetQuery)
+    assert result.operator == "INTERSECT"
+
+
+def test_set_query_to_sql_roundtrip() -> None:
+    sql = (
+        "SELECT id FROM a "
+        "UNION "
+        "SELECT id FROM b"
+    )
+    result = parse_select(sql)
+    assert isinstance(result, SetQuery)
+    rebuilt = result.to_sql()
+    assert "UNION" in rebuilt
+    assert "SELECT" in rebuilt
+
+
+def test_set_query_with_order_by_and_limit() -> None:
+    sql = (
+        "SELECT id FROM a "
+        "UNION "
+        "SELECT id FROM b "
+        "ORDER BY id "
+        "LIMIT 10"
+    )
+    result = parse_select(sql)
+    assert isinstance(result, SetQuery)
+    assert len(result.order_by) == 1
+    assert result.limit == 10

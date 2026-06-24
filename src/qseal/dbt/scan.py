@@ -7,6 +7,7 @@ from qseal.constraints.model import ColumnConstraint, ConstraintCatalog, TableCo
 from qseal.dbt.jinja import preprocess_dbt_sql
 from qseal.dbt.project import discover_dbt_project
 from qseal.dialects import DEFAULT_DIALECT, SqlDialect
+from qseal.ir.model import SelectQuery
 from qseal.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from qseal.rewrites.base import RewriteSuggestion, VerificationStatus
 from qseal.rewrites.chain import RewriteChainResult, suggest_rewrite_chain
@@ -227,6 +228,8 @@ def _scan_model(
 
     try:
         query = parse_select(preprocessed.sql, dialect=dialect)
+        if not isinstance(query, SelectQuery):
+            raise UnsupportedSqlError("Set operations are not supported for builtin rewrites.")
     except UnsupportedSqlError as error:
         subtree = suggest_subtree_rewrites(
             preprocessed.sql,

@@ -1,5 +1,5 @@
 from qseal.constraints.model import ConstraintCatalog
-from qseal.ir.model import SelectQuery
+from qseal.ir.model import ParsedQuery, SelectQuery
 from qseal.rewrites.base import VerificationStatus
 from qseal.rewrites.join_distinct_exists import RewriteJoinDistinctToExists
 from qseal.rewrites.join_elimination import RemoveUnusedLeftJoin
@@ -10,10 +10,29 @@ from qseal.verifier.model import VerificationResult
 
 
 def check_equivalence(
-    original: SelectQuery,
-    rewritten: SelectQuery,
+    original: ParsedQuery,
+    rewritten: ParsedQuery,
     constraints: ConstraintCatalog,
 ) -> VerificationResult:
+    # SetQuery handling: only normalized identity applies (no rewrite rules
+    # operate on set operations). This is sound -- if both sides parse to the
+    # same set operation IR, they are trivially equivalent.
+    if not isinstance(original, SelectQuery) or not isinstance(rewritten, SelectQuery):
+        if original == rewritten:
+            return VerificationResult(
+                status=VerificationStatus.PROVEN_EQUIVALENT,
+                original_sql=original.raw_sql,
+                rewritten_sql=rewritten.raw_sql,
+                rule_name="normalized_identity",
+                reason="Set queries normalize to the same supported IR.",
+            )
+        return VerificationResult(
+            status=VerificationStatus.UNKNOWN,
+            original_sql=original.raw_sql,
+            rewritten_sql=rewritten.raw_sql,
+            reason="No verifier rule applies to set operation queries.",
+        )
+
     if original == rewritten:
         return VerificationResult(
             status=VerificationStatus.PROVEN_EQUIVALENT,
@@ -114,7 +133,7 @@ def check_equivalence(
     )
 
 
-def _same_normalized_query(left: SelectQuery, right: SelectQuery) -> bool:
+def _same_normalized_query(left: ParsedQuery, right: ParsedQuery) -> bool:
     # Compare every semantic IR field via full structural equality, blanking only
     # the non-semantic ``raw_sql`` provenance string (which always differs between
     # a rule's rendered output and the candidate it is checked against). Enumerating
@@ -127,7 +146,7 @@ def _same_normalized_query(left: SelectQuery, right: SelectQuery) -> bool:
     )
 
 
-def _parse_expected(sql: str, reference: SelectQuery) -> SelectQuery | None:
+def _parse_expected(sql: str, reference: ParsedQuery) -> ParsedQuery | None:
     # ``reference`` supplies only the dialect for re-parsing. On failure we must
     # return ``None`` -- never ``reference`` (the candidate). Returning the
     # candidate would make ``_same_normalized_query`` compare it against itself

@@ -21,6 +21,7 @@ from qseal.cli.types import (
     VerifierChoice,
 )
 from qseal.dialects import DEFAULT_DIALECT
+from qseal.ir.model import SelectQuery
 from qseal.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from qseal.report.json import (
     render_candidate_evidence_json,
@@ -116,6 +117,8 @@ def candidates_generate(
     raw_sql = query_path.read_text()
     try:
         query = parse_select(raw_sql, dialect=dialect)
+        if not isinstance(query, SelectQuery):
+            raise UnsupportedSqlError("Set operations are not supported for builtin rewrites.")
         constraints = _load_constraints(schema_path, schema_format)
         suggestions = suggest_rewrites(query, constraints, rules=select_rules(selected_rules))
     except (UnsupportedSqlError, ValueError) as error:
@@ -253,6 +256,8 @@ def candidates_run(
     raw_sql = query_path.read_text()
     try:
         query = parse_select(raw_sql, dialect=dialect)
+        if not isinstance(query, SelectQuery):
+            raise UnsupportedSqlError("Set operations are not supported for builtin rewrites.")
         constraints = _load_constraints(schema_path, schema_format)
         suggestions = suggest_rewrites(query, constraints, rules=select_rules(selected_rules))
     except (UnsupportedSqlError, ValueError) as error:

@@ -13,6 +13,7 @@ from qseal.cli.types import (
     SchemaFormat,
 )
 from qseal.dialects import DEFAULT_DIALECT
+from qseal.ir.model import SelectQuery
 from qseal.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from qseal.report.json import (
     render_rewrite_chain_json,
@@ -126,6 +127,8 @@ def suggest(
 
     try:
         query = parse_select(raw_sql, dialect=dialect)
+        if not isinstance(query, SelectQuery):
+            raise UnsupportedSqlError("Set operations are not supported for builtin rewrites.")
         suggestions = suggest_rewrites(query, constraints, rules=rules)
     except UnsupportedSqlError as error:
         suggestions = suggest_subtree_rewrites(

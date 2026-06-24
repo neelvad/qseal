@@ -135,6 +135,8 @@ def _sql_context_features(
         query = parse_select(state_sql, dialect=dialect)
     except UnsupportedSqlError:
         return ()
+    if not isinstance(query, SelectQuery):
+        return ()
 
     projection_columns = _direct_projection_columns(query)
     not_null_columns = _not_null_predicate_columns(query)

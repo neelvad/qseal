@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from qseal.constraints.model import ConstraintCatalog
 from qseal.dialects import DEFAULT_DIALECT, SqlDialect
+from qseal.ir.model import SelectQuery
 from qseal.parser.sqlglot_parser import UnsupportedSqlError, parse_select
 from qseal.rewrites.base import RewriteSuggestion, VerificationStatus
 from qseal.rewrites.registry import DEFAULT_RULES, RewriteRule, suggest_rewrites
@@ -121,9 +122,12 @@ def _next_proven_step(
     except UnsupportedSqlError as error:
         parse_error = str(error)
     else:
-        for suggestion in suggest_rewrites(query, constraints, rules=rules):
-            if suggestion.status == VerificationStatus.PROVEN_EQUIVALENT:
-                return suggestion
+        if isinstance(query, SelectQuery):
+            for suggestion in suggest_rewrites(query, constraints, rules=rules):
+                if suggestion.status == VerificationStatus.PROVEN_EQUIVALENT:
+                    return suggestion
+        else:
+            parse_error = "Set operations are not supported for builtin rewrites."
 
     subtree = suggest_subtree_rewrites(
         sql,

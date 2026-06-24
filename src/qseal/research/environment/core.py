@@ -13,6 +13,7 @@ from qseal.benchmark import (
     benchmark_query_pair,
 )
 from qseal.benchmark.model import QueryBenchmark
+from qseal.ir.model import SelectQuery
 from qseal.parser.sqlglot_parser import parse_select
 from qseal.research.environment.model import (
     EnvironmentAction,
@@ -269,7 +270,10 @@ class RewriteEnvironment:
         step_index: int,
         query,
     ) -> EnvironmentObservation:
-        matches = available_rewrite_matches(query, task.constraints, rules=self.rules)
+        if not isinstance(query, SelectQuery):
+            matches: tuple = ()
+        else:
+            matches = available_rewrite_matches(query, task.constraints, rules=self.rules)
         actions = tuple(
             EnvironmentAction(
                 action_id=f"{match.rule_name}::{match.match_id}",

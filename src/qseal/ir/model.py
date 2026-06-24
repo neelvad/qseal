@@ -352,3 +352,45 @@ class SelectQuery(BaseModel):
 
     def without_distinct_sql(self) -> str:
         return self.model_copy(update={"distinct": False}).to_sql()
+
+
+class SetQuery(BaseModel):
+    """A set operation (UNION / UNION ALL / INTERSECT / EXCEPT) combining two
+    queries.  The operands may themselves be :class:`SelectQuery` or nested
+    :class:`SetQuery` (N-way unions chain left-deep in sqlglot).
+
+    No builtin rewrite rule operates on set operations; they are captured so
+    that they parse successfully and can be sent to the formal-prover cascade.
+    Normalized IR identity still compares them structurally, and the formal
+    provers see raw SQL.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    operator: str  # "UNION", "UNION ALL", "INTERSECT", "EXCEPT"
+    left: SelectQuery | SetQuery
+    right: SelectQuery | SetQuery
+    order_by: tuple[OrderByItem, ...] = ()
+    limit: int | None = None
+    offset: int | None = None
+    raw_sql: str
+    dialect: SqlDialect = DEFAULT_DIALECT
+
+    def to_sql(self) -> str:
+        left_sql = self.left.to_sql().removesuffix(";")
+        right_sql = self.right.to_sql().removesuffix(";")
+        sql = f"{left_sql}\n{self.operator}\n{right_sql}"
+        if self.order_by:
+            ordered = ", ".join(item.to_sql() for item in self.order_by)
+            sql = f"{sql}\nORDER BY {ordered}"
+        if self.limit is not None:
+            sql = f"{sql}\nLIMIT {self.limit}"
+        if self.offset is not None:
+            sql = f"{sql}\nOFFSET {self.offset}"
+        return f"{sql};"
+
+    def references_cte_relation(self) -> bool:
+        return self.left.references_cte_relation() or self.right.references_cte_relation()
+
+
+ParsedQuery = SelectQuery | SetQuery
