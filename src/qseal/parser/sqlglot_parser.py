@@ -610,7 +610,7 @@ def _join(
         raise UnsupportedSqlError("Only direct table JOIN targets are supported.")
 
     condition = node.args.get("on")
-    conditions = _join_conditions(condition)
+    conditions = _join_conditions(condition, dialect)
 
     return Join(
         join_type=join_type,
@@ -637,25 +637,35 @@ def _join_subquery_target(
     }
 
 
-def _join_conditions(node: exp.Expression | None) -> tuple[JoinCondition, ...]:
+def _join_conditions(
+    node: exp.Expression | None,
+    dialect: SqlDialect = DEFAULT_DIALECT,
+) -> tuple[JoinCondition, ...]:
     if isinstance(node, exp.And):
-        return (*_join_conditions(node.this), *_join_conditions(node.expression))
+        return (
+            *_join_conditions(node.this, dialect),
+            *_join_conditions(node.expression, dialect),
+        )
     if not isinstance(node, exp.EQ):
-        raise UnsupportedSqlError("JOIN conditions must be column equality predicates.")
-    condition_sides_are_columns = isinstance(node.this, exp.Column) and isinstance(
-        node.expression,
-        exp.Column,
-    )
-    if not condition_sides_are_columns:
-        raise UnsupportedSqlError("JOIN conditions must compare two columns.")
+        raise UnsupportedSqlError("JOIN conditions must be equality predicates.")
     return (
         JoinCondition(
-            left=ColumnRef(table=node.this.table or None, name=node.this.name),
-            right=ColumnRef(
-                table=node.expression.table or None,
-                name=node.expression.name,
-            ),
+            left=_join_condition_side(node.this, dialect),
+            right=_join_condition_side(node.expression, dialect),
         ),
+    )
+
+
+def _join_condition_side(node: exp.Expression, dialect: SqlDialect) -> ColumnRef:
+    if isinstance(node, exp.Column):
+        return ColumnRef(table=node.table or None, name=node.name)
+    referenced_tables, references_unqualified = _expression_column_references(node)
+    expression_sql = node.sql(dialect=dialect)
+    return ColumnRef(
+        name=expression_sql,
+        expression_sql=expression_sql,
+        referenced_tables=referenced_tables,
+        references_unqualified_columns=references_unqualified,
     )
 
 

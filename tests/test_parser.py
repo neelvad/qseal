@@ -629,6 +629,20 @@ def test_parse_simple_inner_join() -> None:
     assert query.joins[0].to_sql() == "INNER JOIN orders o ON u.user_id = o.user_id"
 
 
+def test_accepts_expression_join_condition() -> None:
+    query = parse_select(
+        "SELECT a.x FROM a "
+        "INNER JOIN b ON a.x * 2 = b.y"
+    )
+    join = query.joins[0]
+    assert join.condition.left.expression_sql is not None
+    assert join.condition.right.table == "b"
+    assert join.condition.right.name == "y"
+    # Rewrite rules check .table against known relations; the opaque side
+    # has table=None, so join elimination and JOIN-to-EXISTS abstain.
+    assert join.condition.left.table is None
+
+
 def test_parse_left_join_preserves_qualified_relation_sql() -> None:
     query = parse_select(
         """

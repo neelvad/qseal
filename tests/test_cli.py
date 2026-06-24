@@ -729,7 +729,7 @@ def test_suggest_cli_reports_unsupported_sql(tmp_path) -> None:
 
     assert result.exit_code == 0
     assert "UNSUPPORTED" in result.output
-    assert "JOIN conditions must be column equality predicates" in result.output
+    assert "JOIN conditions must be equality predicates" in result.output
 
 
 def test_check_cli_reports_unsupported_original_sql(tmp_path) -> None:
