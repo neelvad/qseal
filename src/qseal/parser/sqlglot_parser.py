@@ -479,9 +479,12 @@ def _is_supported_opaque_projection(
 ) -> bool:
     if _contains_aggregate(node) and not allow_aggregate:
         return False
-    # Subqueries may correlate with relations outside the expression, which
-    # the recorded column references cannot capture.
-    return not any(isinstance(child, exp.Select) for child in node.walk())
+    # Scalar subqueries inside projection expressions are accepted as opaque.
+    # _expression_column_references walks into subqueries and captures
+    # qualified table references; unqualified columns (possible correlation)
+    # set references_unqualified_columns, which makes join elimination and
+    # other relation-sensitive rules conservatively abstain.
+    return True
 
 
 def _contains_aggregate(node: exp.Expression) -> bool:

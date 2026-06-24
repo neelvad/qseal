@@ -684,6 +684,26 @@ def test_parses_bare_aggregate_projection_without_group_by() -> None:
     assert query.projections[0].is_aggregate is True
 
 
-def test_rejects_scalar_subquery_projection() -> None:
-    with pytest.raises(UnsupportedSqlError):
-        parse_select("SELECT user_id, (SELECT MAX(x) FROM t) AS m FROM users")
+def test_accepts_scalar_subquery_projection() -> None:
+    query = parse_select("SELECT user_id, (SELECT MAX(x) FROM t) AS m FROM users")
+    assert len(query.projections) == 2
+    sub = query.projections[1]
+    assert sub.expression_sql is not None
+    assert "SELECT" in sub.expression_sql.upper()
+    assert sub.alias == "m"
+    # Join elimination should see the opaque projection as potentially
+    # referencing any relation (table is None → may_reference_relation = True).
+    assert sub.table is None
+
+
+def test_accepts_arithmetic_subquery_projection() -> None:
+    sql = (
+        "SELECT COUNT(*) * 100.0 / (SELECT COUNT(*) FROM orders) AS pct "
+        "FROM customers"
+    )
+    query = parse_select(sql)
+    assert len(query.projections) == 1
+    pct = query.projections[0]
+    assert pct.expression_sql is not None
+    assert pct.alias == "pct"
+    assert pct.is_aggregate  # COUNT(*) is an aggregate
