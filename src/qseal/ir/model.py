@@ -241,6 +241,10 @@ class Join(BaseModel):
     # True when the join target is a CTE reference, so trusted base-table
     # constraints sharing the CTE's name must not be applied to it.
     table_is_cte: bool = False
+    # A derived-table join target: ``JOIN (SELECT ...) AS alias``. When set,
+    # ``table`` holds the alias-derived name and ``subquery`` holds the inner
+    # SELECT. Rewrite rules conservatively abstain on subquery joins.
+    subquery: SelectQuery | None = None
     condition: JoinCondition
     extra_conditions: tuple[JoinCondition, ...] = ()
 
@@ -251,10 +255,13 @@ class Join(BaseModel):
         return (self.condition, *self.extra_conditions)
 
     def to_sql(self) -> str:
-        table_sql = self.table_sql or self.table
+        if self.subquery is not None:
+            source = f"({self.subquery.to_sql().removesuffix(';')})"
+        else:
+            source = self.table_sql or self.table
         alias = f" {self.alias}" if self.alias else ""
         conditions = " AND ".join(condition.to_sql() for condition in self.conditions())
-        return f"{self.join_type} JOIN {table_sql}{alias} ON {conditions}"
+        return f"{self.join_type} JOIN {source}{alias} ON {conditions}"
 
 
 class SelectQuery(BaseModel):

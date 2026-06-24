@@ -509,6 +509,42 @@ def test_parses_grouped_cte_relation_with_join() -> None:
     ]
 
 
+def test_parses_derived_table_join_target() -> None:
+    query = parse_select(
+        """
+        SELECT t2.name, t1.max_count
+        FROM League AS t2
+        INNER JOIN (
+          SELECT league_id, MAX(cnt) AS max_count
+          FROM Match
+          GROUP BY league_id
+        ) AS t1
+          ON t1.league_id = t2.id
+        """,
+        dialect="sqlite",
+    )
+
+    join = query.joins[0]
+    assert join.join_type == "INNER"
+    assert join.table == "t1"
+    assert join.alias == "t1"
+    assert join.subquery is not None
+    assert join.subquery.table == "Match"
+    assert join.condition.to_sql() == "t1.league_id = t2.id"
+    assert "INNER JOIN (SELECT league_id, MAX(cnt) AS max_count" in query.to_sql()
+
+
+def test_rejects_derived_table_join_without_alias() -> None:
+    with pytest.raises(UnsupportedSqlError, match="alias"):
+        parse_select(
+            """
+            SELECT * FROM a
+            INNER JOIN (SELECT id FROM b) ON a.id = b.id
+            """,
+            dialect="sqlite",
+        )
+
+
 def test_accepts_opaque_cte_with_distinct_order_by_limit() -> None:
     query = parse_select(
         """

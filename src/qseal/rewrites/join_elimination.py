@@ -60,6 +60,13 @@ class RemoveUnusedLeftJoin:
             )
 
         join = query.joins[0]
+        if join.subquery is not None:
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.NOT_APPLICABLE,
+                original_sql=query.raw_sql,
+                reason="LEFT JOIN elimination of derived-table joins is not supported.",
+            )
         if join.join_type != "LEFT":
             return RewriteSuggestion(
                 rule_name=self.rule_name,
@@ -177,6 +184,13 @@ class RemoveForeignKeyInnerJoin:
             )
 
         join = query.joins[0]
+        if join.subquery is not None:
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.NOT_APPLICABLE,
+                original_sql=query.raw_sql,
+                reason="FK-backed INNER JOIN elimination of derived-table joins is not supported.",
+            )
         if join.join_type != "INNER":
             return RewriteSuggestion(
                 rule_name=self.rule_name,

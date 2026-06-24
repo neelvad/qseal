@@ -592,16 +592,19 @@ def _join(
     join_type = _join_type(node)
     if join_type is None:
         raise UnsupportedSqlError("Only INNER JOIN and LEFT JOIN are supported yet.")
-    if not isinstance(node.this, exp.Table):
-        raise UnsupportedSqlError("Only direct table JOIN targets are supported.")
-    if node.this.name in ctes:
-        target = _join_cte_target(node.this, ctes, dialect)
+    if isinstance(node.this, exp.Subquery):
+        target = _join_subquery_target(node.this, ctes, dialect)
+    elif isinstance(node.this, exp.Table):
+        if node.this.name in ctes:
+            target = _join_cte_target(node.this, ctes, dialect)
+        else:
+            target = {
+                "table": node.this.name,
+                "table_sql": _relation_sql_without_alias(node.this, dialect),
+                "alias": node.this.alias or None,
+            }
     else:
-        target = {
-            "table": node.this.name,
-            "table_sql": _relation_sql_without_alias(node.this, dialect),
-            "alias": node.this.alias or None,
-        }
+        raise UnsupportedSqlError("Only direct table JOIN targets are supported.")
 
     condition = node.args.get("on")
     conditions = _join_conditions(condition)
@@ -612,6 +615,23 @@ def _join(
         condition=conditions[0],
         extra_conditions=tuple(conditions[1:]),
     )
+
+
+def _join_subquery_target(
+    node: exp.Subquery,
+    ctes: dict[str, exp.Select],
+    dialect: SqlDialect,
+) -> dict[str, object]:
+    if not isinstance(node.this, exp.Select):
+        raise UnsupportedSqlError("Only SELECT subquery JOIN targets are supported.")
+    alias = node.alias or None
+    if alias is None:
+        raise UnsupportedSqlError("Derived-table JOIN targets must have an alias.")
+    return {
+        "table": alias,
+        "alias": alias,
+        "subquery": _parse_select_expression(node.this, ctes, dialect),
+    }
 
 
 def _join_conditions(node: exp.Expression | None) -> tuple[JoinCondition, ...]:

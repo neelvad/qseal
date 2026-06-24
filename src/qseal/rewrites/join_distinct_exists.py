@@ -73,6 +73,13 @@ class RewriteJoinDistinctToExists:
             )
 
         join = query.joins[0]
+        if join.subquery is not None:
+            return RewriteSuggestion(
+                rule_name=self.rule_name,
+                status=VerificationStatus.NOT_APPLICABLE,
+                original_sql=query.raw_sql,
+                reason="JOIN to EXISTS rewrite of derived-table joins is not supported.",
+            )
         if join.join_type != "INNER":
             return RewriteSuggestion(
                 rule_name=self.rule_name,
