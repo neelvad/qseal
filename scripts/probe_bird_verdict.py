@@ -151,11 +151,14 @@ def _probe(pairs: list[dict], cascade: Cascade) -> dict:
     buckets: Counter[str] = Counter()
     tier_counts: Counter[str] = Counter()
     examples: dict[str, list[dict]] = {}
+    pair_results: list[dict] = []
     exact_text_match = 0
 
     for pair in pairs:
         gold = pair["gold"]
         pred = pair["predicted"]
+        qid = pair.get("question_id")
+        db_id = pair.get("db_id")
         if gold.strip() == pred.strip():
             exact_text_match += 1
 
@@ -164,12 +167,18 @@ def _probe(pairs: list[dict], cascade: Cascade) -> dict:
         except UnsupportedSqlError:
             _add(examples, "gold_parse_fail", pair)
             buckets["gold_parse_fail"] += 1
+            pair_results.append({
+                "question_id": qid, "db_id": db_id, "label": "gold_parse_fail",
+            })
             continue
         try:
             parse_select(pred, dialect=cascade.dialect)
         except UnsupportedSqlError:
             _add(examples, "pred_parse_fail", pair)
             buckets["pred_parse_fail"] += 1
+            pair_results.append({
+                "question_id": qid, "db_id": db_id, "label": "pred_parse_fail",
+            })
             continue
 
         result, tier = cascade.run(gold, pred, constraints)
@@ -179,6 +188,15 @@ def _probe(pairs: list[dict], cascade: Cascade) -> dict:
             label = "bounded_unknown"
         buckets[label] += 1
         tier_counts[tier] += 1
+        pair_results.append({
+            "question_id": qid,
+            "db_id": db_id,
+            "label": label,
+            "tier": tier,
+            "rule_name": result.rule_name,
+            "reason": result.reason,
+            "counterexample": result.counterexample,
+        })
         if label != "unknown" or len(examples.get("unknown", [])) < 3:
             _add(
                 examples,
@@ -199,6 +217,7 @@ def _probe(pairs: list[dict], cascade: Cascade) -> dict:
         "exact_text_match": exact_text_match,
         "buckets": dict(buckets),
         "tier_final_counts": dict(tier_counts),
+        "pair_results": pair_results,
         "examples": {k: v[:5] for k, v in examples.items()},
     }
 
